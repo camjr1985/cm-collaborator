@@ -78,6 +78,7 @@
     share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
     panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>',
     lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
   };
   function ico(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + I[n] + "</svg>"; }
@@ -85,7 +86,7 @@
   /* ---------------- shell ---------------- */
   function buildShell() {
     const crumbs = (CFG.crumbs || []).map(function (c) { return c.href ? '<a href="' + c.href + '">' + esc(c.label) + "</a>" : "<span>" + esc(c.label) + "</span>"; }).join('<i>/</i>');
-    document.body.classList.add("board-page");
+    document.body.className = "board-page";
     document.body.innerHTML =
       '<header class="topbar">' +
       '<a class="brand" href="' + ROOT + '"><span class="logo">CM</span><span>CM Collaborator</span></a>' +
@@ -97,6 +98,8 @@
       '<div class="lang" data-lang-switch></div>' +
       '<button id="btnShare" class="btn primary">' + ico("share") + "<span>Share</span></button>" +
       '<button id="btnPanel" class="icon-btn" title="Ranking & comments">' + ico("panel") + "</button>" +
+      (CFG.isAdmin ? '<a class="icon-btn" href="' + ROOT + 'admin/" title="Administration">' + ico("lock") + "</a>" : "") +
+      (CFG.signedIn ? '<button id="btnSignOut" class="icon-btn" title="Sign out">' + ico("logout") + "</button>" : "") +
       "</header>" +
       '<main id="viewport" tabindex="-1"><div id="world"><div id="tpl"></div><div id="stickies"></div><div id="cursors"></div></div></main>' +
       '<aside id="toolbar" aria-label="Tools">' +
@@ -183,6 +186,7 @@
 
   /* ---------------- data writes ---------------- */
   function write(path, value, opts) {
+    if (CFG.readOnly) { toast("View only – you can read this board but not edit it"); return; }
     opts = opts || {};
     const before = clone(getPath(path));
     if (!opts.noHistory) {
@@ -313,7 +317,7 @@
   function deselect() { if (editing) stopEdit(); select(null); }
   function updateCtx() {
     const s = selected && S.stickies[selected];
-    els.ctx.hidden = !s;
+    els.ctx.hidden = !s || !!CFG.readOnly;
     if (!s) return;
     const mine = s.votes && s.votes[me.id] ? s.votes[me.id] : 0;
     $("#cVoteN").textContent = totalVotes(s) || "";
@@ -442,7 +446,7 @@
           return '<div class="cmt"><span class="av" style="background:' + (c.color || "#888") + '">' + esc(initials(c.name)) + '</span><div><div class="cmt-meta"><b>' + esc(c.name || "Guest") + "</b> · " + timeAgo(c.t) +
             (c.by === me.id ? ' <button class="link" data-delc="' + c.id + '">delete</button>' : "") + '</div><div class="cmt-text">' + esc(c.text) + "</div></div></div>";
         }).join("");
-        h += '<form class="cmt-form" id="cmtForm"><textarea id="cmtText" rows="2" placeholder="Write a comment… (Enter to send)" required></textarea><button class="btn primary">Send</button></form>';
+        if (!CFG.readOnly) h += '<form class="cmt-form" id="cmtForm"><textarea id="cmtText" rows="2" placeholder="Write a comment… (Enter to send)" required></textarea><button class="btn primary">Send</button></form>';
       } else {
         const withC = list.filter(function (s) { return s.comments && Object.keys(s.comments).length; });
         h += '<p class="panel-hint">Select a post-it to read or add comments.</p>';
@@ -683,6 +687,7 @@
         if (!s) return;
         select(id);
         const w = toWorld(e.clientX, e.clientY);
+        if (CFG.readOnly) return;
         dragging = { id: id, mode: e.target.classList.contains("rz") ? "resize" : "move", sx: w.x, sy: w.y, o: clone(s), moved: false };
         vp.setPointerCapture(e.pointerId);
         e.preventDefault();
@@ -746,6 +751,7 @@
     vp.addEventListener("pointerleave", function () { cursor = { x: null, y: null }; sendPresence(); });
 
     vp.addEventListener("dblclick", function (e) {
+      if (CFG.readOnly) return;
       const stEl = e.target.closest(".sticky");
       if (stEl) { startEdit(stEl.dataset.id); return; }
       if (e.target.closest("[data-field],.photo")) return;
@@ -786,7 +792,7 @@
 
     // template fields
     els.tpl.querySelectorAll("[data-field]").forEach(function (f) {
-      f.contentEditable = "true";
+      f.contentEditable = CFG.readOnly ? "false" : "true";
       f.spellcheck = false;
       let before = "";
       f.addEventListener("focus", function () { before = S.fields[f.dataset.field] || ""; });
@@ -802,6 +808,7 @@
     let photoKey = null;
     els.tpl.querySelectorAll(".photo").forEach(function (p) {
       p.addEventListener("click", function (e) {
+        if (CFG.readOnly) return;
         if (e.target.closest(".photo-x")) { write("photos/" + p.dataset.photo, null); return; }
         photoKey = p.dataset.photo; $("#filePhoto").click();
       });
@@ -884,6 +891,8 @@
     });
 
     $("#btnShare").onclick = shareModal;
+    const so = $("#btnSignOut");
+    if (so) so.onclick = function () { confirmModal("Sign out?", "You will need to sign in again to open this board.", "Sign out", function () { window.CMAuth.signOut(); }); };
     els.timerBtn.onclick = timerModal;
     els.syncPill.onclick = shareModal;
     els.modal.addEventListener("pointerdown", function (e) { if (e.target === els.modal && !$("#nameForm")) closeModal(); });
@@ -903,7 +912,7 @@
       if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); return duplicate(); }
       if ((e.key === "Delete" || e.key === "Backspace") && selected) { e.preventDefault(); return $("#cDel").click(); }
       if (e.key === "Enter" && selected) { e.preventDefault(); return startEdit(selected); }
-      if (!mod && e.key.toLowerCase() === "n") return addAtCenter(PALETTE[0]);
+      if (!mod && e.key.toLowerCase() === "n" && !CFG.readOnly) return addAtCenter(PALETTE[0]);
       if (!mod && e.key.toLowerCase() === "f") return fit();
       if (!mod && (e.key === "+" || e.key === "=")) return zoomCenter(1.2);
       if (!mod && e.key === "-") return zoomCenter(1 / 1.2);
@@ -954,7 +963,7 @@
       if (!data || !data.meta || !data.stickies) {
         const d = seedData();
         Object.assign(d.fields, (data && data.fields) || {});
-        sync.replaceAll ? (sync.mode === "local" ? sync.replaceAll(d) : ["stickies", "fields", "meta"].forEach(function (c) { sync.put(c, d[c]); })) : null;
+        if (!CFG.readOnly) sync.replaceAll(d);
         data = d;
       }
       apply("*", data);
@@ -965,7 +974,62 @@
       toast("Could not connect to the live server – check config.js");
     });
     document.body.classList.add("ready");
+    if (CFG.readOnly) { document.body.classList.add("readonly"); setTimeout(function () { toast("View only – you can read this board but not edit it"); }, 800); }
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+  /* ---------------- access gate (runs before the board) ---------------- */
+  function prettify(id) { return String(id || "Board").split("-").map(function (w) { return w ? w[0].toUpperCase() + w.slice(1) : w; }).join(" "); }
+  function gateScreen(title, text, actions) {
+    document.body.className = "gate-page";
+    document.body.innerHTML = '<main class="gate"><a class="brand" href="' + ROOT + '"><span class="logo">CM</span><span>CM Collaborator</span></a>' +
+      "<h1>" + title + '</h1><p>' + text + '</p><div class="gate-actions">' + (actions || "") + '</div><div class="lang" data-lang-switch></div></main>';
+    const so = document.getElementById("gateSignOut");
+    if (so) so.onclick = function () { window.CMAuth.signOut(); };
+  }
+  function setCrumbs() {
+    CFG.crumbs = CFG.crumbs || [{ label: "Home", href: ROOT }, { label: "Mentoring", href: ROOT + "mentoring/" }, { label: CFG.title }];
+  }
+  function start() {
+    if (!CFG.id || !/^[a-z0-9-]{2,60}$/.test(CFG.id)) {
+      return gateScreen("Board not found", "This link is incomplete. Open your boards from the Mentoring page.", '<a class="btn primary" href="' + ROOT + 'mentoring/">Mentoring</a>');
+    }
+    if (!window.CMAuth || !window.CMAuth.enabled) {
+      CFG.title = CFG.title || prettify(CFG.id);
+      CFG.defaults = CFG.defaults || { name: CFG.title };
+      setCrumbs();
+      return boot();
+    }
+    gateScreen("Loading…", "Checking your access to this board.");
+    window.CMAuth.ready().then(function (user) {
+      if (!user) {
+        return gateScreen("Sign in required", "This board is private. Sign in with the e-mail address the mentor invited.",
+          '<a class="btn primary" href="' + ROOT + "mentoring/?next=" + encodeURIComponent(location.pathname + location.search) + '">Sign in</a>');
+      }
+      const db = window.CMAuth.db();
+      return Promise.all([window.CMAuth.isAdmin(), db.ref("boards/" + CFG.id + "/info").once("value")]).then(function (r) {
+        const admin = r[0], info = r[1].val();
+        if (!info) return gateScreen("Board not found", "This board does not exist or was removed.", '<a class="btn primary" href="' + ROOT + 'mentoring/">My boards</a>');
+        const memberP = admin ? Promise.resolve({ role: "editor" }) : db.ref("boards/" + CFG.id + "/members/" + window.CMAuth.key(user.email)).once("value").then(function (s) { return s.val() || {}; });
+        return memberP.then(function (m) {
+          CFG.title = info.title || prettify(CFG.id);
+          CFG.defaults = { name: info.mentee || CFG.title };
+          CFG.readOnly = !admin && m.role === "viewer";
+          CFG.isAdmin = admin;
+          CFG.signedIn = true;
+          me.id = user.uid;
+          if (!me.name) me.name = user.displayName || user.email.split("@")[0];
+          saveMe();
+          setCrumbs();
+          window.CMSyncError = function (e) { console.warn(e); toast("Not saved – you don't have permission to edit"); };
+          boot();
+        });
+      }).catch(function (err) {
+        console.warn(err);
+        gateScreen("No access", "Your account (" + esc(user.email) + ") doesn't have access to this board. Ask the mentor for an invitation.",
+          '<a class="btn primary" href="' + ROOT + 'mentoring/">My boards</a><button class="btn" id="gateSignOut">Use another account</button>');
+      });
+    });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();

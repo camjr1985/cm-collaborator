@@ -1,47 +1,44 @@
 # CM Collaborator
 
-Collaborative whiteboard for mentoring (Miro-style), bilingual **EN / PT**, ready for GitHub Pages.
+Collaborative whiteboard for mentoring, bilingual **EN / PT**, hosted on GitHub Pages,
+with **private boards**: only people the administrator invites can open a board.
 
 ```
-index.html                         Landing page (features, journey, licensing)
-mentoring/index.html               Mentees list
-mentoring/joaquim-ventura/         Joaquim Ventura's board (Persona Map + Priority Map)
-assets/css/                        site.css, board.css
-assets/js/config.js                Firebase config (real-time collaboration) + votes per user
-assets/js/i18n.js                  EN/PT translations
-assets/js/sync.js                  Local / Firebase sync
-assets/js/board.js                 Whiteboard engine
-assets/js/templates/persona.js     Persona Map + Priority Map template
+index.html                 Landing page
+mentoring/                 "My boards" – sign in + the boards you were invited to
+admin/                     Administration – create boards, invite / remove people (admins only)
+board/?id=<board-id>       Any board (e.g. board/?id=joaquim-ventura)
+database.rules.json        Security rules (THE thing that enforces access)
+assets/js/config.js        Firebase config
+assets/js/auth.js          Sign-in (Google or passwordless e-mail link)
+assets/js/admin.js, hub.js Administration and My boards pages
+assets/js/board.js         Whiteboard engine; sync.js live sync; i18n.js EN/PT
 ```
 
-## Publish on GitHub Pages
-1. Create a repository (e.g. `cmcollab`) and upload all files in this folder (including `.nojekyll`).
-2. Settings → Pages → Source: *Deploy from a branch* → `main` / root → Save.
-3. After ~1 minute the site is at `https://<your-user>.github.io/cmcollab/`.
+## Turn on private access (one-time, ~10 minutes)
+Without this the site runs in **demo mode** (no sign-in, boards saved only in the browser).
 
-## Turn on real-time collaboration (live sync, cursors, presence)
-GitHub Pages only serves static files, so multi-user sync uses Firebase Realtime Database (free plan).
-1. https://console.firebase.google.com → Add project.
-2. Build → Realtime Database → Create database (choose europe-west1).
-3. Project settings → Your apps → Web (`</>`) → copy `firebaseConfig`.
-4. Paste it into `assets/js/config.js` (`window.CMCOLLAB_FIREBASE = {...}`) and push.
-5. Rules (Realtime Database → Rules) – starting point:
-   ```json
-   { "rules": { "boards": { "$board": { ".read": true, ".write": true } } } }
-   ```
-   This lets anyone with the link edit. Before charging licences, add Firebase Authentication
-   and restrict each board to its mentor and mentee.
+1. **Create the project** – https://console.firebase.google.com → *Add project* (Analytics not needed).
+2. **Sign-in** – *Build → Authentication → Get started → Sign-in method*:
+   enable **Google** and **Email/Password → Email link (passwordless sign-in)**.
+   Then *Settings → Authorized domains → Add domain*: `camjr1985.github.io`.
+3. **Database** – *Build → Realtime Database → Create database* (location europe-west1, start in **locked mode**).
+   *Rules* tab: replace everything with the content of `database.rules.json` → **Publish**.
+4. **Make yourself admin** – Realtime Database → *Data* tab → `+` on the root:
+   key `admins`, then inside it a child whose key is **your e-mail with every `.` replaced by `,`**
+   (e.g. `john.doe@gmail.com` → `john,doe@gmail,com`) and value `true`.
+   Admins can only be added here – nobody can promote themselves from the website.
+5. **Connect the site** – *Project settings → Your apps → Web (`</>`)* → register app → copy `firebaseConfig`
+   into `assets/js/config.js` as `window.CMCOLLAB_FIREBASE = { ... }` (must include `databaseURL`) and push.
 
-Without Firebase the board runs in **Local** mode: saved in the browser, synced live between tabs,
-and boards can be exchanged with Export / Import (JSON).
+The Firebase web config is public by design; protection comes from the rules in step 3.
 
-## Add a mentee
-1. Copy `mentoring/joaquim-ventura/` to e.g. `mentoring/maria-silva/`.
-2. In its `index.html` change `id`, `title`, `defaults.name` and the last breadcrumb.
-3. Add a card for them in `mentoring/index.html`.
+## Daily use
+- **Administration** (`/admin/`): *New board* → mentee name + e-mail → **Create board & grant access**.
+  An invitation message opens: copy it or open it in your e-mail app.
+- Add more people to a board (e.g. a co-mentor) with **Can edit** or **View only**; remove access at any time.
+- The mentee opens the link, signs in **with the invited e-mail** (Google or e-mail link) and sees only their boards.
+- A board filled in demo mode can be moved: on the old board use *Export* (toolbar), then *Import* on the private board.
 
-## Board features
-Post-its (double-click to add, colour by area), drag / resize, inline editing, photos (avatar and family),
-editable Name / Role / City, Skills Profile rings, MoSCoW quadrants, RICE scoring with automatic ranking,
-dot voting, comments per post-it, shared timer, live cursors and presence, undo / redo,
-export / import JSON, print to PDF, keyboard shortcuts, touch pinch-zoom, EN / PT switch.
+## Next steps (planned)
+Mobile app and billing / licences build on the same model (`admins`, `boards/*/members`, `userBoards`).

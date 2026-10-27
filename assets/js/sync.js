@@ -77,39 +77,25 @@
     };
   }
 
-  /* ---------------- Firebase Realtime Database adapter ---------------- */
-  function loadScript(src) {
-    return new Promise(function (res, rej) {
-      const s = document.createElement("script");
-      s.src = src; s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
-  }
-
-  function createFirebase(boardId, cfg) {
-    const V = "10.12.2";
+  /* ---------------- Firebase Realtime Database adapter (needs auth.js) ---------------- */
+  function createFirebase(boardId) {
     let ref, presRef, myPresRef;
     let presenceCb = function () {};
-    let ready;
-
     function boot() {
-      if (ready) return ready;
-      ready = loadScript("https://www.gstatic.com/firebasejs/" + V + "/firebase-app-compat.js")
-        .then(function () { return loadScript("https://www.gstatic.com/firebasejs/" + V + "/firebase-database-compat.js"); })
-        .then(function () {
-          if (!window.firebase.apps.length) window.firebase.initializeApp(cfg);
-          const db = window.firebase.database();
-          ref = db.ref("boards/" + boardId + "/data");
-          presRef = db.ref("boards/" + boardId + "/presence");
-        });
-      return ready;
+      return window.CMAuth.ready().then(function () {
+        const db = window.CMAuth.db();
+        ref = db.ref("boards/" + boardId + "/data");
+        presRef = db.ref("boards/" + boardId + "/presence");
+      });
     }
+    let booted = null;
+    function b() { return booted || (booted = boot()); }
 
     return {
       mode: "live",
       saveOk: true,
       init: function (onRemote) {
-        return boot().then(function () {
+        return b().then(function () {
           return ref.once("value").then(function (snap) {
             const data = snap.val() || {};
             ["stickies", "fields", "photos", "meta"].forEach(function (col) {
@@ -124,10 +110,11 @@
         });
       },
       put: function (path, value) {
-        return boot().then(function () { return ref.child(path).set(value === undefined ? null : value); });
+        return b().then(function () { return ref.child(path).set(value === undefined ? null : value); })
+          .catch(function (e) { if (window.CMSyncError) window.CMSyncError(e); });
       },
       replaceAll: function (newData) {
-        return boot().then(function () { return ref.set(newData || {}); }).then(function () { location.reload(); });
+        return b().then(function () { return ref.set(newData || {}); });
       },
       presence: function (me) {
         if (!presRef) return;
@@ -135,7 +122,7 @@
           myPresRef = presRef.child(me.id);
           myPresRef.onDisconnect().remove();
         }
-        myPresRef.set(Object.assign({}, me, { t: Date.now() }));
+        myPresRef.set(Object.assign({}, me, { t: Date.now() })).catch(function () { /* viewers may not publish */ });
       },
       leave: function () { if (myPresRef) myPresRef.remove(); },
       onPresence: function (cb) { presenceCb = cb; }
@@ -144,8 +131,7 @@
 
   window.MBSync = {
     create: function (boardId) {
-      const cfg = window.CMCOLLAB_FIREBASE;
-      if (cfg && cfg.databaseURL) return createFirebase(boardId, cfg);
+      if (window.CMAuth && window.CMAuth.enabled) return createFirebase(boardId);
       return createLocal(boardId);
     },
     setPath: setPath

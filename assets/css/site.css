@@ -148,3 +148,49 @@ body:not(.board-page) .mock { color: #1c2033; }
 body:not(.board-page) .nav .nav-links a { color: var(--ink-2); }
 body:not(.board-page) .nav .nav-links a:hover { color: #fff; }
 body:not(.board-page) .mock .q { color: #4a5068; border-color: #e3e6ef; }
+
+/* ============ Auth, hub & admin ============ */
+.notice { background: rgba(232,196,104,.10); border: 1px solid rgba(232,196,104,.35); color: var(--ink); padding: 14px 16px; border-radius: 12px; margin-bottom: 20px; font-size: 15px; }
+.auth-card { max-width: 460px; }
+.auth-card h2 { font-size: 24px; }
+.auth-card .btn.full { margin-top: 12px; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--ink-3); font-size: 13px; margin: 18px 0 6px; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.lbl-f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.lbl-f input, .lbl-f select, .form-inline input, .form-inline select, .member select, .modal-lite textarea {
+  font: inherit; font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--ink); min-width: 0; }
+.lbl-f input:focus, .lbl-f select:focus, .form-inline input:focus, .form-inline select:focus, .member select:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(44,196,179,.2); }
+select option { color: #1c2033; }
+.small { font-size: 13px; }
+.userbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.userbar > span { flex: 1; min-width: 200px; }
+.empty-big { text-align: center; padding: 40px 20px; }
+.setup { color: var(--ink-2); padding-left: 20px; font-size: 15px; }
+.setup li { margin-bottom: 8px; }
+.admin-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.form-grid .btn { grid-column: 1 / -1; justify-content: center; }
+.stats { display: flex; flex-direction: column; gap: 12px; }
+.stat { display: flex; align-items: baseline; gap: 10px; }
+.stat b { font-family: var(--display); font-size: 36px; color: var(--gold); }
+.board-row { margin-top: 14px; }
+.br-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.br-head h3 { margin: 0 0 2px; }
+.br-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
+.danger-t { color: #ff8a8e !important; }
+.members { list-style: none; padding: 0; margin: 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.member { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
+.m-who { flex: 1; display: flex; flex-direction: column; min-width: 160px; font-size: 14px; }
+.m-who .muted { font-size: 13px; }
+.av.sm { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: linear-gradient(135deg, var(--teal), var(--gold)); color: var(--navy); font-size: 13px; flex: none; }
+.form-inline { display: grid; grid-template-columns: 1fr 1.4fr auto auto; gap: 8px; }
+.modal-lite { position: fixed; inset: 0; z-index: 50; background: rgba(5,10,25,.6); display: grid; place-items: center; padding: 16px; }
+.modal-lite[hidden] { display: none; }
+.modal-lite .card { width: min(560px, 100%); }
+.modal-lite textarea { width: 100%; resize: vertical; margin-top: 8px; white-space: pre-wrap; }
+.row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.site-toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 30px); opacity: 0; z-index: 70; background: var(--gold); color: var(--navy); padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; transition: .2s; pointer-events: none; }
+.site-toast.show { opacity: 1; transform: translate(-50%, 0); }
+[hidden] { display: none !important; }
+@media (max-width: 880px) { .admin-grid, .form-grid, .form-inline { grid-template-columns: 1fr; } }
