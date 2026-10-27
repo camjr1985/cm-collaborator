@@ -108,3 +108,43 @@ a.mentee:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
   .mock { height: 300px; }
   section { padding: 48px 0; }
 }
+
+/* ============ Brand theme: "Superando Obstáculos" palette (navy · teal · gold) ============ */
+:root { --navy: #0e1a33; --navy-2: #15264a; --navy-3: #1c3160; --teal: #2cc4b3; --gold: #e8c468; --gold-2: #f2d585; --light: #d9d9d9; }
+.logo { background: linear-gradient(135deg, var(--teal) 0%, var(--gold) 100%); color: var(--navy); box-shadow: 0 2px 8px rgba(232,196,104,.35); }
+body:not(.board-page) {
+  --bg: var(--navy); --card: var(--navy-2); --ink: #f1f4f9; --ink-2: #c9d2e3; --ink-3: #93a1bd; --line: rgba(255,255,255,.10);
+  --brand: var(--teal); --brand-2: #22a798; --brand-soft: rgba(44,196,179,.14);
+  background: radial-gradient(900px 500px at 85% -10%, rgba(44,196,179,.16), transparent 60%),
+              radial-gradient(700px 420px at -10% 30%, rgba(232,196,104,.10), transparent 60%), var(--navy);
+}
+body:not(.board-page) .nav { background: rgba(14,26,51,.82); }
+body:not(.board-page) .btn { background: transparent; color: var(--ink); border-color: rgba(255,255,255,.22); }
+body:not(.board-page) .btn:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.35); }
+body:not(.board-page) .btn.primary, .board-page .btn.primary { background: var(--gold); border-color: var(--gold); color: var(--navy); }
+body:not(.board-page) .btn.primary:hover, .board-page .btn.primary:hover { background: var(--gold-2); border-color: var(--gold-2); }
+body:not(.board-page) .lang { background: transparent; border-color: rgba(255,255,255,.2); }
+.lang button[aria-pressed="true"] { background: var(--gold); color: var(--navy); }
+body:not(.board-page) h1 { color: #fff; }
+body:not(.board-page) .eyebrow { color: var(--teal); }
+body:not(.board-page) code { background: rgba(255,255,255,.08); }
+body:not(.board-page) .mock { border-color: rgba(255,255,255,.12); box-shadow: 0 20px 50px rgba(0,0,0,.35); }
+body:not(.board-page) section#how { background: rgba(255,255,255,.03) !important; }
+body:not(.board-page) .step::before { background: var(--gold); color: var(--navy); }
+body:not(.board-page) .plan li { border-top-color: rgba(255,255,255,.07); }
+body:not(.board-page) .plan li::before { border-color: var(--teal); }
+body:not(.board-page) .plan.hi { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(232,196,104,.18); }
+body:not(.board-page) .tag { background: rgba(232,196,104,.16); color: var(--gold); }
+body:not(.board-page) .status { background: rgba(44,196,179,.16); color: var(--teal); }
+body:not(.board-page) .journey span { background: var(--card); }
+body:not(.board-page) .journey b { color: var(--gold); }
+body:not(.board-page) .mentee .av { background: linear-gradient(135deg, var(--teal), var(--gold)); color: var(--navy); }
+body:not(.board-page) .mentee .thumb { border-color: rgba(255,255,255,.12); }
+body:not(.board-page) .mentee.add { border-color: rgba(255,255,255,.22); }
+body:not(.board-page) main a:not(.btn):not(.mentee), body:not(.board-page) footer a { color: var(--teal); }
+body:not(.board-page) .nav-links a { color: var(--ink-2); }
+body:not(.board-page) { min-height: 100vh; background-attachment: fixed; }
+body:not(.board-page) .mock { color: #1c2033; }
+body:not(.board-page) .nav .nav-links a { color: var(--ink-2); }
+body:not(.board-page) .nav .nav-links a:hover { color: #fff; }
+body:not(.board-page) .mock .q { color: #4a5068; border-color: #e3e6ef; }

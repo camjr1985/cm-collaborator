@@ -220,3 +220,26 @@ em.must { background: #fdecec; color: #c62a2f; } em.should { background: #fff0e5
   body.board-page { height: auto; }
   @page { size: A3 landscape; margin: 8mm; }
 }
+
+/* ============ Brand theme on the board (navy canvas, gold titles) ============ */
+.topbar { background: var(--navy); border-bottom-color: rgba(255,255,255,.08); }
+.topbar .brand { color: #fff; }
+.crumbs { color: #93a1bd; } .crumbs a { color: #c9d2e3; } .crumbs span { color: #fff; } .crumbs i { color: #4a5a7d; }
+.topbar .icon-btn { color: #c9d2e3; } .topbar .icon-btn:hover { background: rgba(255,255,255,.08); }
+.topbar .timer { background: transparent; border-color: rgba(255,255,255,.2); color: #c9d2e3; }
+.topbar .timer.on { background: rgba(44,196,179,.16); border-color: var(--teal); color: var(--teal); }
+.topbar .lang { background: transparent; border-color: rgba(255,255,255,.2); }
+.topbar .lang button { color: #93a1bd; }
+.people .av { border-color: var(--navy); }
+body.board-page, #viewport { background-color: var(--navy); }
+#viewport { background-image: radial-gradient(rgba(255,255,255,.13) 1.1px, transparent 1.2px); }
+.board-title { color: var(--gold); }
+.quad-title { color: #c9d2e3; }
+.rice { color: #f1f4f9; }
+.rice-f .num { border-bottom-color: #f1f4f9; }
+.rice-help { color: #93a1bd; }
+.rice-help b { color: var(--gold); }
+#tbSticky { background: var(--gold); }
+#tbSticky:hover { background: var(--gold-2); }
+@media print { #viewport { background: #fff; } .board-title { color: #0e1a33; } .quad-title, .rice { color: #1c2033; } }
+.topbar .lang button[aria-pressed="true"] { color: var(--navy); }
