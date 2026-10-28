@@ -119,10 +119,6 @@
     html += '<div class="quad ' + q[4] + '" data-bucket="' + q[0] + '" style="left:' + q[2] + "px;top:" + (q[3] + 46) + 'px;width:450px;height:400px">' +
       '<div class="quad-desc">' + q[1] + '</div></div>';
   });
-  html += '<div class="rice" style="left:1650px;top:1050px;width:930px">' +
-    '<div class="rice-f"><span class="num">Reach × Impact × Confidence</span><span class="den">Effort</span></div>' +
-    '<div class="rice-eq">= RICE SCORE</div>' +
-    '<div class="rice-help">Select a post-it and click <b>RICE</b> to score it. The <b>Ranking</b> panel orders everything automatically.</div></div>';
 
   const seeds = [
     { x: 84, y: 192, color: C.green }, { x: 84, y: 442, color: C.red }, { x: 84, y: 672, color: C.blue },
@@ -136,7 +132,8 @@
   window.MB_TEMPLATES = window.MB_TEMPLATES || {};
   window.MB_TEMPLATES.persona = {
     version: "persona-v1",
-    world: { w: 2620, h: 1240 },
+    label: "Persona Map + Priority Map",
+    world: { w: 2620, h: 1080 },
     colors: C,
     html: html,
     seeds: seeds,

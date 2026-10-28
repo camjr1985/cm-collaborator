@@ -194,3 +194,26 @@ select option { color: #1c2033; }
 .site-toast.show { opacity: 1; transform: translate(-50%, 0); }
 [hidden] { display: none !important; }
 @media (max-width: 880px) { .admin-grid, .form-grid, .form-inline { grid-template-columns: 1fr; } }
+
+/* ============ v2: workspaces ============ */
+.ws-form { grid-template-columns: 1fr auto; margin-top: 14px; }
+.stat-row { display: flex; gap: 28px; flex-wrap: wrap; }
+.stat { flex-direction: column; gap: 0; }
+.ws-card { margin-top: 22px; }
+.ws-card h2 { margin: 6px 0 0; font-size: 26px; }
+.eyebrow.sm { font-size: 11px; padding: 4px 9px; }
+.ws-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 18px; }
+.ws-cols h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.count { font-size: 12px; font-weight: 700; background: rgba(255,255,255,.08); color: var(--ink-2); padding: 2px 8px; border-radius: 999px; font-family: var(--font); }
+.form-grid3 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.form-grid3 input, .form-grid3 select { font: inherit; font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--ink); min-width: 0; }
+.form-grid3 input:focus, .form-grid3 select:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(44,196,179,.2); }
+.form-grid3 .btn { justify-content: center; }
+.brow { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
+.b-ic { width: 32px; height: 32px; border-radius: 8px; flex: none; background: #fff; position: relative; overflow: hidden; }
+.b-ic::before, .b-ic::after { content: ""; position: absolute; width: 11px; height: 11px; top: 6px; left: 5px; background: #fff59d; box-shadow: 13px 0 0 #a9d1f7, 0 13px 0 #f7a8b0, 13px 13px 0 #c8eba1; }
+.ws-sec { margin-top: 30px; }
+.ws-sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.ws-sec-head h2 { margin: 0; font-size: 24px; }
+@media (max-width: 980px) { .ws-cols { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .form-grid3, .ws-form { grid-template-columns: 1fr; } }

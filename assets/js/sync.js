@@ -98,7 +98,7 @@
         return b().then(function () {
           return ref.once("value").then(function (snap) {
             const data = snap.val() || {};
-            ["stickies", "fields", "photos", "meta"].forEach(function (col) {
+            ["stickies", "fields", "photos", "images", "meta"].forEach(function (col) {
               const c = ref.child(col);
               c.on("child_added", function (s) { onRemote(col + "/" + s.key, s.val()); });
               c.on("child_changed", function (s) { onRemote(col + "/" + s.key, s.val()); });
@@ -110,8 +110,7 @@
         });
       },
       put: function (path, value) {
-        return b().then(function () { return ref.child(path).set(value === undefined ? null : value); })
-          .catch(function (e) { if (window.CMSyncError) window.CMSyncError(e); });
+        return b().then(function () { return ref.child(path).set(value === undefined ? null : value); });
       },
       replaceAll: function (newData) {
         return b().then(function () { return ref.set(newData || {}); });

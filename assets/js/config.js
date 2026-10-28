@@ -15,7 +15,16 @@
  * saved in the browser and syncs live between tabs of the same
  * browser. Export / Import JSON lets you exchange boards.
  */
-window.CMCOLLAB_FIREBASE = null;
+window.CMCOLLAB_FIREBASE = {
+  apiKey: "AIzaSyCd46gn1BXzMEq1JNbjcQ9WTCUa7fvjcNg",
+  authDomain: "cm-collaborator.firebaseapp.com",
+  databaseURL: "https://cm-collaborator-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "cm-collaborator",
+  storageBucket: "cm-collaborator.firebasestorage.app",
+  messagingSenderId: "527728682427",
+  appId: "1:527728682427:web:ba9b9781aa4c6b6021d09e"
+};
+/* This web config is public by design. Access is enforced by database.rules.json in the Firebase console. */
 
 /* Example:
 window.CMCOLLAB_FIREBASE = {

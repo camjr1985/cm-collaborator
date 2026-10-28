@@ -10,7 +10,7 @@
   function boardCard(id, info, badge) {
     return '<a class="card mentee" href="../board/?id=' + encodeURIComponent(id) + '">' +
       '<div class="mentee-top"><span class="av">' + esc(initials(info.mentee || info.title)) + '</span><div style="flex:1;min-width:0">' +
-      '<h3 style="margin:0">' + esc(info.title || id) + '</h3><div class="muted" style="font-size:14px">Persona Map · Priority Map</div></div>' +
+      '<h3 style="margin:0" class="no-i18n">' + esc(info.title || id) + '</h3><div class="muted" style="font-size:14px">' + t("Open the board") + '</div></div>' +
       (badge ? '<span class="status">' + esc(badge) + "</span>" : "") + "</div>" + thumb() +
       '<span class="btn primary" style="align-self:flex-start">Open board</span></a>';
   }
@@ -54,24 +54,32 @@
       (admin ? '<a class="btn primary" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';
   }
 
+  function wsSection(id, w, admin) {
+    const boards = w.boards || {};
+    const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
+    return '<section class="ws-sec"><div class="ws-sec-head"><h2 class="no-i18n">' + esc((w.info || {}).name || id) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + "</span></div>" +
+      (ids.length ? '<div class="mentees">' + ids.map(function (b) { return boardCard(b, { title: boards[b].title, mentee: boards[b].title }, null); }).join("") + "</div>"
+        : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one in Administration." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
+  }
+
   function list(user) {
     const db = A.db();
     A.isAdmin().then(function (admin) {
       const navAdmin = document.getElementById("navAdmin");
       if (admin && navAdmin) navAdmin.hidden = false;
       const p = admin
-        ? db.ref("boardIndex").once("value").then(function (s) { return s.val() || {}; })
-        : db.ref("userBoards/" + A.key(user.email)).once("value").then(function (s) {
+        ? db.ref("workspaces").once("value").then(function (s) { return s.val() || {}; })
+        : db.ref("userWorkspaces/" + A.key(user.email)).once("value").then(function (s) {
           const ids = Object.keys(s.val() || {});
           return Promise.all(ids.map(function (id) {
-            return db.ref("boards/" + id + "/info").once("value").then(function (x) { return [id, x.val()]; }, function () { return [id, null]; });
+            return db.ref("workspaces/" + id).once("value").then(function (x) { return [id, x.val()]; }, function () { return [id, null]; });
           })).then(function (rows) { const o = {}; rows.forEach(function (r) { if (r[1]) o[r[0]] = r[1]; }); return o; });
         });
-      return p.then(function (boards) {
-        const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
+      return p.then(function (wss) {
+        const ids = Object.keys(wss).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
         el.innerHTML = userBar(user, admin) + (ids.length
-          ? '<div class="mentees">' + ids.map(function (id) { return boardCard(id, boards[id], admin ? t("Admin") : t("Invited")); }).join("") + "</div>"
-          : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + (admin ? t("Create the first board in Administration.") : t("Ask your mentor to invite this e-mail address.")) + "</p></div>");
+          ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
+          : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + (admin ? t("Create a workspace and its first board in Administration.") : t("Ask your mentor to invite this e-mail address.")) + "</p></div>");
         document.getElementById("soBtn").onclick = A.signOut;
       });
     }).catch(function (e) { el.innerHTML = '<div class="notice">' + esc(e.message) + "</div>"; });
