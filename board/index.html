@@ -15,7 +15,7 @@
     /* One page serves every board: board/?id=<board-id> */
     window.BOARD_CONFIG = {
       id: (new URLSearchParams(location.search).get("id") || "").toLowerCase(),
-      template: "persona",
+      template: new URLSearchParams(location.search).get("tpl") || "persona",
       root: "../"
     };
   </script>
@@ -28,6 +28,7 @@
   <script src="../assets/js/sync.js"></script>
   <script src="../assets/js/templates/persona.js"></script>
   <script src="../assets/js/templates/basic.js"></script>
+  <script src="../assets/js/templates/kits.js"></script>
   <script src="../assets/js/board.js"></script>
 </body>
 </html>

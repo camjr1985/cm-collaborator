@@ -5,7 +5,7 @@
   const el = document.getElementById("admin");
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
-  const TEMPLATES = [["persona", "Persona Map + Priority Map"], ["moscow", "MoSCoW priority map"], ["blank", "Blank board"]];
+  const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
   let db, me, ws = {};
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
