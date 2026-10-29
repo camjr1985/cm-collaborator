@@ -6,7 +6,21 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, ws = {};
+  let db, me, ws = {}, feedback = {};
+  const DAY = 86400000;
+  function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
+  function fmtDate(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-PT" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
+  function expiryBadge(m) {
+    if (!m.expires) return '<span class="xp none">' + t("No time limit") + "</span>";
+    const d = daysLeft(m.expires);
+    if (d <= 0) return '<span class="xp off">' + t("Expired") + " · " + fmtDate(m.expires) + "</span>";
+    return '<span class="xp' + (d <= 2 ? " soon" : "") + '">' + (PT ? d + (d === 1 ? " dia" : " dias") + " · até " : d + (d === 1 ? " day" : " days") + " left · until ") + fmtDate(m.expires) + "</span>";
+  }
+  function daysSelect(name, val) {
+    return '<select name="' + name + '" aria-label="' + esc(t("Access period")) + '">' + [[0, "No time limit"], [7, "7 days"], [14, "14 days"], [30, "30 days"]].map(function (o) {
+      return '<option value="' + o[0] + '"' + (Number(val || 0) === o[0] ? " selected" : "") + ">" + esc(t(o[1])) + "</option>";
+    }).join("") + "</select>";
+  }
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function slug(s) { return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48); }
@@ -37,7 +51,10 @@
 
   /* ---------------- data ---------------- */
   function load() {
-    return db.ref("workspaces").once("value").then(function (s) { ws = s.val() || {}; render(); });
+    return Promise.all([
+      db.ref("workspaces").once("value"),
+      db.ref("feedback").once("value").catch(function () { return { val: function () { return {}; } }; })
+    ]).then(function (r) { ws = r[0].val() || {}; feedback = r[1].val() || {}; render(); });
   }
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { if (okMsg) toast(okMsg); return load(); }).catch(fail);
@@ -46,7 +63,7 @@
     const name = f.wsname.value.trim();
     if (!name) return toast("Give the workspace a name");
     const id = (slug(name) || "workspace") + "-" + rnd(), u = {};
-    u["workspaces/" + id + "/info"] = { name: name, created: TS(), createdBy: me.email };
+    u["workspaces/" + id + "/info"] = { name: name, created: TS(), createdBy: me.email, accessDays: Number(f.days.value) || 0 };
     f.reset();
     update(u, "Workspace created").then(function () { const x = document.getElementById("ws-" + id); if (x) x.scrollIntoView({ behavior: "smooth" }); });
   }
@@ -68,11 +85,19 @@
   function addMember(wsId, f) {
     const email = f.email.value.trim().toLowerCase(), name = f.name.value.trim(), role = f.role.value;
     if (!validEmail(email)) return toast("Enter a valid e-mail");
-    const k = A.key(email), u = {};
-    u["workspaces/" + wsId + "/members/" + k] = { email: email, name: name || email.split("@")[0], role: role, invitedAt: TS(), invitedBy: me.email };
-    u["userWorkspaces/" + k + "/" + wsId] = true;
+    const k = A.key(email), u = {}, days = Number(f.days.value) || 0;
+    const expires = days ? Date.now() + days * DAY : null;
+    u["workspaces/" + wsId + "/members/" + k] = { email: email, name: name || email.split("@")[0], role: role, invitedAt: TS(), invitedBy: me.email, expires: expires };
+    u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
     f.reset();
     update(u, "Access granted").then(function () { openInvite(wsId, k); });
+  }
+  function extendMember(wsId, k, days) {
+    const m = ws[wsId].members[k], u = {};
+    const expires = days ? Math.max(Date.now(), m.expires || Date.now()) + days * DAY : null;
+    u["workspaces/" + wsId + "/members/" + k + "/expires"] = expires;
+    u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
+    update(u, days ? "Access extended" : "Access without time limit");
   }
   function removeMember(wsId, k) {
     const m = ws[wsId].members[k];
@@ -115,13 +140,17 @@
 
   /* ---------------- invitation ---------------- */
   function inviteText(wsId, m) {
-    const w = ws[wsId], link = abs("../mentoring/");
+    const w = ws[wsId], link = abs("../mentoring/"), fb = abs("../feedback/");
     if (PT) {
       return "Olá " + (m.name || "") + ",\n\nVocê foi convidado(a) para o workspace \"" + w.info.name + "\" no CM Collaborator.\n\n" +
-        "1. Abra: " + link + "\n2. Entre com este e-mail: " + m.email + " (botão Google ou link de acesso por e-mail).\n3. Os seus quadros aparecem em \"Os meus quadros\".\n\nAté já!";
+        "1. Abra: " + link + "\n2. Entre com este e-mail: " + m.email + " (botão Google ou link de acesso por e-mail).\n3. Os seus quadros aparecem em \"Os meus quadros\"." +
+        (m.expires ? "\n\nO seu acesso de teste é válido até " + fmtDate(m.expires) + ". Explore à vontade e, no fim, deixe a sua opinião (5 perguntas, 3 minutos): " + fb : "") +
+        "\n\nObrigado!";
     }
     return "Hi " + (m.name || "") + ",\n\nYou've been invited to the workspace \"" + w.info.name + "\" on CM Collaborator.\n\n" +
-      "1. Open: " + link + "\n2. Sign in with this e-mail: " + m.email + " (Google button or e-mail sign-in link).\n3. Your boards appear under \"My boards\".\n\nSee you there!";
+      "1. Open: " + link + "\n2. Sign in with this e-mail: " + m.email + " (Google button or e-mail sign-in link).\n3. Your boards appear under \"My boards\"." +
+      (m.expires ? "\n\nYour test access is valid until " + fmtDate(m.expires) + ". Explore freely and, at the end, share your opinion (5 questions, 3 minutes): " + fb : "") +
+      "\n\nThank you!";
   }
   function openInvite(wsId, k) {
     const m = ((ws[wsId] || {}).members || {})[k]; if (!m) return;
@@ -132,6 +161,58 @@
     dlg.querySelector("textarea").value = txt;
     dlg.querySelector("#mailBtn").href = "mailto:" + encodeURIComponent(m.email) + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(txt);
     dlg.hidden = false;
+  }
+
+  /* ---------------- feedback report ---------------- */
+  function fbList() { return Object.keys(feedback).map(function (k) { return Object.assign({ id: k }, feedback[k]); }).sort(function (a, b) { return (b.t || 0) - (a.t || 0); }); }
+  function avg(list, f) { const v = list.map(function (x) { return x[f]; }).filter(function (x) { return typeof x === "number"; }); return v.length ? v.reduce(function (a, b) { return a + b; }, 0) / v.length : null; }
+  function nps(list) {
+    const v = list.map(function (x) { return x.nps; }).filter(function (x) { return typeof x === "number"; });
+    if (!v.length) return null;
+    const pro = v.filter(function (x) { return x >= 9; }).length, det = v.filter(function (x) { return x <= 6; }).length;
+    return Math.round((pro - det) / v.length * 100);
+  }
+  function label(list, key) { const x = (list || []).find(function (p) { return p[0] === key; }); return x ? t(x[1]) : key; }
+  function bars(counts, total, labels) {
+    return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).map(function (k) {
+      const pct = total ? Math.round(counts[k] / total * 100) : 0;
+      return '<div class="fb-bar"><span class="fb-bl">' + esc(label(labels, k)) + '</span><span class="fb-bt"><i style="width:' + pct + '%"></i></span><span class="fb-bn">' + counts[k] + "</span></div>";
+    }).join("");
+  }
+  function feedbackSection() {
+    const list = fbList(), F = window.MBFeedback || { ROLES: [], FEATURES: [] };
+    let h = '<section class="card fb-report" id="feedback"><div class="br-head"><div><span class="eyebrow sm">Feedback</span><h2>' + t("Tester feedback") + '</h2><p class="muted small">' + t("Answers from the feedback form (inside the boards and at the link below).") + '</p></div>' +
+      '<div class="br-actions"><button class="btn sm" data-copy-fb>' + t("Copy form link") + "</button>" + (list.length ? '<button class="btn sm primary" id="fbCsv">' + t("Export CSV") + "</button>" : "") + "</div></div>";
+    h += '<div class="copy-row"><input readonly value="' + esc(abs("../feedback/")) + '" class="no-i18n"></div>';
+    if (!list.length) return h + '<div class="empty-big"><p class="muted">' + t("No feedback yet. Share the form link with your testers.") + "</p></div></section>";
+    const a1 = avg(list, "sat"), a2 = avg(list, "ease"), n = nps(list);
+    const roles = {}, feats = {};
+    list.forEach(function (x) { if (x.role) roles[x.role] = (roles[x.role] || 0) + 1; Object.keys(x.features || {}).forEach(function (f) { feats[f] = (feats[f] || 0) + 1; }); });
+    h += '<div class="fb-kpis"><div><b>' + list.length + "</b><span>" + t("Responses") + "</span></div>" +
+      "<div><b>" + (a1 === null ? "–" : a1.toFixed(1)) + "<small>/5</small></b><span>" + t("Satisfaction") + "</span></div>" +
+      "<div><b>" + (a2 === null ? "–" : a2.toFixed(1)) + "<small>/5</small></b><span>" + t("Ease of use") + "</span></div>" +
+      "<div><b>" + (n === null ? "–" : (n > 0 ? "+" : "") + n) + "</b><span>NPS</span></div></div>";
+    h += '<div class="fb-cols"><div><h3>' + t("Roles") + "</h3>" + bars(roles, list.length, F.ROLES) + "</div><div><h3>" + t("Features tried") + "</h3>" + bars(feats, list.length, F.FEATURES) + "</div></div>";
+    h += "<h3>" + t("Responses") + '</h3><div class="fb-resp">' + list.map(function (x) {
+      return '<article class="fb-item"><header><b class="no-i18n">' + esc(x.name || x.email || "") + '</b> <span class="muted small no-i18n">' + esc(x.email || "") + " · " + (x.t ? fmtDate(x.t) : "") + "</span>" +
+        '<span class="fb-tags"><span>' + esc(label(F.ROLES, x.role)) + "</span><span>★ " + (x.sat || "–") + "</span><span>" + t("Ease") + " " + (x.ease || "–") + "</span><span>NPS " + (x.nps === undefined ? "–" : x.nps) + "</span></span>" +
+        '<button class="link" data-delfb="' + x.id + '">' + t("delete") + "</button></header>" +
+        (x.pain ? '<p><b>' + t("Difficulty / bug:") + '</b> <span class="no-i18n">' + esc(x.pain) + "</span></p>" : "") +
+        (x.ideas ? '<p><b>' + t("Suggestions:") + '</b> <span class="no-i18n">' + esc(x.ideas) + "</span></p>" : "") + "</article>";
+    }).join("") + "</div></section>";
+    return h;
+  }
+  function exportCsv() {
+    const F = window.MBFeedback || { FEATURES: [] };
+    const cols = ["date", "name", "email", "role", "satisfaction_1_5", "ease_1_5", "nps_0_10", "features", "difficulty_bug", "suggestions", "board"];
+    const q = function (v) { v = v == null ? "" : String(v); return '"' + v.replace(/"/g, '""') + '"'; };
+    const rows = fbList().map(function (x) {
+      return [x.t ? new Date(x.t).toISOString() : "", x.name, x.email, x.role, x.sat, x.ease, x.nps, Object.keys(x.features || {}).map(function (f) { return label(F.FEATURES, f); }).join("; "), x.pain, x.ideas, x.board].map(q).join(",");
+    });
+    const blob = new Blob(["\ufeff" + cols.join(",") + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "cm-collaborator-feedback-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
   }
 
   /* ---------------- UI ---------------- */
@@ -147,8 +228,9 @@
 
     let h = '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../mentoring/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
     h += '<div class="admin-grid"><section class="card"><h2>New workspace</h2><p class="muted small">A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.</p>' +
-      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off"><button class="btn primary">Create workspace</button></form></section>' +
-      '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div></div>" +
+      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button></form>' +
+      '<p class="muted small">' + t("Access period: choose 7 days for beta testers – access closes automatically.") + "</p></section>" +
+      '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div><a class=\"stat\" href=\"#feedback\"><b>" + Object.keys(feedback).length + "</b><span>Feedback</span></a></div>" +
       '<p class="muted small">Only invited e-mails can open a workspace. Admins are managed in the Firebase console.</p></section></div>';
 
     if (!ids.length) h += '<div class="card empty-big" style="margin-top:24px"><h3>No workspaces yet</h3><p class="muted">Create the first one above – for example "Mentoring".</p></div>';
@@ -168,9 +250,10 @@
         const m = members[k];
         return '<li class="member"><span class="av sm no-i18n">' + esc((m.name || m.email)[0].toUpperCase()) + '</span><span class="m-who"><b class="no-i18n">' + esc(m.name || "") + '</b><span class="muted no-i18n">' + esc(m.email) + "</span></span>" +
           roleSelect("", m.role, 'data-role="' + id + "|" + k + '"') +
-          '<button class="btn sm" data-invite="' + id + "|" + k + '">Invite</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button></li>';
+          '<button class="btn sm" data-invite="' + id + "|" + k + '">Invite</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
+          '<span class="m-exp">' + expiryBadge(m) + '<button class="link" data-ext="' + id + "|" + k + '|7">' + t("+7 days") + "</button>" + (m.expires ? '<button class="link" data-ext="' + id + "|" + k + '|0">' + t("Remove limit") + "</button>" : "") + "</span></li>";
       }).join("");
-      return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2></div>" +
+      return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2>" + (w.info.accessDays ? '<span class="xp">' + esc(t("Default access")) + ": " + w.info.accessDays + " " + esc(t("days")) + "</span>" : "") + "</div>" +
         '<button class="btn sm ghost danger-t" data-delws="' + id + '">Delete workspace</button></div>' +
         '<div class="ws-cols"><div><h3>Boards <span class="count">' + bIds.length + "</span></h3>" +
         '<ul class="members">' + (bl || '<li class="muted small">No boards yet.</li>') + "</ul>" +
@@ -181,9 +264,10 @@
         '<div><h3>People with access <span class="count">' + mIds.length + "</span></h3>" +
         '<ul class="members">' + (ml || '<li class="muted small">No one has access yet.</li>') + "</ul>" +
         '<form class="form-grid3" data-add="' + id + '"><input name="name" placeholder="' + esc(t("Name")) + '" autocomplete="off"><input name="email" type="email" required placeholder="name@email.com" autocomplete="off">' +
-        roleSelect("role", "editor") + '<button class="btn primary">Grant access</button></form></div></div></section>';
+        roleSelect("role", "editor") + daysSelect("days", w.info.accessDays) + '<button class="btn primary">Grant access</button></form></div></div></section>';
     }).join("");
 
+    h += feedbackSection();
     h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">Send this message to the person. They sign in with the invited e-mail and see the workspace boards.</p>' +
       '<textarea rows="10" readonly></textarea><div class="row-end"><button class="btn" id="dlgClose">Close</button><button class="btn" id="copyInv">Copy message</button><a class="btn primary" id="mailBtn" href="#">Open in e-mail</a></div></div></div>';
     el.innerHTML = h;
@@ -199,6 +283,10 @@
     el.querySelectorAll("[data-delb]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delb); deleteBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-delws]").forEach(function (b) { b.onclick = function () { deleteWorkspace(b.dataset.delws); }; });
+    el.querySelectorAll("[data-ext]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ext); extendMember(p[0], p[1], Number(p[2])); }; });
+    const csv = document.getElementById("fbCsv"); if (csv) csv.onclick = exportCsv;
+    el.querySelectorAll("[data-delfb]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Delete this response?"))) db.ref("feedback/" + b.dataset.delfb).remove().then(load, fail); }; });
+    el.querySelectorAll("[data-copy-fb]").forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText(abs("../feedback/")).then(function () { toast("Link copied"); }); }; });
     el.querySelectorAll("[data-copy]").forEach(function (b) {
       b.onclick = function () { navigator.clipboard.writeText(abs("../board/?id=" + encodeURIComponent(b.dataset.copy))).then(function () { toast("Link copied"); }); };
     });

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/site.css">
+  <title>Feedback · CM Collaborator</title>
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-in">
+      <a class="brand" href="../"><span class="logo">CM</span><span>CM Collaborator</span></a>
+      <nav class="nav-links">
+        <a href="../">Home</a>
+        <a href="../mentoring/">My boards</a>
+      </nav>
+      <div class="spacer"></div>
+      <div class="lang" data-lang-switch></div>
+    </div>
+  </header>
+
+  <main class="wrap fb-page">
+    <div class="page-head">
+      <span class="eyebrow">Beta test</span>
+      <h1 style="font-size:clamp(28px,3.6vw,40px)">Share your feedback</h1>
+      <p class="lead">Thank you for testing CM Collaborator. 5 quick questions + your suggestions – about 3 minutes.</p>
+    </div>
+    <div class="card fb-card" id="fbPage" style="margin-top:24px"></div>
+  </main>
+
+  <footer style="margin-top:72px">
+    <div class="wrap"><span>© 2026 CM Collaborator</span><a href="../">Home</a></div>
+  </footer>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/i18n.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/feedback.js"></script>
+  <script>
+    (function () {
+      var box = document.getElementById("fbPage"), A = window.CMAuth, t = window.MBt || String;
+      function show() { window.MBFeedback.render(box, { board: "feedback-page" }); }
+      if (!A || !A.enabled) return show();
+      box.innerHTML = '<p class="muted">' + t("Loading…") + "</p>";
+      A.ready().then(function (user) {
+        if (user) return show();
+        box.innerHTML = '<h2>' + t("Sign in required") + '</h2><p class="muted">' + t("Please sign in with the e-mail you were invited with, so we know who the feedback comes from.") + '</p>' +
+          '<a class="btn primary" href="../mentoring/?next=' + encodeURIComponent(location.pathname) + '">' + t("Sign in") + "</a>";
+      });
+    })();
+  </script>
+</body>
+</html>

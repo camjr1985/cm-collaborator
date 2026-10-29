@@ -112,7 +112,8 @@
     logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>',
     front: '<rect x="8" y="8" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"/><path d="M4 16V4h12"/>',
     back: '<rect x="4" y="4" width="12" height="12" rx="2"/><path d="M20 8v12H8"/>',
-    head: '<path d="M4 12h14M13 7l5 5-5 5"/>'
+    head: '<path d="M4 12h14M13 7l5 5-5 5"/>',
+    megaphone: '<path d="M3 10v4h3l7 5V5L6 10z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/>'
   };
   function ico(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + I[n] + "</svg>"; }
   function shapeIco(k) {
@@ -133,6 +134,7 @@
       '<button id="timerBtn" class="timer" title="Session timer">' + ico("timer") + '<span id="timerTxt">Timer</span></button>' +
       '<div id="people" class="people" aria-label="People on this board"></div>' +
       '<div class="lang" data-lang-switch></div>' +
+      (window.MBFeedback ? '<button id="btnFeedback" class="btn fb-top" title="Give feedback">' + ico("megaphone") + "<span>Feedback</span></button>" : "") +
       '<button id="btnShare" class="btn primary">' + ico("share") + "<span>Share</span></button>" +
       '<button id="btnPanel" class="icon-btn" title="Ranking & comments">' + ico("panel") + "</button>" +
       (CFG.isAdmin ? '<a class="icon-btn" href="' + ROOT + 'admin/" title="Administration">' + ico("lock") + "</a>" : "") +
@@ -909,7 +911,7 @@
     const list = window.MBTemplateList ? window.MBTemplateList().filter(function (x) { return x.kind === "kit"; }) : [];
     const cats = window.MB_KIT_CATS || {};
     let h = '<div class="tpl-head"><h2>Templates</h2><button class="icon-btn" id="tplClose" title="Close">' + ico("close") + '</button></div><p class="muted">Insert a ready-made template into this board. Everything stays editable – move, recolour, add post-its.</p>';
-    ["agile", "diagram", "strategy"].forEach(function (c) {
+    ["feedback", "agile", "diagram", "strategy"].forEach(function (c) {
       const items = list.filter(function (x) { return x.cat === c; });
       if (!items.length) return;
       h += '<h3 class="tpl-cat no-i18n">' + esc(cats[c] || c) + '</h3><div class="tpl-grid">' + items.map(function (x) {
@@ -1042,7 +1044,7 @@
     const f = els.modalBody.querySelector("input,textarea,select");
     if (f) setTimeout(function () { f.focus(); }, 30);
   }
-  function closeModal() { els.modal.hidden = true; els.modalBody.innerHTML = ""; els.modal.classList.remove("wide"); }
+  function closeModal() { els.modal.hidden = true; els.modalBody.innerHTML = ""; els.modal.classList.remove("wide", "fbm"); }
   function askName() {
     if (me.name) return;
     modal('<h2>Welcome to the board 👋</h2><p class="muted">Your name appears on your cursor, post-its and comments.</p>' +
@@ -1127,6 +1129,12 @@
         (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).then(function () { toast("Link copied"); }, function () { document.execCommand("copy"); toast("Link copied"); });
       };
       root.querySelector("#shClose").onclick = closeModal;
+    });
+  }
+  function feedbackModal() {
+    modal('<h2>Share your feedback</h2><p class="muted">5 quick questions + your suggestions. About 3 minutes.</p><div id="fbBox"></div>', function (root) {
+      els.modal.classList.add("wide", "fbm");
+      window.MBFeedback.render(root.querySelector("#fbBox"), { board: CFG.id, onDone: function () { setTimeout(closeModal, 2200); } });
     });
   }
   function confirmModal(title, text, okLabel, onOk) {
@@ -1692,6 +1700,8 @@
     });
 
     $("#btnShare").onclick = shareModal;
+    const fbb = $("#btnFeedback");
+    if (fbb) fbb.onclick = feedbackModal;
     els.timerBtn.onclick = timerModal;
     const so = $("#btnSignOut");
     if (so) so.onclick = function () { confirmModal(t("Sign out?"), t("You will need to sign in again to open this board."), t("Sign out"), function () { window.CMAuth.signOut(); }); };
@@ -1855,6 +1865,14 @@
         });
       }).catch(function (err) {
         console.warn(err);
+        return db.ref("userWorkspaces/" + key).once("value").then(function (s) {
+          const v = s.val() || {}, now = Date.now();
+          const ended = Object.keys(v).map(function (k) { return v[k]; }).filter(function (e) { return e && e.expires && e.expires <= now; });
+          if (!ended.length) throw err;
+          gateScreen("Your test access has ended", t("Thank you for testing CM Collaborator! If you haven't yet, please share your feedback – it takes about 3 minutes."),
+            '<a class="btn primary" href="' + ROOT + 'feedback/">' + t("Give feedback") + '</a><a class="btn" href="' + ROOT + 'mentoring/">' + t("My boards") + "</a>");
+        });
+      }).catch(function () {
         gateScreen("No access", t("Your account (" + esc(user.email) + ") doesn't have access to this board. Ask the mentor for an invitation."),
           '<a class="btn primary" href="' + ROOT + 'mentoring/">' + t("My boards") + '</a><button class="btn" id="gateSignOut">' + t("Use another account") + "</button>");
       });

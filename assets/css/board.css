@@ -425,3 +425,13 @@ body.canvas-dark .frameobj .ftitle .txt { color: #c9d2e3; }
   #toolbar { max-height: none; }
 }
 body.canvas-dark .frameobj .ftitle .txt { color: #fff; background: rgba(14,26,51,.82); }
+/* feedback in board */
+.topbar .btn.fb-top { background: transparent; color: #e8c468; border-color: rgba(232,196,104,.5); }
+.topbar .btn.fb-top:hover { background: rgba(232,196,104,.12); }
+.topbar .btn.fb-top svg { width: 17px; height: 17px; }
+.modal.fbm .modal-card { width: min(720px, 100%); }
+.modal .fb-form .chip span, .modal .fb-scale span, .modal .fb-form textarea { border-color: #d5d8e2; }
+.modal .fb-l b { color: #4262ff; }
+.modal .chip input:checked + span { background: #1c2033; border-color: #1c2033; color: #fff; }
+.modal .fb-scale input:checked + span { background: #e8c468; border-color: #e8c468; color: #1c2033; }
+@media (max-width: 760px) { .topbar .btn.fb-top span { display: none; } }

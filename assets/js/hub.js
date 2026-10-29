@@ -132,17 +132,46 @@
   }
   function userBar(user, admin) {
     return '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(user.email) + "</b></span>" +
+      '<button class="btn" data-feedback>💬 <span>Give feedback</span></button>' +
       (admin ? '<a class="btn" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';
   }
+  function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LANG === "pt" ? "pt-PT" : "en-GB", { day: "2-digit", month: "short" }); }
+  function accessBanner(entries) {
+    const now = Date.now();
+    const active = entries.filter(function (e) { return e.expires && e.expires > now; });
+    const ended = entries.filter(function (e) { return e.expires && e.expires <= now; });
+    let h = "";
+    active.forEach(function (e) {
+      const d = Math.ceil((e.expires - now) / 86400000);
+      h += '<div class="beta-banner"><span class="bb-ic">🧪</span><div><b class="no-i18n">' + esc(e.name || "") + '</b><span> · ' + esc(t("Test access")) + ": " + d + " " + esc(t(d === 1 ? "day left" : "days left")) + " (" + esc(t("until")) + " " + fmtDate(e.expires) + ')</span><p class="muted small">' + esc(t("Explore the boards freely. Before the end, please share your opinion – 5 quick questions.")) + '</p></div><button class="btn primary" data-feedback>' + esc(t("Give feedback")) + "</button></div>";
+    });
+    ended.forEach(function (e) {
+      h += '<div class="beta-banner ended"><span class="bb-ic">⏳</span><div><b class="no-i18n">' + esc(e.name || "") + '</b><span> · ' + esc(t("Your test access ended on")) + " " + fmtDate(e.expires) + '.</span><p class="muted small">' + esc(t("Thank you for testing! If you haven't yet, please share your feedback.")) + '</p></div><button class="btn primary" data-feedback>' + esc(t("Give feedback")) + "</button></div>";
+    });
+    return h;
+  }
+  function feedbackDialog() {
+    if (document.getElementById("fbDlg")) return;
+    document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="fbDlg"><div class="card fb-card"><div class="br-head"><div><h2>' + esc(t("Share your feedback")) + '</h2><p class="muted small">' + esc(t("5 quick questions + your suggestions. About 3 minutes.")) + '</p></div><button class="btn sm ghost" id="fbX">✕</button></div><div id="fbBox"></div></div></div>');
+    const dlg = document.getElementById("fbDlg");
+    function close() { dlg.remove(); }
+    document.getElementById("fbX").onclick = close;
+    dlg.onclick = function (e) { if (e.target === dlg) close(); };
+    window.MBFeedback.render(document.getElementById("fbBox"), { board: "hub" });
+  }
+  function bindFeedback() { el.querySelectorAll("[data-feedback]").forEach(function (b) { b.onclick = feedbackDialog; }); }
   function list(user) {
     const db = A.db();
+    let entries = [];
     A.isAdmin().then(function (admin) {
       const navAdmin = document.getElementById("navAdmin");
       if (admin && navAdmin) navAdmin.hidden = false;
       const p = admin
         ? db.ref("workspaces").once("value").then(function (s) { return s.val() || {}; })
         : db.ref("userWorkspaces/" + A.key(user.email)).once("value").then(function (s) {
-          const ids = Object.keys(s.val() || {});
+          const raw = s.val() || {}, now = Date.now();
+          entries = Object.keys(raw).map(function (k) { const v = raw[k]; return { id: k, name: v && v.name, expires: v && v.expires }; });
+          const ids = entries.filter(function (e) { return !e.expires || e.expires > now; }).map(function (e) { return e.id; });
           return Promise.all(ids.map(function (id) {
             return db.ref("workspaces/" + id).once("value").then(function (x) { return [id, x.val()]; }, function () { return [id, null]; });
           })).then(function (rows) { const o = {}; rows.forEach(function (r) { if (r[1]) o[r[0]] = r[1]; }); return o; });
@@ -151,9 +180,10 @@
         const ids = Object.keys(wss).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
         const allowed = {};
         ids.forEach(function (w) { const bs = wss[w].boards || {}; Object.keys(bs).forEach(function (b) { allowed[b] = { title: bs[b].title, template: bs[b].template, ws: (wss[w].info || {}).name }; }); });
-        el.innerHTML = userBar(user, admin) + searchBar() + startStrip(admin) + recentRows(allowed) +
+        el.innerHTML = userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(admin) + recentRows(allowed) +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
-            : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + (admin ? t("Pick a template above to create your first board.") : t("Ask your mentor to invite this e-mail address.")) + "</p></div>");
+            : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + (admin ? t("Pick a template above to create your first board.") : t("Ask your mentor to invite this e-mail address.")) + "</p></div>"));
+        bindFeedback();
         document.getElementById("soBtn").onclick = A.signOut;
         el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, wss); }; });
         el.querySelectorAll("[data-newin]").forEach(function (b) {

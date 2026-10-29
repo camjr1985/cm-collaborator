@@ -239,6 +239,22 @@
         return k.out;
       }
     },
+    betatest: {
+      name: "Beta test kit", desc: L("Test missions for testers plus a feedback wall by theme.", "Missões de teste para os testadores e um mural de feedback por tema."), cat: "feedback",
+      build: function () {
+        const k = kit();
+        k.F(0, 0, 2000, 1100, L("Beta test – start here", "Beta test – comece aqui"));
+        k.T(40, 24, L("Welcome to the CM Collaborator beta 👋", "Bem-vindo ao beta do CM Collaborator 👋"), 40, 1300);
+        k.T(40, 92, L("Explore freely for 7 days. Try the missions, leave post-its on the feedback wall and answer the short form (📣 Feedback button at the top).", "Explore à vontade durante 7 dias. Faça as missões, deixe post-its no mural de feedback e responda ao formulário curto (botão 📣 Feedback no topo)."), 20, 1700, "#4a5068");
+        k.F(40, 180, 560, 880, L("🧭 Test missions", "🧭 Missões de teste"), BG.blue);
+        k.T(64, 210, L("☐ 1. Draw a frame (F) and add post-its inside\n☐ 2. Build a small process with shapes (R) and connectors (L)\n☐ 3. Insert a template (grid button on the left)\n☐ 4. Paste or drop an image or GIF\n☐ 5. Add icons and emoji\n☐ 6. Comment and vote on a post-it\n☐ 7. Select several items, copy and paste them\n☐ 8. Switch the canvas to dark mode and back",
+          "☐ 1. Desenhe um frame (F) e coloque post-its dentro\n☐ 2. Monte um pequeno processo com formas (R) e conectores (L)\n☐ 3. Insira um template (botão de grelha à esquerda)\n☐ 4. Cole ou arraste uma imagem ou GIF\n☐ 5. Adicione ícones e emoji\n☐ 6. Comente e vote num post-it\n☐ 7. Selecione vários itens, copie e cole\n☐ 8. Mude o quadro para modo escuro e volte"), 20, 510);
+        k.E(470, 950, 80, "🧪");
+        const wall = [[L("👍 What works well", "👍 O que funciona bem"), BG.green, C.green], [L("😕 Confusing / friction", "😕 Confuso / atrito"), BG.orange, C.orange], [L("🐞 Bugs", "🐞 Bugs"), BG.red, C.red], [L("💡 Ideas & features", "💡 Ideias e funcionalidades"), BG.blue, C.blue], [L("🎨 UI / visual", "🎨 UI / visual"), BG.purple, C.purple]];
+        wall.forEach(function (c, i) { k.F(640 + i * 266, 180, 250, 880, c[0], c[1]); k.S(660 + i * 266, 210, L("Add yours…", "Adicione o seu…"), c[2]); });
+        return k.out;
+      }
+    },
     roadmap: {
       name: "Roadmap", desc: L("Now, next and later.", "Agora, a seguir e mais tarde."), cat: "strategy",
       build: function () {
@@ -253,8 +269,8 @@
   };
 
   window.MB_KITS = KITS;
-  window.MB_KIT_ORDER = ["kanban", "retro", "planning", "piplanning", "sysdemo", "process", "mindmap", "journey", "empathy", "swot", "eisenhower", "okr", "roadmap"];
-  window.MB_KIT_CATS = { agile: "Agile", diagram: L("Maps & diagrams", "Mapas e diagramas"), strategy: L("Strategy", "Estratégia"), mentoring: L("Mentoring", "Mentoria"), basic: L("Basic", "Básico") };
+  window.MB_KIT_ORDER = ["betatest", "kanban", "retro", "planning", "piplanning", "sysdemo", "process", "mindmap", "journey", "empathy", "swot", "eisenhower", "okr", "roadmap"];
+  window.MB_KIT_CATS = { agile: "Agile", diagram: L("Maps & diagrams", "Mapas e diagramas"), strategy: L("Strategy", "Estratégia"), feedback: L("Feedback & testing", "Feedback e testes"), mentoring: L("Mentoring", "Mentoria"), basic: L("Basic", "Básico") };
 
   /* ---------- icons (24×24 stroke) ---------- */
   window.MB_ICONS = {
@@ -362,7 +378,7 @@
     return list;
   };
   // Portuguese names
-  const NPT = { kanban: "Quadro Kanban", retro: "Retrospetiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap" };
+  const NPT = { betatest: "Kit de beta test", kanban: "Quadro Kanban", retro: "Retrospetiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap" };
   Object.keys(NPT).forEach(function (k) { KITS[k].namePT = NPT[k]; });
   window.MBTemplatePreview = function (id) {
     if (KITS[id]) { if (!KITS[id]._pv) KITS[id]._pv = window.MBKitPreview(KITS[id].build()); return KITS[id]._pv; }

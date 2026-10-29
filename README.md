@@ -9,6 +9,7 @@ index.html                 Landing page
 mentoring/                 "My boards" – sign in, see your workspaces and boards
 admin/                     Administration – workspaces, boards, people (admins only)
 board/?id=<board-id>       Any board (e.g. board/?id=joaquim-ventura)
+feedback/                  Feedback form for testers (answers visible only to admins)
 database.rules.json        Security rules (published in the Firebase console – this is what enforces access)
 assets/js/config.js        Firebase web config (public by design)
 assets/js/auth.js          Sign-in (Google or passwordless e-mail link)
@@ -45,3 +46,10 @@ live cursors · undo / redo · export / import · print to PDF.
 
 ## Add another administrator
 Firebase console → Realtime Database → Data → `admins` → add child `<e-mail with , instead of .>` = `true`.
+
+## Beta testers (7-day access) and feedback
+- Administration → New workspace → access period **7 days**. Everyone invited to it gets access that
+  closes automatically after 7 days (enforced by the security rules). Use **+7 days** to extend or **Remove limit**.
+- The invitation message includes the end date and the feedback link (`/feedback/`).
+- Testers can answer the form from the **📣 Feedback** button on any board, from "My boards" or at `/feedback/`.
+- Results: Administration → **Tester feedback** (responses, satisfaction, ease of use, NPS, roles, features) → **Export CSV**.
