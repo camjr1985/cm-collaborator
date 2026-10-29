@@ -45,6 +45,46 @@
           ".validate": "newData.isString() && newData.val().length <= 4000"
         }
       }
+    },
+    "signups": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
+      "$id": {
+        ".write": "(!data.exists() && newData.exists()) || (auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true)",
+        ".validate": "!newData.exists() || (newData.hasChildren(['name', 'email', 'role', 'consent', 't']) && newData.child('t').val() <= now + 60000 && $id == newData.child('email').val().toLowerCase().replace('.', ','))",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 120"
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 200 && newData.val().matches(/^[^@ ]+@[^@ ]+[.][^@ ]+$/)"
+        },
+        "role": {
+          ".validate": "newData.isString() && newData.val().matches(/^(ux|ui|designer|architect|pm|process|other)$/)"
+        },
+        "consent": {
+          ".validate": "newData.val() === true"
+        },
+        "t": {
+          ".validate": "newData.isNumber()"
+        },
+        "lang": {
+          ".validate": "newData.isString() && newData.val().length <= 5"
+        },
+        "src": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "status": {
+          ".validate": "newData.isString() && newData.val().length <= 20"
+        },
+        "ws": {
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "at": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }

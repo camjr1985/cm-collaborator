@@ -7,7 +7,13 @@
 (function () {
   "use strict";
   let lang = "en";
-  try { lang = localStorage.getItem("cmcollab:lang") || "en"; } catch (e) { /* ignore */ }
+  // priority: ?lang=pt|en in the link (also remembered) → saved choice → browser language
+  const urlLang = (new URLSearchParams(location.search).get("lang") || "").toLowerCase();
+  let saved = null;
+  try { saved = localStorage.getItem("cmcollab:lang"); } catch (e) { /* ignore */ }
+  if (urlLang === "pt" || urlLang === "en") { lang = urlLang; try { localStorage.setItem("cmcollab:lang", lang); } catch (e) { /* ignore */ } }
+  else if (saved === "pt" || saved === "en") lang = saved;
+  else lang = /^pt/i.test(navigator.language || "") ? "pt" : "en";
   document.documentElement.lang = lang === "pt" ? "pt" : "en";
 
   const PT = {
@@ -414,6 +420,82 @@
     "Delete this response?": "Apagar esta resposta?",
     "Feedback & testing": "Feedback e testes",
     "Beta test kit": "Kit de beta test",
+    "Beta · CM Collaborator – test it free for 7 days": "Beta · CM Collaborator – teste grátis durante 7 dias",
+    "Join the beta": "Quero participar",
+    "Beta launch · limited spots": "Lançamento beta · vagas limitadas",
+    "Test CM Collaborator free for 7 days": "Teste o CM Collaborator grátis durante 7 dias",
+    "A visual collaboration board for designers, UX/UI, architects, project managers and process analysts. Help shape it before the official launch.": "Um quadro de colaboração visual para designers, UX/UI, arquitetos, gestores de projeto e analistas de processos. Ajude a construí-lo antes do lançamento oficial.",
+    "What you'll test": "O que vai testar",
+    "days of full access": "dias de acesso completo",
+    "ready-made templates": "templates prontos",
+    "minutes of feedback": "minutos de feedback",
+    "Everything you need to think visually – together": "Tudo o que precisa para pensar visualmente – em equipa",
+    "Ready-made templates": "Templates prontos",
+    "Kanban, retrospective, sprint and PI planning, process flows, mind maps and customer journeys.": "Kanban, retrospetiva, sprint e PI planning, fluxos de processo, mapas mentais e jornadas do cliente.",
+    "Frames, shapes & connectors": "Frames, formas e conectores",
+    "Organise ideas in white frames and draw flows whose arrows follow your shapes.": "Organize ideias em frames brancos e desenhe fluxos com setas que acompanham as formas.",
+    "Live cursors, comments, dot voting and a shared timer for workshops.": "Cursores ao vivo, comentários, votação e timer partilhado para workshops.",
+    "Drop screenshots, paste GIFs and add icons and emoji to bring boards to life.": "Arraste capturas de ecrã, cole GIFs e adicione ícones e emoji para dar vida aos quadros.",
+    "Who it's for": "Para quem é",
+    "Made for people who design processes and experiences": "Feito para quem desenha processos e experiências",
+    "Project manager (GP)": "Gestor(a) de projeto (GP)",
+    "Process analyst": "Analista de processos",
+    "From sign-up to feedback in 4 steps": "Da inscrição ao feedback em 4 passos",
+    "Sign up": "Inscreva-se",
+    "Fill in the form below – it takes 30 seconds.": "Preencha o formulário abaixo – leva 30 segundos.",
+    "Get your invitation": "Receba o convite",
+    "We send your access by e-mail. Sign in with Google or a link.": "Enviamos o seu acesso por e-mail. Entre com Google ou por link.",
+    "Explore for 7 days": "Explore durante 7 dias",
+    "Follow the test missions or use your own projects.": "Siga as missões de teste ou use os seus próprios projetos.",
+    "5 quick questions and your suggestions shape the next version.": "5 perguntas rápidas e as suas sugestões moldam a próxima versão.",
+    "Request your 7-day access": "Peça o seu acesso de 7 dias",
+    "Spots are limited. We review requests and send the invitation by e-mail.": "As vagas são limitadas. Analisamos os pedidos e enviamos o convite por e-mail.",
+    "Free – no card needed": "Grátis – sem cartão",
+    "Access to every template and tool": "Acesso a todos os templates e ferramentas",
+    "Your data is used only for this beta": "Os seus dados são usados só para este beta",
+    "Full name": "Nome completo",
+    "e.g. Ana Martins": "ex.: Ana Martins",
+    "Use the e-mail you will sign in with (Google or other).": "Use o e-mail com que vai entrar (Google ou outro).",
+    "Your role": "A sua função",
+    "I agree to receive the beta invitation and a short feedback request by e-mail. My data is used only for this beta.": "Aceito receber por e-mail o convite para o beta e um pedido curto de feedback. Os meus dados são usados só para este beta.",
+    "Request my access": "Pedir o meu acesso",
+    "Beta sign-ups": "Inscrições no beta",
+    "Requests from the beta launch page. One click gives 7-day access to the selected workspace.": "Pedidos da página de lançamento do beta. Um clique dá acesso de 7 dias ao workspace selecionado.",
+    "Copy beta page link": "Copiar link da página beta",
+    "Invite all pending": "Convidar todos os pendentes",
+    "Sign-ups": "Inscrições",
+    "Pending": "Pendente",
+    "Give access to workspace": "Dar acesso ao workspace",
+    "No sign-ups yet. Share the beta page link.": "Ainda sem inscrições. Partilhe o link da página beta.",
+    "Role": "Função",
+    "Date": "Data",
+    "Source": "Origem",
+    "Status": "Estado",
+    "Give 7-day access": "Dar acesso de 7 dias",
+    "Delete this sign-up?": "Apagar esta inscrição?",
+    "Give 7-day access to all pending requests?": "Dar acesso de 7 dias a todos os pedidos pendentes?",
+    "No pending requests": "Sem pedidos pendentes",
+    "Create a workspace first": "Crie primeiro um workspace",
+    "people": "pessoas",
+    "Questions": "Perguntas",
+    "Good to know": "Bom saber",
+    "Is it free?": "É grátis?",
+    "Yes. The beta is free and no card is needed.": "Sim. O beta é grátis e não é preciso cartão.",
+    "What do I need?": "O que preciso?",
+    "Just a browser and the e-mail you signed up with – sign in with Google or with a link we send by e-mail.": "Só um navegador e o e-mail com que se inscreveu – entre com Google ou com um link que enviamos por e-mail.",
+    "What happens after 7 days?": "O que acontece depois de 7 dias?",
+    "Your access closes automatically. We ask you 5 quick questions about your experience.": "O seu acesso fecha automaticamente. Pedimos-lhe 5 perguntas rápidas sobre a sua experiência.",
+    "Who sees my data?": "Quem vê os meus dados?",
+    "Only the CM Collaborator team, and only to run this beta. You can ask us to delete it at any time.": "Só a equipa do CM Collaborator, e só para gerir este beta. Pode pedir para os apagarmos a qualquer momento.",
+    "You're on the list!": "Está na lista!",
+    "You're already on the list": "Já está na lista",
+    "This e-mail is already registered – we'll be in touch soon.": "Este e-mail já está inscrito – entraremos em contacto em breve.",
+    "We'll send your invitation to": "Vamos enviar o seu convite para",
+    "Check your spam folder too.": "Veja também a pasta de spam.",
+    "Please enter your full name.": "Indique o seu nome completo.",
+    "Please enter a valid e-mail.": "Indique um e-mail válido.",
+    "Please choose your role.": "Escolha a sua função.",
+    "Please accept to be contacted about the beta.": "Aceite ser contactado(a) sobre o beta.",
     "People on this board": "Pessoas neste quadro", "Tools": "Ferramentas"
   };
 
@@ -466,7 +548,8 @@
 
   function setLang(l) {
     try { localStorage.setItem("cmcollab:lang", l); } catch (e) { /* ignore */ }
-    location.reload();
+    const u = new URL(location.href);
+    if (u.searchParams.has("lang")) { u.searchParams.delete("lang"); location.replace(u.toString()); } else location.reload();
   }
   window.MBSetLang = setLang;
 

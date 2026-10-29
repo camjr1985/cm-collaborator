@@ -53,3 +53,10 @@ Firebase console → Realtime Database → Data → `admins` → add child `<e-m
 - The invitation message includes the end date and the feedback link (`/feedback/`).
 - Testers can answer the form from the **📣 Feedback** button on any board, from "My boards" or at `/feedback/`.
 - Results: Administration → **Tester feedback** (responses, satisfaction, ease of use, NPS, roles, features) → **Export CSV**.
+
+## Beta launch page (hidden)
+- `beta/` is a one-page launch site with a sign-up form (full name, e-mail, role). It is **not linked** in the
+  navigation – share the link directly: `https://camjr1985.github.io/cm-collaborator/beta/` (`?lang=pt` for Portuguese).
+- Sign-ups are stored in `signups/<e-mail>` (one per e-mail; anyone can create, only admins can read).
+- Administration → **Beta sign-ups**: choose the workspace, **Give 7-day access** per person or **Invite all pending**
+  (opens an e-mail with everyone in BCC), **Export CSV**.

@@ -6,7 +6,7 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, ws = {}, feedback = {};
+  let db, me, ws = {}, feedback = {}, signups = {}, signupWs = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-PT" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
@@ -53,8 +53,9 @@
   function load() {
     return Promise.all([
       db.ref("workspaces").once("value"),
-      db.ref("feedback").once("value").catch(function () { return { val: function () { return {}; } }; })
-    ]).then(function (r) { ws = r[0].val() || {}; feedback = r[1].val() || {}; render(); });
+      db.ref("feedback").once("value").catch(function () { return { val: function () { return {}; } }; }),
+      db.ref("signups").once("value").catch(function () { return { val: function () { return {}; } }; })
+    ]).then(function (r) { ws = r[0].val() || {}; feedback = r[1].val() || {}; signups = r[2].val() || {}; render(); });
   }
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { if (okMsg) toast(okMsg); return load(); }).catch(fail);
@@ -163,6 +164,87 @@
     dlg.hidden = false;
   }
 
+  /* ---------------- beta sign-ups ---------------- */
+  const SROLES = [["ux", "UX"], ["ui", "UI"], ["designer", "Designer"], ["architect", "Architect"], ["pm", "Project manager (GP)"], ["process", "Process analyst"], ["other", "Other"]];
+  function suList() { return Object.keys(signups).map(function (k) { return Object.assign({ k: k }, signups[k]); }).sort(function (a, b) { return (b.t || 0) - (a.t || 0); }); }
+  function betaWsDefault() {
+    const ids = Object.keys(ws);
+    if (signupWs && ws[signupWs]) return signupWs;
+    const timed = ids.filter(function (id) { return ws[id].info && ws[id].info.accessDays; })
+      .sort(function (a, b) { return (ws[b].info.created || 0) - (ws[a].info.created || 0); });
+    const beta = timed.find(function (id) { return /beta/i.test(ws[id].info.name || ""); });
+    return beta || timed[0] || ids[0] || null;
+  }
+  function grantUpdates(wsId, x, u) {
+    const days = Number((ws[wsId].info || {}).accessDays) || 7, k = A.key(x.email);
+    const expires = Date.now() + days * DAY;
+    const m = { email: x.email, name: x.name || x.email.split("@")[0], role: "editor", invitedAt: TS(), invitedBy: me.email, expires: expires };
+    u["workspaces/" + wsId + "/members/" + k] = m;
+    u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
+    u["signups/" + x.k + "/status"] = "invited";
+    u["signups/" + x.k + "/ws"] = wsId;
+    u["signups/" + x.k + "/at"] = TS();
+    return k;
+  }
+  function grantSignup(k) {
+    const wsId = betaWsDefault(); if (!wsId) return toast("Create a workspace first");
+    const x = Object.assign({ k: k }, signups[k]), u = {};
+    const mk = grantUpdates(wsId, x, u);
+    update(u, "Access granted").then(function () { openInvite(wsId, mk); });
+  }
+  function grantAllPending() {
+    const wsId = betaWsDefault(); if (!wsId) return toast("Create a workspace first");
+    const pend = suList().filter(function (x) { return x.status !== "invited"; });
+    if (!pend.length) return toast("No pending requests");
+    if (!window.confirm(t("Give 7-day access to all pending requests?") + " (" + pend.length + ")")) return;
+    const u = {};
+    pend.forEach(function (x) { grantUpdates(wsId, x, u); });
+    update(u, "Access granted").then(function () { openBulkInvite(wsId, pend.map(function (x) { return x.email; })); });
+  }
+  function openBulkInvite(wsId, emails) {
+    const w = ws[wsId], days = Number(w.info.accessDays) || 7, until = fmtDate(Date.now() + days * DAY);
+    const link = abs("../mentoring/"), fb = abs("../feedback/");
+    const txt = PT
+      ? "Olá,\n\nObrigado por se inscrever no beta do CM Collaborator! O seu acesso de teste já está ativo.\n\n1. Abra: " + link + "\n2. Entre com o e-mail com que se inscreveu (botão Google ou link de acesso por e-mail).\n3. O workspace \"" + w.info.name + "\" aparece em \"Os meus quadros\".\n\nO acesso é válido até " + until + ". No fim, deixe a sua opinião (5 perguntas, 3 minutos): " + fb + "\n\nObrigado!"
+      : "Hi,\n\nThank you for joining the CM Collaborator beta! Your test access is now active.\n\n1. Open: " + link + "\n2. Sign in with the e-mail you signed up with (Google button or e-mail sign-in link).\n3. The workspace \"" + w.info.name + "\" appears under \"My boards\".\n\nAccess is valid until " + until + ". At the end, share your opinion (5 questions, 3 minutes): " + fb + "\n\nThank you!";
+    const subject = PT ? "O seu acesso ao beta do CM Collaborator" : "Your CM Collaborator beta access";
+    const dlg = document.getElementById("inviteDlg");
+    dlg.querySelector("h2").textContent = t("Invite") + " " + emails.length + " " + t("people");
+    dlg.querySelector("textarea").value = txt + "\n\n---\nBCC: " + emails.join(", ");
+    dlg.querySelector("#mailBtn").href = "mailto:?bcc=" + encodeURIComponent(emails.join(",")) + "&subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(txt);
+    dlg.hidden = false;
+  }
+  function exportSignups() {
+    const cols = ["date", "name", "email", "role", "language", "source", "status", "workspace"];
+    const q = function (v) { v = v == null ? "" : String(v); return '"' + v.replace(/"/g, '""') + '"'; };
+    const rows = suList().map(function (x) { return [x.t ? new Date(x.t).toISOString() : "", x.name, x.email, label(SROLES, x.role), x.lang, x.src, x.status || "pending", x.ws ? ((ws[x.ws] || {}).info || {}).name || x.ws : ""].map(q).join(","); });
+    const blob = new Blob(["\ufeff" + cols.join(",") + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "cm-collaborator-beta-signups-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  function signupsSection() {
+    const list = suList(), pend = list.filter(function (x) { return x.status !== "invited"; }).length, wsId = betaWsDefault();
+    let h = '<section class="card fb-report su-report" id="signups"><div class="br-head"><div><span class="eyebrow sm">Beta</span><h2>' + t("Beta sign-ups") + '</h2><p class="muted small">' + t("Requests from the beta launch page. One click gives 7-day access to the selected workspace.") + "</p></div>" +
+      '<div class="br-actions"><button class="btn sm" data-copy-beta>' + t("Copy beta page link") + "</button>" + (list.length ? '<button class="btn sm" id="suCsv">' + t("Export CSV") + "</button>" : "") + (pend ? '<button class="btn sm primary" id="suAll">' + t("Invite all pending") + " (" + pend + ")</button>" : "") + "</div></div>";
+    h += '<div class="copy-row"><input readonly value="' + esc(abs("../beta/")) + '" class="no-i18n"></div>';
+    h += '<div class="fb-kpis"><div><b>' + list.length + "</b><span>" + t("Sign-ups") + "</span></div><div><b>" + pend + "</b><span>" + t("Pending") + "</span></div><div><b>" + (list.length - pend) + "</b><span>" + t("Invited") + "</span></div></div>";
+    if (Object.keys(ws).length) {
+      h += '<label class="su-target">' + t("Give access to workspace") + ' <select id="suWs">' + Object.keys(ws).map(function (id) {
+        return '<option value="' + esc(id) + '"' + (id === wsId ? " selected" : "") + ' class="no-i18n">' + esc(ws[id].info.name) + (ws[id].info.accessDays ? " · " + ws[id].info.accessDays + "d" : "") + "</option>";
+      }).join("") + "</select></label>";
+    }
+    if (!list.length) return h + '<div class="empty-big"><p class="muted">' + t("No sign-ups yet. Share the beta page link.") + "</p></div></section>";
+    h += '<div class="su-table-wrap"><table class="su-table"><thead><tr><th>' + t("Name") + "</th><th>E-mail</th><th>" + t("Role") + "</th><th>" + t("Date") + "</th><th>" + t("Source") + "</th><th>" + t("Status") + "</th><th></th></tr></thead><tbody>" +
+      list.map(function (x) {
+        const inv = x.status === "invited";
+        return "<tr><td class=\"no-i18n\"><b>" + esc(x.name) + '</b></td><td class="no-i18n">' + esc(x.email) + "</td><td>" + esc(label(SROLES, x.role)) + '</td><td class="no-i18n">' + (x.t ? fmtDate(x.t) : "") + '</td><td class="no-i18n muted">' + esc(x.src || "") + "</td>" +
+          "<td>" + (inv ? '<span class="xp">' + t("Invited") + "</span>" : '<span class="xp soon">' + t("Pending") + "</span>") + "</td>" +
+          '<td class="su-act"><div>' + (inv ? "" : '<button class="btn sm primary" data-grant="' + esc(x.k) + '">' + t("Give 7-day access") + "</button>") + '<button class="link" data-delsu="' + esc(x.k) + '">' + t("delete") + "</button></div></td></tr>";
+      }).join("") + "</tbody></table></div></section>";
+    return h;
+  }
+
   /* ---------------- feedback report ---------------- */
   function fbList() { return Object.keys(feedback).map(function (k) { return Object.assign({ id: k }, feedback[k]); }).sort(function (a, b) { return (b.t || 0) - (a.t || 0); }); }
   function avg(list, f) { const v = list.map(function (x) { return x[f]; }).filter(function (x) { return typeof x === "number"; }); return v.length ? v.reduce(function (a, b) { return a + b; }, 0) / v.length : null; }
@@ -230,9 +312,10 @@
     h += '<div class="admin-grid"><section class="card"><h2>New workspace</h2><p class="muted small">A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.</p>' +
       '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button></form>' +
       '<p class="muted small">' + t("Access period: choose 7 days for beta testers – access closes automatically.") + "</p></section>" +
-      '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div><a class=\"stat\" href=\"#feedback\"><b>" + Object.keys(feedback).length + "</b><span>Feedback</span></a></div>" +
+      '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div><a class=\"stat\" href=\"#signups\"><b>" + Object.keys(signups).length + "</b><span>Sign-ups</span></a><a class=\"stat\" href=\"#feedback\"><b>" + Object.keys(feedback).length + "</b><span>Feedback</span></a></div>" +
       '<p class="muted small">Only invited e-mails can open a workspace. Admins are managed in the Firebase console.</p></section></div>';
 
+    h += signupsSection();
     if (!ids.length) h += '<div class="card empty-big" style="margin-top:24px"><h3>No workspaces yet</h3><p class="muted">Create the first one above – for example "Mentoring".</p></div>';
 
     h += ids.map(function (id) {
@@ -284,6 +367,12 @@
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-delws]").forEach(function (b) { b.onclick = function () { deleteWorkspace(b.dataset.delws); }; });
     el.querySelectorAll("[data-ext]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ext); extendMember(p[0], p[1], Number(p[2])); }; });
+    const suWs = document.getElementById("suWs"); if (suWs) suWs.onchange = function () { signupWs = suWs.value; };
+    const suAll = document.getElementById("suAll"); if (suAll) suAll.onclick = grantAllPending;
+    const suCsv = document.getElementById("suCsv"); if (suCsv) suCsv.onclick = exportSignups;
+    el.querySelectorAll("[data-grant]").forEach(function (b) { b.onclick = function () { grantSignup(b.dataset.grant); }; });
+    el.querySelectorAll("[data-delsu]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Delete this sign-up?"))) db.ref("signups/" + b.dataset.delsu).remove().then(load, fail); }; });
+    el.querySelectorAll("[data-copy-beta]").forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText(abs("../beta/")).then(function () { toast("Link copied"); }); }; });
     const csv = document.getElementById("fbCsv"); if (csv) csv.onclick = exportCsv;
     el.querySelectorAll("[data-delfb]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Delete this response?"))) db.ref("feedback/" + b.dataset.delfb).remove().then(load, fail); }; });
     el.querySelectorAll("[data-copy-fb]").forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText(abs("../feedback/")).then(function () { toast("Link copied"); }); }; });
