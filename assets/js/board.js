@@ -2023,25 +2023,25 @@
   }
   function start() {
     if (!CFG.id || !/^[a-z0-9-]{2,60}$/.test(CFG.id)) {
-      return gateScreen("Board not found", t("This link is incomplete. Open your boards from the Mentoring page."), '<a class="btn primary" href="' + ROOT + 'mentoring/">' + t("My boards") + "</a>");
+      return gateScreen("Board not found", t("This link is incomplete. Open your boards from My workspaces."), '<a class="btn primary" href="' + ROOT + 'workspaces/">' + t("My boards") + "</a>");
     }
     if (!window.CMAuth || !window.CMAuth.enabled) {
       CFG.title = CFG.title || prettify(CFG.id);
       CFG.template = CFG.template || "persona";
       CFG.defaults = CFG.defaults || { name: CFG.title };
-      CFG.crumbs = [{ label: t("Home"), href: ROOT }, { label: t("My boards"), href: ROOT + "mentoring/" }, { label: CFG.title }];
+      CFG.crumbs = [{ label: t("Home"), href: ROOT }, { label: t("My boards"), href: ROOT + "workspaces/" }, { label: CFG.title }];
       return boot();
     }
     gateScreen("Loading…", t("Checking your access to this board."));
     window.CMAuth.ready().then(function (user) {
       if (!user) {
         return gateScreen("Sign in required", t("This board is private. Sign in with the e-mail address the mentor invited."),
-          '<a class="btn primary" href="' + ROOT + "mentoring/?next=" + encodeURIComponent(location.pathname + location.search) + '">' + t("Sign in") + "</a>");
+          '<a class="btn primary" href="' + ROOT + "workspaces/?next=" + encodeURIComponent(location.pathname + location.search) + '">' + t("Sign in") + "</a>");
       }
       const db = window.CMAuth.db(), key = window.CMAuth.key(user.email);
       return Promise.all([window.CMAuth.isAdmin(), db.ref("boards/" + CFG.id + "/info").once("value")]).then(function (r) {
         const admin = r[0], info = r[1].val();
-        if (!info) return gateScreen("Board not found", t("This board does not exist or was removed."), '<a class="btn primary" href="' + ROOT + 'mentoring/">' + t("My boards") + "</a>");
+        if (!info) return gateScreen("Board not found", t("This board does not exist or was removed."), '<a class="btn primary" href="' + ROOT + 'workspaces/">' + t("My boards") + "</a>");
         const wsP = info.ws ? db.ref("workspaces/" + info.ws + "/info/name").once("value").then(function (s) { return s.val(); }, function () { return null; }) : Promise.resolve(null);
         const roleP = admin ? Promise.resolve("editor") : db.ref("workspaces/" + info.ws + "/members/" + key + "/role").once("value").then(function (s) { return s.val() || "viewer"; });
         return Promise.all([wsP, roleP]).then(function (x) {
@@ -2052,7 +2052,7 @@
           CFG.readOnly = role === "viewer";
           CFG.isAdmin = admin;
           CFG.signedIn = true;
-          CFG.crumbs = [{ label: t("My boards"), href: ROOT + "mentoring/" }].concat(wsName ? [{ label: wsName }] : []).concat([{ label: CFG.title }]);
+          CFG.crumbs = [{ label: t("My boards"), href: ROOT + "workspaces/" }].concat(wsName ? [{ label: wsName }] : []).concat([{ label: CFG.title }]);
           me.id = user.uid;
           if (!me.name) me.name = user.displayName || user.email.split("@")[0];
           saveMe();
@@ -2065,11 +2065,11 @@
           const ended = Object.keys(v).map(function (k) { return v[k]; }).filter(function (e) { return e && e.expires && e.expires <= now; });
           if (!ended.length) throw err;
           gateScreen("Your test access has ended", t("Thank you for testing CM Collaborator! If you haven't yet, please share your feedback – it takes about 3 minutes."),
-            '<a class="btn primary" href="' + ROOT + 'feedback/">' + t("Give feedback") + '</a><a class="btn" href="' + ROOT + 'mentoring/">' + t("My boards") + "</a>");
+            '<a class="btn primary" href="' + ROOT + 'feedback/">' + t("Give feedback") + '</a><a class="btn" href="' + ROOT + 'workspaces/">' + t("My boards") + "</a>");
         });
       }).catch(function () {
         gateScreen("No access", t("Your account (" + esc(user.email) + ") doesn't have access to this board. Ask the mentor for an invitation."),
-          '<a class="btn primary" href="' + ROOT + 'mentoring/">' + t("My boards") + '</a><button class="btn" id="gateSignOut">' + t("Use another account") + "</button>");
+          '<a class="btn primary" href="' + ROOT + 'workspaces/">' + t("My boards") + '</a><button class="btn" id="gateSignOut">' + t("Use another account") + "</button>");
       });
     });
   }

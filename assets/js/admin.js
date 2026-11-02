@@ -91,7 +91,7 @@
     u["workspaces/" + wsId + "/members/" + k] = { email: email, name: name || email.split("@")[0], role: role, invitedAt: TS(), invitedBy: me.email, expires: expires };
     u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
     f.reset();
-    update(u, "Access granted").then(function () { openInvite(wsId, k); });
+    update(u).then(function () { inviteAndTell([email]); });
   }
   function extendMember(wsId, k, days) {
     const m = ws[wsId].members[k], u = {};
@@ -141,7 +141,7 @@
 
   /* ---------------- invitation ---------------- */
   function inviteText(wsId, m) {
-    const w = ws[wsId], link = abs("../mentoring/"), fb = abs("../feedback/");
+    const w = ws[wsId], link = abs("../workspaces/"), fb = abs("../feedback/");
     if (PT) {
       return "Olá " + (m.name || "") + ",\n\nVocê foi convidado(a) para o workspace \"" + w.info.name + "\" no CM Collaborator.\n\n" +
         "1. Abra: " + link + "\n2. Entre com este e-mail: " + m.email + " (botão Google ou link de acesso por e-mail).\n3. Os seus quadros aparecem em \"Os meus quadros\"." +
@@ -153,12 +153,30 @@
       (m.expires ? "\n\nYour test access is valid until " + fmtDate(m.expires) + ". Explore freely and, at the end, share your opinion (5 questions, 3 minutes): " + fb : "") +
       "\n\nThank you!";
   }
+  /* Sends the invitation e-mail straight away: a passwordless sign-in link from Firebase Auth. */
+  function sendInviteEmail(email) {
+    try {
+      const auth = window.firebase.auth();
+      auth.languageCode = PT ? "pt" : "en";
+      return auth.sendSignInLinkToEmail(email, { url: abs("../workspaces/?invite=1"), handleCodeInApp: true })
+        .then(function () { return true; }, function (e) { console.warn(e); return false; });
+    } catch (e) { return Promise.resolve(false); }
+  }
+  function inviteAndTell(emails) {
+    let ok = 0;
+    return emails.reduce(function (p, em) { return p.then(function () { return sendInviteEmail(em).then(function (r) { if (r) ok++; }); }); }, Promise.resolve())
+      .then(function () {
+        if (ok === emails.length) toast(emails.length === 1 ? t("Invitation e-mailed to") + " " + emails[0] : ok + " " + t("invitations e-mailed"));
+        else toast(t("Access granted, but some e-mails could not be sent – use “Resend invite”."));
+        return ok;
+      });
+  }
   function openInvite(wsId, k) {
     const m = ((ws[wsId] || {}).members || {})[k]; if (!m) return;
     const txt = inviteText(wsId, m);
     const subject = PT ? "Convite: CM Collaborator – " + ws[wsId].info.name : "Invitation: CM Collaborator – " + ws[wsId].info.name;
     const dlg = document.getElementById("inviteDlg");
-    dlg.querySelector("h2").textContent = t("Invite") + " " + (m.name || m.email);
+    dlg.querySelector("h2").textContent = t("Invitation sent to") + " " + (m.name || m.email);
     dlg.querySelector("textarea").value = txt;
     dlg.querySelector("#mailBtn").href = "mailto:" + encodeURIComponent(m.email) + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(txt);
     dlg.hidden = false;
@@ -191,7 +209,7 @@
     const wsId = betaWsDefault(); if (!wsId) return toast("Create a workspace first");
     const x = Object.assign({ k: k }, signups[k]), u = {};
     const mk = grantUpdates(wsId, x, u);
-    update(u, "Access granted").then(function () { openInvite(wsId, mk); });
+    update(u).then(function () { inviteAndTell([x.email]); });
   }
   function grantAllPending() {
     const wsId = betaWsDefault(); if (!wsId) return toast("Create a workspace first");
@@ -201,11 +219,11 @@
     if (!window.confirm(t("Give access to all pending requests?") + " (" + pend.length + ") – " + (dd ? t("Temporary") + " · " + dd + " " + t("days") : t("Full access")))) return;
     const u = {};
     pend.forEach(function (x) { grantUpdates(wsId, x, u); });
-    update(u, "Access granted").then(function () { openBulkInvite(wsId, pend.map(function (x) { return x.email; })); });
+    update(u).then(function () { inviteAndTell(pend.map(function (x) { return x.email; })); });
   }
   function openBulkInvite(wsId, emails) {
     const w = ws[wsId], days = suDays(wsId), until = days ? fmtDate(Date.now() + days * DAY) : "";
-    const link = abs("../mentoring/"), fb = abs("../feedback/");
+    const link = abs("../workspaces/"), fb = abs("../feedback/");
     const txt = PT
       ? "Olá,\n\nObrigado por se inscrever no beta do CM Collaborator! O seu acesso de teste já está ativo.\n\n1. Abra: " + link + "\n2. Entre com o e-mail com que se inscreveu (botão Google ou link de acesso por e-mail).\n3. O workspace \"" + w.info.name + "\" aparece em \"Os meus quadros\"." + (until ? "\n\nO acesso é válido até " + until + "." : "") + "\n\nQuando puder, deixe a sua opinião (5 perguntas, 3 minutos): " + fb + "\n\nObrigado!"
       : "Hi,\n\nThank you for joining the CM Collaborator beta! Your test access is now active.\n\n1. Open: " + link + "\n2. Sign in with the e-mail you signed up with (Google button or e-mail sign-in link).\n3. The workspace \"" + w.info.name + "\" appears under \"My boards\"." + (until ? "\n\nAccess is valid until " + until + "." : "") + "\n\nWhen you can, share your opinion (5 questions, 3 minutes): " + fb + "\n\nThank you!";
@@ -310,7 +328,7 @@
     const people = {};
     ids.forEach(function (id) { Object.keys(ws[id].members || {}).forEach(function (k) { people[k] = 1; }); });
 
-    let h = '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../mentoring/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
+    let h = '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
     h += '<div class="admin-grid"><section class="card"><h2>New workspace</h2><p class="muted small">A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.</p>' +
       '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button></form>' +
       '<p class="muted small">' + t("Access period: choose 7 days for beta testers – access closes automatically.") + "</p></section>" +
@@ -335,7 +353,7 @@
         const m = members[k];
         return '<li class="member"><span class="av sm no-i18n">' + esc((m.name || m.email)[0].toUpperCase()) + '</span><span class="m-who"><b class="no-i18n">' + esc(m.name || "") + '</b><span class="muted no-i18n">' + esc(m.email) + "</span></span>" +
           roleSelect("", m.role, 'data-role="' + id + "|" + k + '"') +
-          '<button class="btn sm" data-invite="' + id + "|" + k + '">Invite</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
+          '<button class="btn sm" data-invite="' + id + "|" + k + '">Resend invite</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
           '<span class="m-exp">' + expiryBadge(m) + '<button class="link" data-ext="' + id + "|" + k + '|7">' + t("+7 days") + "</button>" + (m.expires ? '<button class="link" data-ext="' + id + "|" + k + '|0">' + t("Make full access") + "</button>" : "") + "</span></li>";
       }).join("");
       return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2>" + (w.info.accessDays ? '<span class="xp">' + esc(t("Default access")) + ": " + w.info.accessDays + " " + esc(t("days")) + "</span>" : "") + "</div>" +
@@ -353,7 +371,7 @@
     }).join("");
 
     h += feedbackSection();
-    h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">Send this message to the person. They sign in with the invited e-mail and see the workspace boards.</p>' +
+    h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">' + t("The sign-in link was e-mailed automatically. If you like, also send this personal message (e.g. by WhatsApp).") + '</p>' +
       '<textarea rows="10" readonly></textarea><div class="row-end"><button class="btn" id="dlgClose">Close</button><button class="btn" id="copyInv">Copy message</button><a class="btn primary" id="mailBtn" href="#">Open in e-mail</a></div></div></div>';
     el.innerHTML = h;
 
@@ -363,7 +381,7 @@
     el.querySelectorAll("form[data-add]").forEach(function (f) { f.onsubmit = function (e) { e.preventDefault(); addMember(f.dataset.add, f); }; });
     function pair(s) { return s.split("|"); }
     el.querySelectorAll("[data-role]").forEach(function (s) { s.onchange = function () { const p = pair(s.dataset.role); setRole(p[0], p[1], s.value); }; });
-    el.querySelectorAll("[data-invite]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.invite); openInvite(p[0], p[1]); }; });
+    el.querySelectorAll("[data-invite]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.invite); const m = ((ws[p[0]] || {}).members || {})[p[1]]; if (m) inviteAndTell([m.email]); openInvite(p[0], p[1]); }; });
     el.querySelectorAll("[data-remove]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.remove); removeMember(p[0], p[1]); }; });
     el.querySelectorAll("[data-delb]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delb); deleteBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });
@@ -392,11 +410,11 @@
     if (!A || !A.enabled) return setup();
     el.innerHTML = '<p class="muted">' + t("Loading…") + "</p>";
     A.ready().then(function (user) {
-      if (!user) return screen("Sign in required", t("Administration is only for the account owner."), '<a class="btn primary" href="../mentoring/?next=' + encodeURIComponent(location.pathname) + '">' + t("Sign in") + "</a>");
+      if (!user) return screen("Sign in required", t("Administration is only for the account owner."), '<a class="btn primary" href="../workspaces/?next=' + encodeURIComponent(location.pathname) + '">' + t("Sign in") + "</a>");
       me = user; db = A.db();
       return A.isAdmin().then(function (ok) {
         if (!ok) {
-          screen("Admins only", t("Your account (" + esc(user.email) + ") is not an administrator."), '<a class="btn primary" href="../mentoring/">' + t("My boards") + '</a> <button class="btn" id="so2">' + t("Sign out") + "</button>");
+          screen("Admins only", t("Your account (" + esc(user.email) + ") is not an administrator."), '<a class="btn primary" href="../workspaces/">' + t("My boards") + '</a> <button class="btn" id="so2">' + t("Sign out") + "</button>");
           const so = document.getElementById("so2"); if (so) so.onclick = A.signOut;
           return;
         }

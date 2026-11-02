@@ -18,7 +18,7 @@
 
   const PT = {
     // navigation / site
-    "Home": "Início", "Mentoring": "Mentoria", "Open board": "Abrir quadro", "Open Mentoring": "Abrir Mentoria",
+    "Home": "Início", "Mentoring": "Mentoria", "Open board": "Abrir quadro", "Open Mentoring": "Abrir Mentoria", "Open my workspaces": "Abrir os meus workspaces", "Workspaces": "Workspaces",
     "Features": "Recursos", "How it works": "Como funciona", "Licensing": "Licenciamento", "Mentees": "Mentorados",
     "Visual workspace for mentoring": "Espaço visual para mentoria",
     "Know your mentee. Prioritise what matters. Act together.": "Conheça o seu mentorado. Priorize o que importa. Aja em conjunto.",
@@ -197,7 +197,7 @@
     "Checking your access to this board.": "A verificar o seu acesso a este quadro.",
     "This board is private. Sign in with the e-mail address the mentor invited.": "Este quadro é privado. Entre com o e-mail que o mentor convidou.",
     "Board not found": "Quadro não encontrado",
-    "This link is incomplete. Open your boards from the Mentoring page.": "Este link está incompleto. Abra os seus quadros na página Mentoria.",
+    "This link is incomplete. Open your boards from My workspaces.": "Este link está incompleto. Abra os seus quadros em Os meus workspaces.",
     "This board does not exist or was removed.": "Este quadro não existe ou foi removido.",
     "No access": "Sem acesso",
     "Use another account": "Usar outra conta",
@@ -459,6 +459,12 @@
     "Your role": "A sua função",
     "I agree to receive the beta invitation and a short feedback request by e-mail. My data is used only for this beta.": "Aceito receber por e-mail o convite para o beta e um pedido curto de feedback. Os meus dados são usados só para este beta.",
     "Request my access": "Pedir o meu acesso",
+    "Invitation e-mailed to": "Convite enviado por e-mail para",
+    "invitations e-mailed": "convites enviados por e-mail",
+    "Access granted, but some e-mails could not be sent – use “Resend invite”.": "Acesso concedido, mas alguns e-mails não foram enviados – use “Reenviar convite”.",
+    "Resend invite": "Reenviar convite",
+    "The sign-in link was e-mailed automatically. If you like, also send this personal message (e.g. by WhatsApp).": "O link de acesso foi enviado automaticamente por e-mail. Se quiser, envie também esta mensagem pessoal (por exemplo, por WhatsApp).",
+    "Invitation sent to": "Convite enviado para",
     "Auto-align – tidy up post-its (select items or a frame; nothing selected = every frame)": "Alinhamento automático – organizar post-its (selecione elementos ou um frame; sem seleção = todos os frames)",
     "Select post-its or a frame to tidy up": "Selecione post-its ou um frame para organizar",
     "Board tidied up – Ctrl+Z to undo": "Quadro organizado – Ctrl+Z para desfazer",

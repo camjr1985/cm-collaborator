@@ -6,7 +6,7 @@ only people the administrator invites can open them.
 
 ```
 index.html                 Landing page
-mentoring/                 "My boards" – sign in, see your workspaces and boards
+workspaces/                "My workspaces" – sign in, see your workspaces and boards (mentoring/ redirects here)
 admin/                     Administration – workspaces, boards, people (admins only)
 board/?id=<board-id>       Any board (e.g. board/?id=persona-ana)
 feedback/                  Feedback form for testers (answers visible only to admins)
@@ -33,7 +33,7 @@ boards/<board>/data/{stickies, images, fields, photos, meta}   board content (au
 ## Daily use
 1. **Administration → New workspace** (e.g. "Mentoring 2026").
 2. In the workspace: **New board** (name + template: Persona Map, MoSCoW or Blank).
-3. **Grant access**: name + e-mail + *Can edit* / *View only* → an invitation message opens (copy or e-mail).
+3. **Grant access**: name + e-mail + *Can edit* / *View only* + *Temporary* or *Full access* → the sign-in link is e-mailed automatically (Firebase Auth). "Resend invite" sends it again and shows a personal message to copy.
 4. The person opens the site, signs in **with the invited e-mail** and sees only their workspaces.
 
 Tip: one workspace per mentee keeps each mentee's boards private from the others.

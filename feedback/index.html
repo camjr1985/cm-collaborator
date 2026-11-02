@@ -16,7 +16,7 @@
       <a class="brand" href="../"><span class="logo">CM</span><span>CM Collaborator</span></a>
       <nav class="nav-links">
         <a href="../">Home</a>
-        <a href="../mentoring/">My boards</a>
+        <a href="../workspaces/">My boards</a>
       </nav>
       <div class="spacer"></div>
       <div class="lang" data-lang-switch></div>
@@ -48,7 +48,7 @@
       A.ready().then(function (user) {
         if (user) return show();
         box.innerHTML = '<h2>' + t("Sign in required") + '</h2><p class="muted">' + t("Please sign in with the e-mail you were invited with, so we know who the feedback comes from.") + '</p>' +
-          '<a class="btn primary" href="../mentoring/?next=' + encodeURIComponent(location.pathname) + '">' + t("Sign in") + "</a>";
+          '<a class="btn primary" href="../workspaces/?next=' + encodeURIComponent(location.pathname) + '">' + t("Sign in") + "</a>";
       });
     })();
   </script>
