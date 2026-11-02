@@ -1048,7 +1048,7 @@
   function askName() {
     if (me.name) return;
     modal('<h2>Welcome to the board 👋</h2><p class="muted">Your name appears on your cursor, post-its and comments.</p>' +
-      '<form id="nameForm"><label>Your name<input id="nameIn" maxlength="40" required placeholder="e.g. Joaquim Ventura"></label>' +
+      '<form id="nameForm"><label>Your name<input id="nameIn" maxlength="40" required placeholder="e.g. Ana Silva"></label>' +
       '<div class="colors">' + PEOPLE_COLORS.map(function (c) { return '<button type="button" class="pc' + (c === me.color ? " on" : "") + '" data-pc="' + c + '" style="background:' + c + '" aria-label="Colour"></button>'; }).join("") + "</div>" +
       '<div class="modal-actions"><button class="btn primary">Enter board</button></div></form>', function (root) {
       root.querySelectorAll(".pc").forEach(function (b) { b.onclick = function () { me.color = b.dataset.pc; root.querySelectorAll(".pc").forEach(function (x) { x.classList.toggle("on", x === b); }); }; });

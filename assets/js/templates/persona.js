@@ -63,7 +63,7 @@
 
   // Header: photo + identity
   html += photo(630, 128, 96, 96, "avatar", "Photo", true);
-  html += field(742, 132, 330, "name", "Name:", "Joaquim Ventura");
+  html += field(742, 132, 330, "name", "Name:", "Full name");
   html += field(742, 164, 330, "role", "Role:", "Your current role");
   html += field(742, 196, 330, "city", "City:", "City - Country");
 

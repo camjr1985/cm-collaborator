@@ -74,7 +74,7 @@
       '<form id="newForm"><label class="lbl-f">' + t("Board name") + '<input name="title" required placeholder="' + esc(t("e.g. Sprint 12 retrospective")) + '" autocomplete="off"></label>';
     if (live) {
       h += '<label class="lbl-f">Workspace<select name="ws">' + wsIds.map(function (id) { return '<option value="' + id + '"' + (id === presetWs ? " selected" : "") + ">" + esc(wss[id].info.name) + "</option>"; }).join("") +
-        '<option value="__new">' + t("+ New workspace…") + '</option></select></label><label class="lbl-f" id="newWsRow"' + (wsIds.length ? " hidden" : "") + ">" + t("New workspace name") + '<input name="wsname" placeholder="' + esc(t("e.g. Mentoring – Joaquim")) + '" autocomplete="off"></label>';
+        '<option value="__new">' + t("+ New workspace…") + '</option></select></label><label class="lbl-f" id="newWsRow"' + (wsIds.length ? " hidden" : "") + ">" + t("New workspace name") + '<input name="wsname" placeholder="' + esc(t("e.g. Mentoring 2026")) + '" autocomplete="off"></label>';
     }
     h += '<div class="row-end"><button type="button" class="btn" id="newCancel">Cancel</button><button class="btn primary">Create board</button></div></form></div></div></div>';
     document.body.insertAdjacentHTML("beforeend", h);

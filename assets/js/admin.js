@@ -342,7 +342,7 @@
         '<button class="btn sm ghost danger-t" data-delws="' + id + '">Delete workspace</button></div>' +
         '<div class="ws-cols"><div><h3>Boards <span class="count">' + bIds.length + "</span></h3>" +
         '<ul class="members">' + (bl || '<li class="muted small">No boards yet.</li>') + "</ul>" +
-        '<form class="form-grid3" data-newboard="' + id + '"><input name="title" required placeholder="' + esc(t("Board name, e.g. Joaquim Ventura")) + '" autocomplete="off">' +
+        '<form class="form-grid3" data-newboard="' + id + '"><input name="title" required placeholder="' + esc(t("Board name, e.g. Persona map – Ana")) + '" autocomplete="off">' +
         '<select name="template" aria-label="Template">' + templateOptions() + '</select>' +
         '<input name="bid" placeholder="' + esc(t("Link id (optional)")) + '" autocomplete="off" pattern="[a-z0-9-]{2,60}">' +
         '<button class="btn primary">New board</button></form></div>' +

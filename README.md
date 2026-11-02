@@ -8,7 +8,7 @@ only people the administrator invites can open them.
 index.html                 Landing page
 mentoring/                 "My boards" – sign in, see your workspaces and boards
 admin/                     Administration – workspaces, boards, people (admins only)
-board/?id=<board-id>       Any board (e.g. board/?id=joaquim-ventura)
+board/?id=<board-id>       Any board (e.g. board/?id=persona-ana)
 feedback/                  Feedback form for testers (answers visible only to admins)
 database.rules.json        Security rules (published in the Firebase console – this is what enforces access)
 assets/js/config.js        Firebase web config (public by design)
@@ -31,7 +31,7 @@ boards/<board>/data/{stickies, images, fields, photos, meta}   board content (au
 ```
 
 ## Daily use
-1. **Administration → New workspace** (e.g. "Mentoring – Joaquim").
+1. **Administration → New workspace** (e.g. "Mentoring 2026").
 2. In the workspace: **New board** (name + template: Persona Map, MoSCoW or Blank).
 3. **Grant access**: name + e-mail + *Can edit* / *View only* → an invitation message opens (copy or e-mail).
 4. The person opens the site, signs in **with the invited e-mail** and sees only their workspaces.
