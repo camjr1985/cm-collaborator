@@ -60,3 +60,11 @@ Firebase console → Realtime Database → Data → `admins` → add child `<e-m
 - Sign-ups are stored in `signups/<e-mail>` (one per e-mail; anyone can create, only admins can read).
 - Administration → **Beta sign-ups**: choose the workspace, **Give 7-day access** per person or **Invite all pending**
   (opens an e-mail with everyone in BCC), **Export CSV**.
+
+## Plans, customers and the app
+- **Anyone can sign in** (Google or e-mail link) and gets the **Free** plan: 1 own workspace, 3 boards, 2 invited people.
+  They create workspaces from "My workspaces" and manage people at `admin/` (owner view – only their own workspaces).
+- **Administrator → Plans & licences**: give a customer `Pro`, `Team` or `Enterprise`, number of seats and end date
+  (stored in `plans/<e-mail>`; only admins can write it). Limits live in `assets/js/plans.js`.
+- **Pricing page**: `pricing/` (USD). Checkout buttons currently e-mail the request; they will open Paddle / app-store checkout.
+- **Installable app (PWA)**: `manifest.webmanifest` + `sw.js` – "Add to Home screen" on Android/iPhone.

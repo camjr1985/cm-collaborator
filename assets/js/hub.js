@@ -45,12 +45,16 @@
     return '<a class="board-card" href="' + boardUrl(id, b.template) + '" data-title="' + esc((b.title || "").toLowerCase()) + '"><span class="tpl-pv">' + pv(b.template) + '</span>' +
       '<span class="bc-t"><b class="no-i18n">' + esc(b.title || id) + '</b><span class="muted small no-i18n">' + esc(wsName || tplName(b.template)) + "</span></span></a>";
   }
-  function wsSection(id, w, admin) {
+  let ME = null, PLAN = null, OWNED = {};
+  function isOwner(id, w) { return !!(w && w.info && ME && w.info.owner === ME); }
+  function wsSection(id, w, adminAll) {
+    const admin = adminAll || isOwner(id, w);
     const boards = w.boards || {};
     const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
     const name = (w.info || {}).name || id;
     return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + "</span>" +
-      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button>' : "") + "</div>" +
+      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><a class="btn sm ghost" href="../admin/#ws-' + id + '">👥 <span>Manage people</span></a>' : "") +
+      (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + "</div>" +
       (ids.length ? '<div class="board-grid">' + ids.map(function (b) { return boardCard(b, boards[b], tplName(boards[b].template)); }).join("") + "</div>"
         : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
   }
@@ -68,7 +72,8 @@
 
   /* ---------------- create board dialog ---------------- */
   function createDialog(tplId, wss, presetWs) {
-    const wsIds = Object.keys(wss || {}).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
+    const canIn = function (id) { return PLAN === "admin" || isOwner(id, wss[id]); };
+    const wsIds = Object.keys(wss || {}).filter(canIn).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
     const live = A && A.enabled;
     let h = '<div class="modal-lite" id="newDlg"><div class="card new-card"><div class="new-pv">' + pv(tplId) + '</div><div class="new-form"><h2>New board</h2><p class="muted small no-i18n">' + esc(tplName(tplId)) + "</p>" +
       '<form id="newForm"><label class="lbl-f">' + t("Board name") + '<input name="title" required placeholder="' + esc(t("e.g. Sprint 12 retrospective")) + '" autocomplete="off"></label>';
@@ -92,17 +97,34 @@
       if (!live) { location.href = boardUrl(id, tplId); return; }
       const db = A.db(), TS = window.firebase.database.ServerValue.TIMESTAMP, me = A.user(), u = {};
       let ws = f.ws.value;
+      const lim = PLAN && PLAN !== "admin" ? PLAN : null;
       if (ws === "__new") {
         const wn = (f.wsname.value || "").trim();
         if (!wn) return toast("Give the workspace a name");
+        if (lim && Object.keys(OWNED).length >= lim.workspaces) return planLimit(t("Your plan allows") + " " + lim.workspaces + " " + t(lim.workspaces === 1 ? "workspace" : "workspaces") + ".");
         ws = (slug(wn) || "workspace") + "-" + rnd();
-        u["workspaces/" + ws + "/info"] = { name: wn, created: TS, createdBy: me.email };
+        const info = { name: wn, created: TS, createdBy: me.email };
+        if (lim) { info.owner = ME; info.ownerEmail = me.email; u["userWorkspaces/" + ME + "/" + ws] = { name: wn, owner: true }; }
+        u["workspaces/" + ws + "/info"] = info;
+      } else if (lim && Object.keys((wss[ws] || {}).boards || {}).length >= lim.boards) {
+        return planLimit(t("Your plan allows") + " " + lim.boards + " " + t("boards per workspace") + ".");
       }
       u["boards/" + id + "/info"] = { title: title, ws: ws, template: tplId, created: TS, createdBy: me.email };
       u["workspaces/" + ws + "/boards/" + id] = { title: title, template: tplId, created: TS };
       f.querySelector(".btn.primary").disabled = true;
       db.ref().update(u).then(function () { location.href = boardUrl(id); }, function (err) { f.querySelector(".btn.primary").disabled = false; toast(err.message); });
     };
+  }
+
+  function planLimit(msg) {
+    document.querySelectorAll("#newDlg").forEach(function (d) { d.remove(); });
+    document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="limDlg"><div class="card"><h2>' + esc(t("Plan limit reached")) + '</h2><p class="muted">' + esc(msg) + " " + esc(t("Upgrade to create more and invite your team.")) + '</p><div class="row-end"><button class="btn" id="limX">' + esc(t("Close")) + '</button><a class="btn primary" href="../pricing/">' + esc(t("See plans")) + "</a></div></div></div>");
+    const d = document.getElementById("limDlg"); document.getElementById("limX").onclick = function () { d.remove(); }; d.onclick = function (e) { if (e.target === d) d.remove(); };
+  }
+  function planBadge() {
+    if (!PLAN) return "";
+    if (PLAN === "admin") return '<span class="plan-badge adm">' + esc(t("Administrator")) + "</span>";
+    return '<span class="plan-badge">' + esc(t("Plan")) + ": <b>" + esc(PLAN.name) + "</b></span>" + (PLAN.id === "free" || PLAN.id === "pro" ? '<a class="btn sm primary" href="../pricing/">' + esc(t("Upgrade")) + "</a>" : "");
   }
 
   /* ---------------- screens ---------------- */
@@ -113,7 +135,7 @@
     bindSearch();
   }
   function login() {
-    el.innerHTML = '<div class="card auth-card"><h2>Sign in</h2><p class="muted">Boards are private. Only people invited by the mentor can open them.</p>' +
+    el.innerHTML = '<div class="card auth-card"><h2>Sign in</h2><p class="muted">Sign in to open your workspaces or create a free account. Boards are private: only people you invite can open them.</p>' +
       '<button class="btn primary full" id="gBtn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="currentColor" opacity=".75" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="currentColor" opacity=".55" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z"/><path fill="currentColor" opacity=".9" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6z"/></svg><span>Continue with Google</span></button>' +
       '<div class="or"><span>or</span></div>' +
       '<form id="linkForm"><label class="lbl-f">E-mail<input type="email" id="linkEmail" required placeholder="name@email.com" autocomplete="email"></label>' +
@@ -131,7 +153,7 @@
     };
   }
   function userBar(user, admin) {
-    return '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(user.email) + "</b></span>" +
+    return '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(user.email) + "</b></span>" + planBadge() +
       '<button class="btn" data-feedback>💬 <span>Give feedback</span></button>' +
       (admin ? '<a class="btn" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';
   }
@@ -163,14 +185,19 @@
   function list(user) {
     const db = A.db();
     let entries = [];
+    ME = A.key(user.email);
     A.isAdmin().then(function (admin) {
       const navAdmin = document.getElementById("navAdmin");
       if (admin && navAdmin) navAdmin.hidden = false;
+      const planP = admin ? Promise.resolve("admin") : db.ref("plans/" + ME).once("value").then(function (s) { return window.CMPlan(s.val()); }, function () { return window.CMPlan(null); });
+      return planP.then(function (pl) { PLAN = pl; return admin; });
+    }).then(function (admin) {
       const p = admin
         ? db.ref("workspaces").once("value").then(function (s) { return s.val() || {}; })
         : db.ref("userWorkspaces/" + A.key(user.email)).once("value").then(function (s) {
           const raw = s.val() || {}, now = Date.now();
-          entries = Object.keys(raw).map(function (k) { const v = raw[k]; return { id: k, name: v && v.name, expires: v && v.expires }; });
+          entries = Object.keys(raw).map(function (k) { const v = raw[k]; return { id: k, name: v && v.name, expires: v && v.expires, owner: !!(v && v.owner) }; });
+          OWNED = {}; entries.forEach(function (e) { if (e.owner) OWNED[e.id] = 1; });
           const ids = entries.filter(function (e) { return !e.expires || e.expires > now; }).map(function (e) { return e.id; });
           return Promise.all(ids.map(function (id) {
             return db.ref("workspaces/" + id).once("value").then(function (x) { return [id, x.val()]; }, function () { return [id, null]; });
@@ -180,9 +207,9 @@
         const ids = Object.keys(wss).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
         const allowed = {};
         ids.forEach(function (w) { const bs = wss[w].boards || {}; Object.keys(bs).forEach(function (b) { allowed[b] = { title: bs[b].title, template: bs[b].template, ws: (wss[w].info || {}).name }; }); });
-        el.innerHTML = userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(admin) + recentRows(allowed) +
+        el.innerHTML = userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + recentRows(allowed) +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
-            : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + (admin ? t("Pick a template above to create your first board.") : t("Ask your mentor to invite this e-mail address.")) + "</p></div>"));
+            : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
         bindFeedback();
         document.getElementById("soBtn").onclick = A.signOut;
         el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, wss); }; });

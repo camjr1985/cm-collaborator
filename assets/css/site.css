@@ -370,3 +370,9 @@ a.stat { text-decoration: none !important; color: inherit !important; }
 .su-act { text-align: right; }
 .su-act .link { color: var(--ink-3, #8a94a6); background: none; border: 0; padding: 0; font-size: 12px; cursor: pointer; text-decoration: underline; }
 .su-act > div { display: flex; gap: 12px; align-items: center; justify-content: flex-end; }
+
+/* v7 – plans */
+.plan-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 5px 10px; border-radius: 999px; background: rgba(44,196,179,.14); color: inherit; }
+.plan-badge.adm { background: rgba(232,196,104,.2); }
+.own-tag { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(232,196,104,.2); color: #e8c468; }
+.userbar > span.plan-badge { flex: 0 0 auto; min-width: 0; }
