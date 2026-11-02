@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Ativar avisos · CM Collaborator</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,Arial,sans-serif;background:#0e1a33;color:#fff;padding:16px;box-sizing:border-box}
+    .c{max-width:440px;background:#16244a;border-radius:18px;padding:28px;box-shadow:0 20px 40px rgba(0,0,0,.35)}
+    h1{font-size:22px;margin:0 0 10px}p{color:#c9d2e3;line-height:1.5;font-size:15px}
+    ol{color:#c9d2e3;line-height:1.6;font-size:15px;padding-left:20px}
+    button{width:100%;margin-top:12px;padding:14px;border:0;border-radius:12px;background:#e8c468;color:#0e1a33;font-weight:800;font-size:16px;cursor:pointer}
+    .logo{width:44px;height:44px;border-radius:12px 12px 12px 4px;background:linear-gradient(135deg,#2cc4b3,#e8c468);color:#0e1a33;display:grid;place-items:center;font-weight:900;margin-bottom:14px}
+  </style>
+</head>
+<body>
+  <form class="c" method="POST" id="f">
+    <div class="logo">CM</div>
+    <h1>Ativar avisos de novas inscrições</h1>
+    <p>Faça isto uma única vez:</p>
+    <ol>
+      <li>Clique no botão abaixo.</li>
+      <li>Abra o e-mail da <b>FormSubmit</b> que vai chegar e clique em <b>Activate Form</b>.</li>
+      <li>Pronto: a partir daí recebe um e-mail a cada nova inscrição no beta.</li>
+    </ol>
+    <input type="hidden" name="_subject" value="Ativação dos avisos do beta CM Collaborator">
+    <input type="hidden" name="_template" value="table">
+    <input type="hidden" name="_captcha" value="false">
+    <input type="hidden" name="Mensagem" value="Teste de ativação dos avisos de inscrição no beta.">
+    <button type="submit">Ativar avisos por e-mail</button>
+  </form>
+  <script src="../assets/js/config.js"></script>
+  <script>
+    (function () {
+      var to = window.CMCOLLAB_NOTIFY, f = document.getElementById("f");
+      f.action = "https://formsubmit.co/" + to;
+      var n = document.createElement("input"); n.type = "hidden"; n.name = "_next";
+      n.value = new URL("../admin/#signups", location.href).href; f.appendChild(n);
+    })();
+  </script>
+</body>
+</html>
