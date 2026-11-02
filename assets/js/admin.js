@@ -6,18 +6,18 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, ws = {}, feedback = {}, signups = {}, signupWs = null;
+  let db, me, ws = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-PT" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
   function expiryBadge(m) {
-    if (!m.expires) return '<span class="xp none">' + t("No time limit") + "</span>";
+    if (!m.expires) return '<span class="xp none">' + t("Full access") + "</span>";
     const d = daysLeft(m.expires);
     if (d <= 0) return '<span class="xp off">' + t("Expired") + " · " + fmtDate(m.expires) + "</span>";
     return '<span class="xp' + (d <= 2 ? " soon" : "") + '">' + (PT ? d + (d === 1 ? " dia" : " dias") + " · até " : d + (d === 1 ? " day" : " days") + " left · until ") + fmtDate(m.expires) + "</span>";
   }
   function daysSelect(name, val) {
-    return '<select name="' + name + '" aria-label="' + esc(t("Access period")) + '">' + [[0, "No time limit"], [7, "7 days"], [14, "14 days"], [30, "30 days"]].map(function (o) {
+    return '<select name="' + name + '" aria-label="' + esc(t("Access period")) + '">' + [[7, "Temporary · 7 days"], [14, "Temporary · 14 days"], [30, "Temporary · 30 days"], [0, "Full access (no time limit)"]].map(function (o) {
       return '<option value="' + o[0] + '"' + (Number(val || 0) === o[0] ? " selected" : "") + ">" + esc(t(o[1])) + "</option>";
     }).join("") + "</select>";
   }
@@ -98,7 +98,7 @@
     const expires = days ? Math.max(Date.now(), m.expires || Date.now()) + days * DAY : null;
     u["workspaces/" + wsId + "/members/" + k + "/expires"] = expires;
     u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
-    update(u, days ? "Access extended" : "Access without time limit");
+    update(u, days ? "Access extended" : "Full access granted");
   }
   function removeMember(wsId, k) {
     const m = ws[wsId].members[k];
@@ -175,9 +175,10 @@
     const beta = timed.find(function (id) { return /beta/i.test(ws[id].info.name || ""); });
     return beta || timed[0] || ids[0] || null;
   }
+  function suDays(wsId) { return signupDays !== null ? signupDays : (Number((ws[wsId].info || {}).accessDays) || 0); }
   function grantUpdates(wsId, x, u) {
-    const days = Number((ws[wsId].info || {}).accessDays) || 7, k = A.key(x.email);
-    const expires = Date.now() + days * DAY;
+    const days = suDays(wsId), k = A.key(x.email);
+    const expires = days ? Date.now() + days * DAY : null;
     const m = { email: x.email, name: x.name || x.email.split("@")[0], role: "editor", invitedAt: TS(), invitedBy: me.email, expires: expires };
     u["workspaces/" + wsId + "/members/" + k] = m;
     u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
@@ -196,17 +197,18 @@
     const wsId = betaWsDefault(); if (!wsId) return toast("Create a workspace first");
     const pend = suList().filter(function (x) { return x.status !== "invited"; });
     if (!pend.length) return toast("No pending requests");
-    if (!window.confirm(t("Give 7-day access to all pending requests?") + " (" + pend.length + ")")) return;
+    const dd = suDays(wsId);
+    if (!window.confirm(t("Give access to all pending requests?") + " (" + pend.length + ") – " + (dd ? t("Temporary") + " · " + dd + " " + t("days") : t("Full access")))) return;
     const u = {};
     pend.forEach(function (x) { grantUpdates(wsId, x, u); });
     update(u, "Access granted").then(function () { openBulkInvite(wsId, pend.map(function (x) { return x.email; })); });
   }
   function openBulkInvite(wsId, emails) {
-    const w = ws[wsId], days = Number(w.info.accessDays) || 7, until = fmtDate(Date.now() + days * DAY);
+    const w = ws[wsId], days = suDays(wsId), until = days ? fmtDate(Date.now() + days * DAY) : "";
     const link = abs("../mentoring/"), fb = abs("../feedback/");
     const txt = PT
-      ? "Olá,\n\nObrigado por se inscrever no beta do CM Collaborator! O seu acesso de teste já está ativo.\n\n1. Abra: " + link + "\n2. Entre com o e-mail com que se inscreveu (botão Google ou link de acesso por e-mail).\n3. O workspace \"" + w.info.name + "\" aparece em \"Os meus quadros\".\n\nO acesso é válido até " + until + ". No fim, deixe a sua opinião (5 perguntas, 3 minutos): " + fb + "\n\nObrigado!"
-      : "Hi,\n\nThank you for joining the CM Collaborator beta! Your test access is now active.\n\n1. Open: " + link + "\n2. Sign in with the e-mail you signed up with (Google button or e-mail sign-in link).\n3. The workspace \"" + w.info.name + "\" appears under \"My boards\".\n\nAccess is valid until " + until + ". At the end, share your opinion (5 questions, 3 minutes): " + fb + "\n\nThank you!";
+      ? "Olá,\n\nObrigado por se inscrever no beta do CM Collaborator! O seu acesso de teste já está ativo.\n\n1. Abra: " + link + "\n2. Entre com o e-mail com que se inscreveu (botão Google ou link de acesso por e-mail).\n3. O workspace \"" + w.info.name + "\" aparece em \"Os meus quadros\"." + (until ? "\n\nO acesso é válido até " + until + "." : "") + "\n\nQuando puder, deixe a sua opinião (5 perguntas, 3 minutos): " + fb + "\n\nObrigado!"
+      : "Hi,\n\nThank you for joining the CM Collaborator beta! Your test access is now active.\n\n1. Open: " + link + "\n2. Sign in with the e-mail you signed up with (Google button or e-mail sign-in link).\n3. The workspace \"" + w.info.name + "\" appears under \"My boards\"." + (until ? "\n\nAccess is valid until " + until + "." : "") + "\n\nWhen you can, share your opinion (5 questions, 3 minutes): " + fb + "\n\nThank you!";
     const subject = PT ? "O seu acesso ao beta do CM Collaborator" : "Your CM Collaborator beta access";
     const dlg = document.getElementById("inviteDlg");
     dlg.querySelector("h2").textContent = t("Invite") + " " + emails.length + " " + t("people");
@@ -225,14 +227,14 @@
   }
   function signupsSection() {
     const list = suList(), pend = list.filter(function (x) { return x.status !== "invited"; }).length, wsId = betaWsDefault();
-    let h = '<section class="card fb-report su-report" id="signups"><div class="br-head"><div><span class="eyebrow sm">Beta</span><h2>' + t("Beta sign-ups") + '</h2><p class="muted small">' + t("Requests from the beta launch page. One click gives 7-day access to the selected workspace.") + "</p></div>" +
+    let h = '<section class="card fb-report su-report" id="signups"><div class="br-head"><div><span class="eyebrow sm">Beta</span><h2>' + t("Beta sign-ups") + '</h2><p class="muted small">' + t("Requests from the beta launch page. Choose the workspace and the access type (temporary or full), then give access in one click.") + "</p></div>" +
       '<div class="br-actions"><button class="btn sm" data-copy-beta>' + t("Copy beta page link") + "</button>" + (list.length ? '<button class="btn sm" id="suCsv">' + t("Export CSV") + "</button>" : "") + (pend ? '<button class="btn sm primary" id="suAll">' + t("Invite all pending") + " (" + pend + ")</button>" : "") + "</div></div>";
     h += '<div class="copy-row"><input readonly value="' + esc(abs("../beta/")) + '" class="no-i18n"></div>';
     h += '<div class="fb-kpis"><div><b>' + list.length + "</b><span>" + t("Sign-ups") + "</span></div><div><b>" + pend + "</b><span>" + t("Pending") + "</span></div><div><b>" + (list.length - pend) + "</b><span>" + t("Invited") + "</span></div></div>";
     if (Object.keys(ws).length) {
       h += '<label class="su-target">' + t("Give access to workspace") + ' <select id="suWs">' + Object.keys(ws).map(function (id) {
         return '<option value="' + esc(id) + '"' + (id === wsId ? " selected" : "") + ' class="no-i18n">' + esc(ws[id].info.name) + (ws[id].info.accessDays ? " · " + ws[id].info.accessDays + "d" : "") + "</option>";
-      }).join("") + "</select></label>";
+      }).join("") + "</select></label>" + '<label class="su-target">' + t("Access type") + " " + daysSelect("suDays", wsId ? suDays(wsId) : 7).replace("<select ", '<select id="suDays" ') + "</label>";
     }
     if (!list.length) return h + '<div class="empty-big"><p class="muted">' + t("No sign-ups yet. Share the beta page link.") + "</p></div></section>";
     h += '<div class="su-table-wrap"><table class="su-table"><thead><tr><th>' + t("Name") + "</th><th>E-mail</th><th>" + t("Role") + "</th><th>" + t("Date") + "</th><th>" + t("Source") + "</th><th>" + t("Status") + "</th><th></th></tr></thead><tbody>" +
@@ -240,7 +242,7 @@
         const inv = x.status === "invited";
         return "<tr><td class=\"no-i18n\"><b>" + esc(x.name) + '</b></td><td class="no-i18n">' + esc(x.email) + "</td><td>" + esc(label(SROLES, x.role)) + '</td><td class="no-i18n">' + (x.t ? fmtDate(x.t) : "") + '</td><td class="no-i18n muted">' + esc(x.src || "") + "</td>" +
           "<td>" + (inv ? '<span class="xp">' + t("Invited") + "</span>" : '<span class="xp soon">' + t("Pending") + "</span>") + "</td>" +
-          '<td class="su-act"><div>' + (inv ? "" : '<button class="btn sm primary" data-grant="' + esc(x.k) + '">' + t("Give 7-day access") + "</button>") + '<button class="link" data-delsu="' + esc(x.k) + '">' + t("delete") + "</button></div></td></tr>";
+          '<td class="su-act"><div>' + (inv ? "" : '<button class="btn sm primary" data-grant="' + esc(x.k) + '">' + t("Give access") + "</button>") + '<button class="link" data-delsu="' + esc(x.k) + '">' + t("delete") + "</button></div></td></tr>";
       }).join("") + "</tbody></table></div></section>";
     return h;
   }
@@ -334,7 +336,7 @@
         return '<li class="member"><span class="av sm no-i18n">' + esc((m.name || m.email)[0].toUpperCase()) + '</span><span class="m-who"><b class="no-i18n">' + esc(m.name || "") + '</b><span class="muted no-i18n">' + esc(m.email) + "</span></span>" +
           roleSelect("", m.role, 'data-role="' + id + "|" + k + '"') +
           '<button class="btn sm" data-invite="' + id + "|" + k + '">Invite</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
-          '<span class="m-exp">' + expiryBadge(m) + '<button class="link" data-ext="' + id + "|" + k + '|7">' + t("+7 days") + "</button>" + (m.expires ? '<button class="link" data-ext="' + id + "|" + k + '|0">' + t("Remove limit") + "</button>" : "") + "</span></li>";
+          '<span class="m-exp">' + expiryBadge(m) + '<button class="link" data-ext="' + id + "|" + k + '|7">' + t("+7 days") + "</button>" + (m.expires ? '<button class="link" data-ext="' + id + "|" + k + '|0">' + t("Make full access") + "</button>" : "") + "</span></li>";
       }).join("");
       return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2>" + (w.info.accessDays ? '<span class="xp">' + esc(t("Default access")) + ": " + w.info.accessDays + " " + esc(t("days")) + "</span>" : "") + "</div>" +
         '<button class="btn sm ghost danger-t" data-delws="' + id + '">Delete workspace</button></div>' +
@@ -367,7 +369,8 @@
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-delws]").forEach(function (b) { b.onclick = function () { deleteWorkspace(b.dataset.delws); }; });
     el.querySelectorAll("[data-ext]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ext); extendMember(p[0], p[1], Number(p[2])); }; });
-    const suWs = document.getElementById("suWs"); if (suWs) suWs.onchange = function () { signupWs = suWs.value; };
+    const suWs = document.getElementById("suWs"); if (suWs) suWs.onchange = function () { signupWs = suWs.value; signupDays = null; render(); };
+    const suD = document.getElementById("suDays"); if (suD) suD.onchange = function () { signupDays = Number(suD.value) || 0; };
     const suAll = document.getElementById("suAll"); if (suAll) suAll.onclick = grantAllPending;
     const suCsv = document.getElementById("suCsv"); if (suCsv) suCsv.onclick = exportSignups;
     el.querySelectorAll("[data-grant]").forEach(function (b) { b.onclick = function () { grantSignup(b.dataset.grant); }; });
