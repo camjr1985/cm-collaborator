@@ -259,7 +259,7 @@
     "Create the first one above – for example \"Mentoring\".": "Crie o primeiro acima – por exemplo \"Mentoria\".",
     "Delete workspace": "Apagar workspace",
     "No boards yet.": "Ainda sem quadros.",
-    "Board name, e.g. Persona map – Ana": "Nome do quadro, ex.: Mapa da persona – Ana",
+    "Board name, e.g. Project kickoff": "Nome do quadro, ex.: Kickoff do projeto",
     "Link id (optional)": "Id do link (opcional)",
     "Open": "Abrir",
     "Rename": "Renomear",
