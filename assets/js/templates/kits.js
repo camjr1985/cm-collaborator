@@ -28,6 +28,7 @@
       Sh: function (x, y, w, h, shape, text, color, tcolor) { const o = { id: "t" + (++n), type: "shape", shape: shape || "rect", x: x, y: y, w: w, h: h, text: text || "", color: color || "#ffffff", tcolor: tcolor || "#1c2033" }; out.push(o); return o.id; },
       A: function (from, to, head) { const o = { id: "t" + (++n), type: "arrow", from: from, to: to, x1: 0, y1: 0, x2: 0, y2: 0, color: "#1c2033", head: head !== false }; out.push(o); return o.id; },
       I: function (x, y, size, name, color) { const o = { id: "t" + (++n), type: "icon", x: x, y: y, w: size, h: size, name: name, color: color || "#1c2033" }; out.push(o); return o.id; },
+      SL: function (x, y, w, h, text, color, fs) { const o = { id: "t" + (++n), type: "shape", shape: "rect", align: "left", x: x, y: y, w: w, h: h, text: text || "", color: color || "#ffffff", tcolor: "#1c2033" }; if (fs) o.fs = fs; out.push(o); return o.id; },
       E: function (x, y, size, emoji) { const o = { id: "t" + (++n), type: "icon", x: x, y: y, w: size, h: size, emoji: emoji }; out.push(o); return o.id; }
     };
     return api;
@@ -255,6 +256,196 @@
         return k.out;
       }
     },
+    pdca: {
+      name: "PDCA executive meeting", desc: L("Plan-Do-Check-Act review with KPIs, decision required, options and decision log for directors.", "Revisão Plan-Do-Check-Act com KPIs, decisão necessária, opções e registo de decisões para diretores."), cat: "executive",
+      build: function () {
+        const k = kit();
+        k.F(0, 0, 1960, 1240, L("PDCA – Executive decision meeting", "PDCA – Reunião executiva de decisão"));
+        k.T(40, 24, L("PDCA – Executive decision meeting", "PDCA – Reunião executiva de decisão"), 38, 1200);
+        k.T(40, 82, L("Programme / initiative: ________   ·   Date: __/__/____   ·   Sponsor: ________   ·   Participants: Directors / Executive committee", "Programa / iniciativa: ________   ·   Data: __/__/____   ·   Sponsor: ________   ·   Participantes: Diretores / Comité executivo"), 17, 1500, "#4a5068");
+        // KPI strip
+        k.F(40, 140, 1880, 150, L("📊 Key indicators vs target", "📊 Indicadores-chave vs meta"), BG.gray);
+        const kpis = [[L("Budget\n92% of plan ●", "Orçamento\n92% do plano ●"), "#C8EBA1"], [L("Schedule\n+2 weeks ●", "Prazo\n+2 semanas ●"), "#FFF59D"], [L("Scope\n85% delivered ●", "Âmbito\n85% entregue ●"), "#C8EBA1"], [L("Quality\n3 critical defects ●", "Qualidade\n3 defeitos críticos ●"), "#F7A8B0"], [L("Risk level\nMedium ●", "Nível de risco\nMédio ●"), "#FFF59D"], [L("Benefits\nROI 1.8x ●", "Benefícios\nROI 1,8x ●"), "#C8EBA1"]];
+        kpis.forEach(function (q, i) { k.Sh(64 + i * 308, 168, 288, 100, "round", q[0], q[1]); });
+        // PDCA quadrants
+        const qx = 40, qy = 330, qw = 600, qh = 340;
+        const Q = [
+          [L("P · PLAN – What did we plan?", "P · PLAN – O que planeámos?"), BG.blue, C.blue, L("Objective, targets and expected outcome", "Objetivo, metas e resultado esperado")],
+          [L("D · DO – What was executed?", "D · DO – O que foi executado?"), BG.green, C.green, L("Deliveries and actions done this period", "Entregas e ações realizadas no período")],
+          [L("C · CHECK – Results vs plan", "C · CHECK – Resultados vs plano"), BG.yellow, C.yellow, L("Gaps, root causes and lessons learned", "Desvios, causas-raiz e lições aprendidas")],
+          [L("A · ACT – What do we adjust?", "A · ACT – O que ajustamos?"), BG.purple, C.purple, L("Corrective actions and standardisation", "Ações corretivas e padronização")]
+        ];
+        Q.forEach(function (q, i) {
+          const x = qx + (i % 2) * (qw + 20), y = qy + Math.floor(i / 2) * (qh + 20);
+          k.F(x, y, qw, qh, q[0], q[1]);
+          k.T(x + 20, y + 20, q[3], 16, qw - 40, "#4a5068");
+          k.S(x + 20, y + 60, "", q[2], 150, 120); k.S(x + 190, y + 60, "", q[2], 150, 120);
+        });
+        // cycle in the middle
+        const cx = 1800, cy = 72;
+        const p1 = k.Sh(cx - 62, cy - 58, 52, 52, "ellipse", "P", "#1c2033", "#ffffff");
+        const p2 = k.Sh(cx + 10, cy - 58, 52, 52, "ellipse", "D", "#12a594", "#ffffff");
+        const p3 = k.Sh(cx + 10, cy + 6, 52, 52, "ellipse", "C", "#e8c468");
+        const p4 = k.Sh(cx - 62, cy + 6, 52, 52, "ellipse", "A", "#8b5cf6", "#ffffff");
+        k.A(p1, p2); k.A(p2, p3); k.A(p3, p4); k.A(p4, p1);
+        // decision area
+        const dx = 1280;
+        k.F(dx, qy, 640, 700, L("⚖️ Decision required today", "⚖️ Decisão necessária hoje"), BG.red);
+        k.T(dx + 20, qy + 20, L("What do we need from the committee?", "O que precisamos do comité?"), 20, 600);
+        k.S(dx + 20, qy + 60, L("Decision question", "Pergunta de decisão"), C.red, 600, 90);
+        const opts = [[L("Option A\nCost · Time · Risk · Impact", "Opção A\nCusto · Prazo · Risco · Impacto"), "#ffffff"], [L("Option B\nCost · Time · Risk · Impact", "Opção B\nCusto · Prazo · Risco · Impacto"), "#ffffff"], [L("Option C\nCost · Time · Risk · Impact", "Opção C\nCusto · Prazo · Risco · Impacto"), "#ffffff"]];
+        opts.forEach(function (o, i) { k.Sh(dx + 20 + i * 205, qy + 180, 190, 150, "round", o[0], o[1]); });
+        k.S(dx + 20, qy + 360, L("✅ Recommendation and rationale", "✅ Recomendação e justificação"), C.green, 600, 120);
+        k.S(dx + 20, qy + 500, L("Impact if we don't decide", "Impacto se não decidirmos"), C.orange, 290, 110);
+        k.S(dx + 330, qy + 500, L("Support / budget needed", "Apoio / orçamento necessário"), C.orange, 290, 110);
+        // decision log + risks + next steps
+        const ly = 1060;
+        k.F(40, ly, 1220, 160, L("📝 Decision log", "📝 Registo de decisões"), BG.white);
+        const cols = [[L("Decision", "Decisão"), 520], [L("Owner", "Responsável"), 220], [L("Due date", "Prazo"), 200], [L("Status", "Estado"), 220]];
+        let x = 60;
+        cols.forEach(function (c) { k.Sh(x, ly + 20, c[1] - 6, 40, "rect", c[0], "#1c2033", "#ffffff"); k.Sh(x, ly + 64, c[1] - 6, 40, "rect", "", "#ffffff"); x += c[1]; });
+        k.F(1280, ly, 310, 160, L("🚩 Risks & escalations", "🚩 Riscos e escalações"), BG.orange);
+        k.F(1610, ly, 310, 160, L("➡️ Next steps & next meeting", "➡️ Próximos passos e próxima reunião"), BG.teal);
+        return k.out;
+      }
+    },
+    swarch: {
+      name: "Software architecture", desc: L("Container view: clients, API gateway, services, data, messaging and external systems.", "Vista de contentores: clientes, API gateway, serviços, dados, mensageria e sistemas externos."), cat: "tech",
+      build: function () {
+        const k = kit();
+        k.F(0, 0, 1900, 1080, L("Software architecture – container view", "Arquitetura de software – vista de contentores"));
+        k.T(40, 24, L("Software architecture – container view (C4 level 2)", "Arquitetura de software – vista de contentores (C4 nível 2)"), 34, 1400);
+        k.F(40, 100, 300, 860, L("👤 Users & clients", "👤 Utilizadores e clientes"), BG.gray);
+        const user = k.Sh(90, 150, 200, 80, "pill", L("Customer", "Cliente"), "#ffffff");
+        const admin = k.Sh(90, 260, 200, 80, "pill", L("Back-office user", "Utilizador back-office"), "#ffffff");
+        const web = k.Sh(80, 430, 220, 110, "round", L("Web app\n[React / SPA]", "Aplicação web\n[React / SPA]"), "#A9D1F7");
+        const mob = k.Sh(80, 580, 220, 110, "round", L("Mobile app\n[iOS / Android]", "App móvel\n[iOS / Android]"), "#A9D1F7");
+        k.F(380, 100, 300, 860, L("🛡 Edge & security", "🛡 Edge e segurança"), BG.purple);
+        const cdn = k.Sh(410, 170, 240, 90, "round", L("CDN / WAF", "CDN / WAF"), "#CDBDF6");
+        const gw = k.Sh(410, 470, 240, 110, "round", L("API Gateway\nauth · rate limit · routing", "API Gateway\nauth · rate limit · routing"), "#CDBDF6");
+        const idp = k.Sh(410, 700, 240, 100, "round", L("Identity provider\n[OAuth2 / OIDC]", "Fornecedor de identidade\n[OAuth2 / OIDC]"), "#CDBDF6");
+        k.F(720, 100, 520, 860, L("⚙️ Services (domain)", "⚙️ Serviços (domínio)"), BG.blue);
+        const s1 = k.Sh(750, 160, 220, 110, "round", L("Accounts service\n[Java / Spring]", "Serviço de contas\n[Java / Spring]"), "#ffffff");
+        const s2 = k.Sh(990, 160, 220, 110, "round", L("Orders service\n[Node.js]", "Serviço de pedidos\n[Node.js]"), "#ffffff");
+        const s3 = k.Sh(750, 400, 220, 110, "round", L("Payments service\n[.NET]", "Serviço de pagamentos\n[.NET]"), "#ffffff");
+        const s4 = k.Sh(990, 400, 220, 110, "round", L("Notifications service\n[Python]", "Serviço de notificações\n[Python]"), "#ffffff");
+        const mq = k.Sh(800, 650, 360, 90, "pill", L("Message broker / event bus\n[Kafka / RabbitMQ]", "Message broker / barramento de eventos\n[Kafka / RabbitMQ]"), "#FFCF8A");
+        k.F(1280, 100, 300, 860, L("🗄 Data", "🗄 Dados"), BG.yellow);
+        const db1 = k.Sh(1310, 160, 240, 120, "ellipse", L("Relational DB\n[PostgreSQL]", "Base relacional\n[PostgreSQL]"), "#FFF59D");
+        const cache = k.Sh(1310, 330, 240, 100, "round", L("Cache\n[Redis]", "Cache\n[Redis]"), "#FFF59D");
+        const db2 = k.Sh(1310, 480, 240, 120, "ellipse", L("Document DB\n[MongoDB]", "Base documental\n[MongoDB]"), "#FFF59D");
+        const obj = k.Sh(1310, 660, 240, 100, "round", L("Object storage\n[files / backups]", "Object storage\n[ficheiros / backups]"), "#FFF59D");
+        k.F(1620, 100, 260, 860, L("🌐 External systems", "🌐 Sistemas externos"), BG.red);
+        const psp = k.Sh(1640, 400, 220, 100, "round", L("Payment provider", "Fornecedor de pagamentos"), "#F7A8B0");
+        const mail = k.Sh(1640, 560, 220, 100, "round", L("E-mail / SMS service", "Serviço de e-mail / SMS"), "#F7A8B0");
+        k.A(user, web); k.A(admin, web); k.A(user, mob); k.A(web, cdn); k.A(mob, gw); k.A(cdn, gw); k.A(gw, idp);
+        k.A(gw, s1); k.A(gw, s2); k.A(gw, s3); k.A(s1, db1); k.A(s2, db1); k.A(s2, cache); k.A(s3, psp); k.A(s2, mq); k.A(s3, mq); k.A(mq, s4); k.A(s4, mail); k.A(s4, db2);
+        k.F(40, 980, 1840, 80, L("🔭 Cross-cutting: observability (logs · metrics · traces) · CI/CD · secrets management · backup & DR", "🔭 Transversal: observabilidade (logs · métricas · traces) · CI/CD · gestão de segredos · backup e DR"), BG.teal);
+        return k.out;
+      }
+    },
+    lakehouse: {
+      name: "Data lakehouse (medallion)", desc: L("Databricks-style lakehouse: sources, ingestion, bronze, silver, gold, consumers and governance.", "Lakehouse ao estilo Databricks: fontes, ingestão, bronze, silver, gold, consumo e governança."), cat: "data",
+      build: function () {
+        const k = kit();
+        k.F(0, 0, 2000, 1000, L("Data lakehouse – medallion architecture", "Data lakehouse – arquitetura medalhão"));
+        k.T(40, 24, L("Data lakehouse – medallion architecture (Bronze · Silver · Gold)", "Data lakehouse – arquitetura medalhão (Bronze · Silver · Gold)"), 34, 1500);
+        const cols = [
+          [L("📥 Sources", "📥 Fontes"), BG.gray, "#ffffff", [L("ERP / core systems", "ERP / sistemas core"), L("CRM / SaaS apps", "CRM / apps SaaS"), L("APIs & events", "APIs e eventos"), L("IoT / streaming", "IoT / streaming"), L("Files (CSV, JSON)", "Ficheiros (CSV, JSON)")]],
+          [L("🔄 Ingestion", "🔄 Ingestão"), BG.blue, "#A9D1F7", [L("Batch loads\n(Auto Loader / COPY)", "Cargas batch\n(Auto Loader / COPY)"), L("Streaming\n(Kafka / Event Hubs)", "Streaming\n(Kafka / Event Hubs)"), L("CDC\n(change data capture)", "CDC\n(captura de alterações)")]],
+          [L("🥉 Bronze – raw", "🥉 Bronze – bruto"), "#f6e3d1", "#E7B98A", [L("Raw Delta tables\nappend-only", "Tabelas Delta brutas\nappend-only"), L("Full history\n& audit", "Histórico completo\ne auditoria"), L("Schema on read", "Schema on read")]],
+          [L("🥈 Silver – cleaned", "🥈 Silver – tratado"), "#eceff3", "#D5DAE3", [L("Cleaned & deduplicated", "Limpo e sem duplicados"), L("Conformed entities\n(customer, product…)", "Entidades conformadas\n(cliente, produto…)"), L("Data quality checks", "Verificações de qualidade")]],
+          [L("🥇 Gold – business", "🥇 Gold – negócio"), "#fbf1cc", "#F3D36B", [L("Business aggregates\n& KPIs", "Agregados de negócio\ne KPIs"), L("Data marts\n(star schema)", "Data marts\n(modelo em estrela)"), L("Feature tables (ML)", "Tabelas de features (ML)")]],
+          [L("📊 Consumers", "📊 Consumo"), BG.green, "#C8EBA1", [L("BI dashboards\n(Power BI, Tableau)", "Dashboards BI\n(Power BI, Tableau)"), L("SQL analytics", "Análise SQL"), L("ML / AI models", "Modelos ML / IA"), L("Data apps & APIs", "Data apps e APIs")]]
+        ];
+        const cw = 300, gap = 20, top = 100, h = 720;
+        const firsts = [];
+        cols.forEach(function (c, i) {
+          const x = 40 + i * (cw + gap);
+          k.F(x, top, cw, h, c[0], c[1]);
+          c[3].forEach(function (t, j) { const id = k.Sh(x + 25, top + 40 + j * 130, cw - 50, 100, "round", t, c[2]); if (j === 0) firsts.push(id); });
+        });
+        for (let i = 0; i < firsts.length - 1; i++) k.A(firsts[i], firsts[i + 1]);
+        k.F(40, 850, 940, 120, L("🔐 Governance – catalogue, lineage, access control, PII masking (e.g. Unity Catalog)", "🔐 Governança – catálogo, linhagem, controlo de acessos, mascaramento de PII (ex.: Unity Catalog)"), BG.purple);
+        k.F(1000, 850, 940, 120, L("⏱ Orchestration & ops – jobs/workflows, monitoring, cost (FinOps), CI/CD for data", "⏱ Orquestração e operação – jobs/workflows, monitorização, custos (FinOps), CI/CD de dados"), BG.teal);
+        return k.out;
+      }
+    },
+    datamodel: {
+      name: "Database model (ER)", desc: L("Entity-relationship diagram with keys and 1:N relationships.", "Diagrama entidade-relação com chaves e relações 1:N."), cat: "data",
+      build: function () {
+        const k = kit();
+        k.F(0, 0, 1500, 900, L("Database model – entity relationship", "Modelo de dados – entidade-relação"));
+        k.T(40, 24, L("Database model – entity relationship (ER)", "Modelo de dados – entidade-relação (ER)"), 34, 1200);
+        k.T(40, 76, L("🔑 PK = primary key · 🔗 FK = foreign key · 1 : N = one-to-many", "🔑 PK = chave primária · 🔗 FK = chave estrangeira · 1 : N = um-para-muitos"), 16, 1200, "#4a5068");
+        const ent = function (x, y, title, fields, color) { return k.SL(x, y, 280, 60 + fields.length * 26, title.toUpperCase() + "\n────────────\n" + fields.join("\n"), color, 15); };
+        const cust = ent(60, 160, L("customer", "cliente"), ["🔑 customer_id  INT", "name  VARCHAR", "email  VARCHAR", "created_at  TIMESTAMP"], "#e3f0fd");
+        const ord = ent(560, 160, L("order", "pedido"), ["🔑 order_id  INT", "🔗 customer_id  INT", "order_date  DATE", "status  VARCHAR", "total  DECIMAL"], "#fff8d6");
+        const item = ent(560, 520, L("order_item", "item_pedido"), ["🔑 item_id  INT", "🔗 order_id  INT", "🔗 product_id  INT", "quantity  INT", "unit_price  DECIMAL"], "#fff8d6");
+        const prod = ent(1080, 520, L("product", "produto"), ["🔑 product_id  INT", "name  VARCHAR", "category  VARCHAR", "price  DECIMAL"], "#eaf7dc");
+        const pay = ent(1080, 160, L("payment", "pagamento"), ["🔑 payment_id  INT", "🔗 order_id  INT", "method  VARCHAR", "paid_at  TIMESTAMP"], "#fde7e9");
+        k.A(cust, ord); k.A(ord, item); k.A(prod, item); k.A(ord, pay);
+        k.T(400, 230, "1 : N", 18, 80); k.T(640, 440, "1 : N", 18, 80); k.T(900, 600, "1 : N", 18, 80); k.T(920, 230, "1 : N", 18, 80);
+        return k.out;
+      }
+    },
+    cloud: {
+      name: "Cloud architecture & definitions", desc: L("Service and deployment models, landing zone and AWS · Azure · GCP equivalents.", "Modelos de serviço e de implementação, landing zone e equivalências AWS · Azure · GCP."), cat: "tech",
+      build: function () {
+        const k = kit();
+        k.F(0, 0, 2000, 1160, L("Cloud architecture & definitions", "Arquitetura e definições de cloud"));
+        k.T(40, 24, L("Cloud architecture & definitions", "Arquitetura e definições de cloud"), 36, 1200);
+        // service models
+        k.F(40, 100, 560, 460, L("☁️ Service models – who manages what", "☁️ Modelos de serviço – quem gere o quê"), BG.blue);
+        [[L("IaaS\nYou: OS, runtime, apps, data\nProvider: servers, network, storage", "IaaS\nVocê: SO, runtime, apps, dados\nFornecedor: servidores, rede, storage"), "#A9D1F7"],
+         [L("PaaS\nYou: apps and data\nProvider: OS, runtime, scaling", "PaaS\nVocê: apps e dados\nFornecedor: SO, runtime, escala"), "#9FE3D3"],
+         [L("SaaS\nYou: users and configuration\nProvider: everything else", "SaaS\nVocê: utilizadores e configuração\nFornecedor: todo o resto"), "#C8EBA1"]].forEach(function (m, i) { k.SL(60, 140 + i * 135, 520, 120, m[0], m[1], 16); });
+        k.F(40, 590, 560, 250, L("🏗 Deployment models", "🏗 Modelos de implementação"), BG.gray);
+        [[L("Public cloud", "Cloud pública"), "#ffffff"], [L("Private cloud", "Cloud privada"), "#ffffff"], [L("Hybrid", "Híbrida"), "#ffffff"], [L("Multi-cloud", "Multi-cloud"), "#ffffff"]].forEach(function (m, i) { k.Sh(60 + (i % 2) * 265, 630 + Math.floor(i / 2) * 100, 250, 80, "round", m[0], m[1]); });
+        // landing zone
+        k.F(640, 100, 700, 740, L("🏢 Reference landing zone", "🏢 Landing zone de referência"), BG.white);
+        const users = k.Sh(890, 130, 200, 60, "pill", L("Users", "Utilizadores"), "#ffffff");
+        k.F(670, 220, 640, 600, L("Region · 2+ availability zones", "Região · 2+ zonas de disponibilidade"), "#f4f5f8");
+        k.F(690, 270, 600, 530, L("Virtual network (VPC / VNet)", "Rede virtual (VPC / VNet)"), "#eaf2fb");
+        k.F(710, 310, 560, 120, L("Public subnet", "Subnet pública"), "#e3f8f2");
+        const cdn = k.Sh(730, 345, 240, 70, "round", L("CDN + WAF", "CDN + WAF"), "#9FE3D3");
+        const lb = k.Sh(1010, 345, 240, 70, "round", L("Load balancer", "Load balancer"), "#9FE3D3");
+        k.F(710, 450, 560, 160, L("Private subnet – application", "Subnet privada – aplicação"), "#e3f0fd");
+        const app = k.Sh(730, 490, 250, 100, "round", L("Containers\n(Kubernetes)", "Contentores\n(Kubernetes)"), "#A9D1F7");
+        const fn = k.Sh(1000, 490, 250, 100, "round", L("Serverless functions", "Funções serverless"), "#A9D1F7");
+        k.F(710, 630, 560, 150, L("Private subnet – data", "Subnet privada – dados"), "#fff8d6");
+        const dbm = k.Sh(730, 665, 250, 100, "ellipse", L("Managed database", "Base de dados gerida"), "#FFF59D");
+        const st = k.Sh(1000, 665, 250, 100, "round", L("Object storage", "Object storage"), "#FFF59D");
+        k.A(users, cdn); k.A(cdn, lb); k.A(lb, app); k.A(app, dbm); k.A(fn, st); k.A(app, fn);
+        k.F(40, 870, 1300, 260, L("🛡 Shared services", "🛡 Serviços partilhados"), BG.purple);
+        [L("Identity & access (IAM, SSO, MFA)", "Identidade e acessos (IAM, SSO, MFA)"), L("Security (keys, secrets, policies)", "Segurança (chaves, segredos, políticas)"), L("Monitoring & logging", "Monitorização e logs"), L("CI/CD & infrastructure as code", "CI/CD e infraestrutura como código"), L("Backup & disaster recovery", "Backup e recuperação de desastres"), L("Cost management (FinOps)", "Gestão de custos (FinOps)")].forEach(function (t, i) { k.Sh(60 + (i % 3) * 425, 910 + Math.floor(i / 3) * 105, 405, 85, "round", t, "#ffffff"); });
+        // equivalence table
+        k.F(1380, 100, 590, 1030, L("🔁 Equivalent services", "🔁 Serviços equivalentes"), BG.white);
+        const rows = [
+          [L("Service", "Serviço"), "AWS", "Azure", "GCP"],
+          [L("Virtual machines", "Máquinas virtuais"), "EC2", "Virtual Machines", "Compute Engine"],
+          ["Kubernetes", "EKS", "AKS", "GKE"],
+          ["Serverless", "Lambda", "Functions", "Cloud Run / Functions"],
+          [L("Object storage", "Object storage"), "S3", "Blob Storage", "Cloud Storage"],
+          [L("Relational DB", "BD relacional"), "RDS / Aurora", "Azure SQL", "Cloud SQL"],
+          [L("NoSQL", "NoSQL"), "DynamoDB", "Cosmos DB", "Firestore / Bigtable"],
+          [L("Data warehouse", "Data warehouse"), "Redshift", "Synapse / Fabric", "BigQuery"],
+          [L("Messaging", "Mensageria"), "SQS / SNS", "Service Bus", "Pub/Sub"],
+          [L("Identity", "Identidade"), "IAM", "Entra ID", "Cloud IAM"],
+          [L("Monitoring", "Monitorização"), "CloudWatch", "Monitor", "Cloud Monitoring"]
+        ];
+        const cws = [150, 130, 140, 140];
+        rows.forEach(function (r, i) {
+          let x = 1400;
+          r.forEach(function (cell, j) {
+            const hdr = i === 0, first = j === 0;
+            k.Sh(x, 140 + i * 88, cws[j] - 6, 80, "rect", cell, hdr ? "#1c2033" : (first ? "#e3f0fd" : "#ffffff"), hdr ? "#ffffff" : "#1c2033");
+            x += cws[j];
+          });
+        });
+        return k.out;
+      }
+    },
     roadmap: {
       name: "Roadmap", desc: L("Now, next and later.", "Agora, a seguir e mais tarde."), cat: "strategy",
       build: function () {
@@ -269,8 +460,8 @@
   };
 
   window.MB_KITS = KITS;
-  window.MB_KIT_ORDER = ["betatest", "kanban", "retro", "planning", "piplanning", "sysdemo", "process", "mindmap", "journey", "empathy", "swot", "eisenhower", "okr", "roadmap"];
-  window.MB_KIT_CATS = { agile: "Agile", diagram: L("Maps & diagrams", "Mapas e diagramas"), strategy: L("Strategy", "Estratégia"), feedback: L("Feedback & testing", "Feedback e testes"), mentoring: L("Mentoring", "Mentoria"), basic: L("Basic", "Básico") };
+  window.MB_KIT_ORDER = ["betatest", "pdca", "kanban", "retro", "planning", "piplanning", "sysdemo", "swarch", "cloud", "lakehouse", "datamodel", "process", "mindmap", "journey", "empathy", "swot", "eisenhower", "okr", "roadmap"];
+  window.MB_KIT_CATS = { executive: L("Executive & governance", "Executivo e governança"), tech: L("Architecture & cloud", "Arquitetura e cloud"), data: L("Data & databases", "Dados e bases de dados"), agile: "Agile", diagram: L("Maps & diagrams", "Mapas e diagramas"), strategy: L("Strategy", "Estratégia"), feedback: L("Feedback & testing", "Feedback e testes"), mentoring: L("Mentoring", "Mentoria"), basic: L("Basic", "Básico") };
 
   /* ---------- icons (24×24 stroke) ---------- */
   window.MB_ICONS = {
@@ -378,7 +569,7 @@
     return list;
   };
   // Portuguese names
-  const NPT = { betatest: "Kit de beta test", kanban: "Quadro Kanban", retro: "Retrospetiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap" };
+  const NPT = { betatest: "Kit de beta test", kanban: "Quadro Kanban", retro: "Retrospetiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap", pdca: "Reunião executiva PDCA", swarch: "Arquitetura de software", lakehouse: "Data lakehouse (medalhão)", datamodel: "Modelo de base de dados (ER)", cloud: "Arquitetura e definições de cloud" };
   Object.keys(NPT).forEach(function (k) { KITS[k].namePT = NPT[k]; });
   window.MBTemplatePreview = function (id) {
     if (KITS[id]) { if (!KITS[id]._pv) KITS[id]._pv = window.MBKitPreview(KITS[id].build()); return KITS[id]._pv; }

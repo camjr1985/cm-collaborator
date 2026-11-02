@@ -76,6 +76,16 @@
 
   /* ================= icons ================= */
   const I = {
+    alignBtn: '<path d="M4 4v16"/><rect x="7" y="6" width="11" height="4" rx="1"/><rect x="7" y="14" width="7" height="4" rx="1"/>',
+    alL: '<path d="M4 3v18"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="7" height="4" rx="1"/>',
+    alC: '<path d="M12 3v18"/><rect x="5" y="6" width="14" height="4" rx="1"/><rect x="8" y="14" width="8" height="4" rx="1"/>',
+    alR: '<path d="M20 3v18"/><rect x="5" y="6" width="12" height="4" rx="1"/><rect x="10" y="14" width="7" height="4" rx="1"/>',
+    alT: '<path d="M3 4h18"/><rect x="6" y="7" width="4" height="12" rx="1"/><rect x="14" y="7" width="4" height="7" rx="1"/>',
+    alM: '<path d="M3 12h18"/><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="8" width="4" height="8" rx="1"/>',
+    alB: '<path d="M3 20h18"/><rect x="6" y="5" width="4" height="12" rx="1"/><rect x="14" y="10" width="4" height="7" rx="1"/>',
+    disH: '<path d="M3 4v16M21 4v16"/><rect x="9" y="7" width="6" height="10" rx="1"/>',
+    disV: '<path d="M4 3h16M4 21h16"/><rect x="7" y="9" width="10" height="6" rx="1"/>',
+    tidy: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     select: '<path d="M5 3l14 8-6 1.5L10 19z"/>',
     hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6 7-2.5 0-4-1-5.5-3L3 14.5a1.6 1.6 0 0 1 2.5-2L8 15"/>',
     template: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/>',
@@ -140,7 +150,7 @@
       (CFG.isAdmin ? '<a class="icon-btn" href="' + ROOT + 'admin/" title="Administration">' + ico("lock") + "</a>" : "") +
       (CFG.signedIn ? '<button id="btnSignOut" class="icon-btn" title="Sign out">' + ico("logout") + "</button>" : "") +
       "</header>" +
-      '<main id="viewport" tabindex="-1"><div id="world"><div id="tpl"></div><div id="objs"></div><div id="marquee" hidden></div><div id="cursors"></div></div>' +
+      '<main id="viewport" tabindex="-1"><div id="world"><div id="tpl"></div><div id="objs"></div><div id="marquee" hidden></div><div id="guides"></div><div id="cursors"></div></div>' +
       '<div id="dropHint" hidden><div>' + ico("image") + "<span>Drop images or GIFs to add them to the board</span></div></div></main>" +
       '<aside id="toolbar" aria-label="Tools">' +
       '<button class="tb" data-tool="select" title="Select (V)">' + ico("select") + "</button>" +
@@ -153,6 +163,7 @@
       '<button class="tb" data-tool="arrow" title="Connector / arrow (L) – drag from one item to another">' + ico("arrow") + "</button>" +
       '<button class="tb" data-tool="frame" title="Frame (F) – drag to draw a white area">' + ico("frame") + "</button>" +
       '<button class="tb" id="tbIcons" title="Icons & emoji">' + ico("smile") + "</button>" +
+      '<button class="tb" id="tbTidy" title="Auto-align – tidy up post-its (select items or a frame; nothing selected = every frame)">' + ico("tidy") + "</button>" +
       '<div class="tool-fly"><button class="tb" id="tbImage" title="Image or GIF (I)">' + ico("image") + '</button><div class="fly menu" id="imgFly">' +
       '<button data-img="upload">' + ico("upload") + '<span>Upload image / GIF</span></button><button data-img="link">' + ico("link") + "<span>Image / GIF from a link</span></button></div></div>" +
       '<span class="sep"></span>' +
@@ -176,7 +187,7 @@
       '<input type="file" id="fileImport" accept="application/json" hidden><input type="file" id="filePhoto" accept="image/*" hidden><input type="file" id="fileImage" accept="image/*" multiple hidden>' +
       '<div class="modal" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true"><div id="modalBody"></div></div></div>';
 
-    ["viewport", "world", "tpl", "marquee", "cursors", "toolbar", "ctx", "panel", "panelBody", "toast", "modal", "modalBody", "people", "saveState", "zPct", "timerTxt", "timerBtn", "dropHint"].forEach(function (id) { els[id] = document.getElementById(id); });
+    ["viewport", "world", "tpl", "marquee", "guides", "cursors", "toolbar", "ctx", "panel", "panelBody", "toast", "modal", "modalBody", "people", "saveState", "zPct", "timerTxt", "timerBtn", "dropHint"].forEach(function (id) { els[id] = document.getElementById(id); });
     els.layer = document.getElementById("objs");
     els.tpl.innerHTML = T.html;
     els.world.style.width = W + "px";
@@ -444,6 +455,7 @@
     } else if (type === "shape") {
       const k = o.shape || "rect", poly = ["diamond", "triangle", "hexagon"].indexOf(k) >= 0;
       el.dataset.shape = k;
+      if (o.align) el.dataset.align = o.align; else delete el.dataset.align;
       const svg = el.querySelector(".shp");
       svg.innerHTML = shapeSvg(k);
       svg.style.display = poly ? "" : "none";
@@ -564,6 +576,7 @@
 
   /* ================= selection & context bar ================= */
   function setSel(ids) {
+    if (ids.length < 2) alignOpen = false;
     sel.forEach(function (id) { if (els.objs[id]) els.objs[id].classList.remove("sel"); });
     sel.clear();
     ids.forEach(function (id) { if (S.stickies[id]) { sel.add(id); if (els.objs[id]) els.objs[id].classList.add("sel"); } });
@@ -603,6 +616,18 @@
         '<button class="cb txt" data-act="rice" title="RICE score">RICE</button><span class="sep v"></span>';
     } else if (!one) {
       h += '<span class="ctx-count">' + esc(t(list.length + " selected")) + '</span><span class="sep v"></span>';
+    }
+    const movable = list.filter(function (o) { return typeOf(o) !== "arrow"; });
+    if (movable.length >= 2) {
+      h += '<div class="ctx-alw"><button class="cb' + (alignOpen ? " on" : "") + '" data-act="alignmenu" title="' + esc(t("Align")) + '">' + ico("alignBtn") + "</button>" +
+        (alignOpen ? '<div class="ctx-fly">' +
+          [["alL", "Align left"], ["alC", "Align center"], ["alR", "Align right"], ["alT", "Align top"], ["alM", "Align middle"], ["alB", "Align bottom"], ["disH", "Distribute horizontally"], ["disV", "Distribute vertically"]].map(function (a) {
+            return '<button class="cb" data-act="' + a[0] + '" title="' + esc(t(a[1])) + '">' + ico(a[0]) + "</button>";
+          }).join("") + '<span class="sep v"></span><button class="cb txt" data-act="tidy" title="' + esc(t("Tidy up into a grid")) + '">' + ico("tidy") + "<span>" + esc(t("Tidy up")) + "</span></button></div>" : "") +
+        '</div><span class="sep v"></span>';
+    }
+    if (one && typeOf(one) === "frame") {
+      h += '<button class="cb txt" data-act="tidyframe" title="' + esc(t("Tidy up everything inside this frame into a grid")) + '">' + ico("tidy") + "<span>" + esc(t("Tidy up")) + '</span></button><span class="sep v"></span>';
     }
     h += '<button class="cb" data-act="front" title="Bring to front">' + ico("front") + "</button>" +
       '<button class="cb" data-act="back" title="Send to back">' + ico("back") + "</button>" +
@@ -661,6 +686,167 @@
     if (act === "back") { let z = minZ() - list.length; return commit(list.sort(function (a, b) { return (a.z || 1) - (b.z || 1); }).map(function (o) { return { path: "stickies/" + o.id + "/z", value: z++ }; })); }
     if (act === "dup") return duplicate();
     if (act === "del") return deleteSel();
+    if (act === "alignmenu") { alignOpen = !alignOpen; return updateCtx(); }
+    if (/^(al[LCRTMB]|dis[HV]|tidy)$/.test(act)) return alignSel(act);
+    if (act === "tidyframe" && one) return tidyFrame(one);
+  }
+
+  /* ================= align / distribute / tidy up ================= */
+  var alignOpen = false;
+  /* move objects by per-id deltas; frames carry their contents along */
+  function moveChanges(deltas) {
+    const ch = [], done = {};
+    function mv(id, dx, dy) {
+      if (done[id] || (!dx && !dy)) return;
+      const o = S.stickies[id]; if (!o || typeOf(o) === "arrow") return;
+      done[id] = 1;
+      const n = clone(o); n.x = Math.round(o.x + dx); n.y = Math.round(o.y + dy);
+      ch.push({ path: "stickies/" + id, value: n });
+    }
+    Object.keys(deltas).forEach(function (id) {
+      const d = deltas[id], o = S.stickies[id]; if (!o) return;
+      if (typeOf(o) === "frame") frameChildren([id]).forEach(function (k) { if (!deltas[k]) mv(k, d.dx, d.dy); });
+    });
+    Object.keys(deltas).forEach(function (id) { mv(id, deltas[id].dx, deltas[id].dy); });
+    return ch;
+  }
+  function topLevel(list) {
+    const frames = list.filter(function (o) { return typeOf(o) === "frame"; }).map(function (o) { return o.id; });
+    const kids = {}; frameChildren(frames).forEach(function (k) { kids[k] = 1; });
+    return list.filter(function (o) { return typeOf(o) !== "arrow" && !kids[o.id]; });
+  }
+  function rowsOf(items) {
+    const sorted = items.slice().sort(function (a, b) { return (a.r.y + a.r.h / 2) - (b.r.y + b.r.h / 2); });
+    const rows = [];
+    sorted.forEach(function (it) {
+      const cy = it.r.y + it.r.h / 2, row = rows[rows.length - 1];
+      if (row && Math.abs(cy - row.cy) <= Math.max(30, row.h * 0.5)) { row.items.push(it); }
+      else rows.push({ cy: cy, h: it.r.h, items: [it] });
+    });
+    rows.forEach(function (row) { row.items.sort(function (a, b) { return a.r.x - b.r.x; }); });
+    return rows;
+  }
+  function gridLayout(items, x0, y0, maxW) {
+    const GAP = 20;
+    const cw = Math.max.apply(null, items.map(function (it) { return it.r.w; }));
+    const chh = Math.max.apply(null, items.map(function (it) { return it.r.h; }));
+    const rows = rowsOf(items);
+    let cols = Math.max.apply(null, rows.map(function (r) { return r.items.length; }));
+    if (rows.length === 1 && items.length > 4) cols = Math.ceil(Math.sqrt(items.length * 1.6));
+    if (maxW) cols = Math.max(1, Math.min(cols, Math.floor((maxW + GAP) / (cw + GAP))));
+    const order = []; rows.forEach(function (r) { r.items.forEach(function (it) { order.push(it); }); });
+    const deltas = {};
+    order.forEach(function (it, i) {
+      const c = i % cols, rI = Math.floor(i / cols);
+      const nx = x0 + c * (cw + GAP) + (cw - it.r.w) / 2, ny = y0 + rI * (chh + GAP) + (chh - it.r.h) / 2;
+      deltas[it.o.id] = { dx: Math.round(nx - it.r.x), dy: Math.round(ny - it.r.y) };
+    });
+    return { deltas: deltas, w: cols * (cw + GAP) - GAP, h: Math.ceil(order.length / cols) * (chh + GAP) - GAP };
+  }
+  function alignSel(act) {
+    const items = topLevel(selObjs()).map(function (o) { return { o: o, r: rectOf(o) }; });
+    if (items.length < 2) return toast("Select at least 2 items");
+    const x0 = Math.min.apply(null, items.map(function (i) { return i.r.x; })), y0 = Math.min.apply(null, items.map(function (i) { return i.r.y; }));
+    const x1 = Math.max.apply(null, items.map(function (i) { return i.r.x + i.r.w; })), y1 = Math.max.apply(null, items.map(function (i) { return i.r.y + i.r.h; }));
+    let deltas = {};
+    const put = function (it, dx, dy) { deltas[it.o.id] = { dx: Math.round(dx), dy: Math.round(dy) }; };
+    if (act === "alL") items.forEach(function (it) { put(it, x0 - it.r.x, 0); });
+    if (act === "alR") items.forEach(function (it) { put(it, x1 - (it.r.x + it.r.w), 0); });
+    if (act === "alC") items.forEach(function (it) { put(it, (x0 + x1) / 2 - (it.r.x + it.r.w / 2), 0); });
+    if (act === "alT") items.forEach(function (it) { put(it, 0, y0 - it.r.y); });
+    if (act === "alB") items.forEach(function (it) { put(it, 0, y1 - (it.r.y + it.r.h)); });
+    if (act === "alM") items.forEach(function (it) { put(it, 0, (y0 + y1) / 2 - (it.r.y + it.r.h / 2)); });
+    if (act === "disH" || act === "disV") {
+      if (items.length < 3) return toast("Select at least 3 items to distribute");
+      const H = act === "disH";
+      const s2 = items.slice().sort(function (a, b) { return H ? a.r.x - b.r.x : a.r.y - b.r.y; });
+      const total = s2.reduce(function (a, it) { return a + (H ? it.r.w : it.r.h); }, 0);
+      const gap = ((H ? x1 - x0 : y1 - y0) - total) / (s2.length - 1);
+      let pos = H ? x0 : y0;
+      s2.forEach(function (it) { if (H) put(it, pos - it.r.x, 0); else put(it, 0, pos - it.r.y); pos += (H ? it.r.w : it.r.h) + gap; });
+    }
+    if (act === "tidy") deltas = gridLayout(items, x0, y0).deltas;
+    const ch = moveChanges(deltas);
+    if (!ch.length) return toast("Already aligned");
+    commit(ch);
+    updateCtx();
+  }
+  function tidyFrame(f) {
+    const PAD = 30;
+    const all = frameChildren([f.id]).map(function (k) { return S.stickies[k]; }).filter(Boolean);
+    const inner = all.filter(function (o) { return typeOf(o) === "frame"; }).map(function (o) { return o.id; });
+    const nested = {}; frameChildren(inner).forEach(function (k) { nested[k] = 1; });
+    const kids = all.filter(function (o) { return typeOf(o) !== "arrow" && typeOf(o) !== "frame" && !nested[o.id] && typeOf(o) !== "text"; });
+    if (!kids.length) return toast(inner.length ? "Select a column frame to tidy up its post-its" : "This frame is empty");
+    const items = kids.map(function (o) { return { o: o, r: rectOf(o) }; });
+    const g = gridLayout(items, f.x + PAD, f.y + PAD, (f.w || 800) - PAD * 2);
+    const ch = moveChanges(g.deltas);
+    const needH = g.h + PAD * 2;
+    if (needH > (f.h || 560)) { const n = clone(f); n.h = Math.ceil(needH); ch.push({ path: "stickies/" + f.id, value: n }); }
+    if (!ch.length) return toast("Already aligned");
+    commit(ch);
+    updateCtx();
+    toast("Frame tidied up");
+  }
+
+  function leafFrames() {
+    return Object.keys(S.stickies).filter(function (k) {
+      const o = S.stickies[k]; if (typeOf(o) !== "frame") return false;
+      return !frameChildren([k]).some(function (c) { return typeOf(S.stickies[c]) === "frame"; });
+    }).map(function (k) { return S.stickies[k]; });
+  }
+  function tidyButton() {
+    if (!canEdit()) return toast("View only – you can read this board but not edit it");
+    const list = selObjs();
+    const frames = list.filter(function (o) { return typeOf(o) === "frame"; });
+    if (list.length === 1 && frames.length === 1) return tidyFrame(frames[0]);
+    if (topLevel(list).length >= 2) return alignSel("tidy");
+    // nothing (useful) selected: tidy every frame that holds post-its
+    const PAD = 30, ch = [];
+    let found = 0;
+    leafFrames().forEach(function (f) {
+      const kids = frameChildren([f.id]).map(function (k) { return S.stickies[k]; }).filter(function (o) { return o && ["sticky", "image", "shape", "icon"].indexOf(typeOf(o)) >= 0; });
+      if (kids.length < 2) return;
+      found++;
+      const g = gridLayout(kids.map(function (o) { return { o: o, r: rectOf(o) }; }), f.x + PAD, f.y + PAD, (f.w || 800) - PAD * 2);
+      moveChanges(g.deltas).forEach(function (c) { ch.push(c); });
+      if (g.h + PAD * 2 > (f.h || 560)) { const n = clone(f); n.h = Math.ceil(g.h + PAD * 2); ch.push({ path: "stickies/" + f.id, value: n }); }
+    });
+    if (!ch.length) return toast(found ? "Already aligned" : "Select post-its or a frame to tidy up");
+    commit(ch);
+    toast("Board tidied up – Ctrl+Z to undo");
+  }
+
+  /* ================= smart guides (snap while dragging) ================= */
+  const SNAP = 6;
+  function clearGuides() { if (els.guides) els.guides.innerHTML = ""; }
+  function snapDrag(g, dx, dy, noSnap) {
+    clearGuides();
+    if (noSnap || !g.box) return { dx: dx, dy: dy };
+    const b = { x: g.box.x + dx, y: g.box.y + dy, w: g.box.w, h: g.box.h };
+    const tol = SNAP / view.s;
+    const xs = [b.x, b.x + b.w / 2, b.x + b.w], ys = [b.y, b.y + b.h / 2, b.y + b.h];
+    let bx = null, by = null;
+    const moving = {}; g.ids.forEach(function (k) { moving[k] = 1; });
+    const vr = els.viewport.getBoundingClientRect();
+    const vis = { x: -view.x / view.s - 200, y: -view.y / view.s - 200, w: vr.width / view.s + 400, h: vr.height / view.s + 400 };
+    Object.keys(S.stickies).forEach(function (k) {
+      if (moving[k]) return;
+      const o = S.stickies[k]; if (typeOf(o) === "arrow") return;
+      const r = rectOf(o);
+      if (r.x > vis.x + vis.w || r.x + r.w < vis.x || r.y > vis.y + vis.h || r.y + r.h < vis.y) return;
+      [r.x, r.x + r.w / 2, r.x + r.w].forEach(function (tx) { xs.forEach(function (sx) { const d = tx - sx; if (Math.abs(d) <= tol && (!bx || Math.abs(d) < Math.abs(bx.d))) bx = { d: d, at: tx, r: r }; }); });
+      [r.y, r.y + r.h / 2, r.y + r.h].forEach(function (ty) { ys.forEach(function (sy) { const d = ty - sy; if (Math.abs(d) <= tol && (!by || Math.abs(d) < Math.abs(by.d))) by = { d: d, at: ty, r: r }; }); });
+    });
+    if (bx) dx += bx.d;
+    if (by) dy += by.d;
+    const nb = { x: g.box.x + dx, y: g.box.y + dy, w: g.box.w, h: g.box.h };
+    const lw = Math.max(1, 1 / view.s);
+    let html = "";
+    if (bx) { const ya = Math.min(nb.y, bx.r.y) - 10, yb = Math.max(nb.y + nb.h, bx.r.y + bx.r.h) + 10; html += '<i class="gd" style="left:' + (bx.at - lw / 2) + "px;top:" + ya + "px;width:" + lw + "px;height:" + (yb - ya) + 'px"></i>'; }
+    if (by) { const xa = Math.min(nb.x, by.r.x) - 10, xb = Math.max(nb.x + nb.w, by.r.x + by.r.w) + 10; html += '<i class="gd" style="top:' + (by.at - lw / 2) + "px;left:" + xa + "px;height:" + lw + "px;width:" + (xb - xa) + 'px"></i>'; }
+    if (els.guides) els.guides.innerHTML = html;
+    return { dx: dx, dy: dy };
   }
   function deleteSel() {
     const list = selObjs(); if (!list.length) return;
@@ -911,7 +1097,7 @@
     const list = window.MBTemplateList ? window.MBTemplateList().filter(function (x) { return x.kind === "kit"; }) : [];
     const cats = window.MB_KIT_CATS || {};
     let h = '<div class="tpl-head"><h2>Templates</h2><button class="icon-btn" id="tplClose" title="Close">' + ico("close") + '</button></div><p class="muted">Insert a ready-made template into this board. Everything stays editable – move, recolour, add post-its.</p>';
-    ["feedback", "agile", "diagram", "strategy"].forEach(function (c) {
+    ["executive", "feedback", "agile", "tech", "data", "diagram", "strategy"].forEach(function (c) {
       const items = list.filter(function (x) { return x.cat === c; });
       if (!items.length) return;
       h += '<h3 class="tpl-cat no-i18n">' + esc(cats[c] || c) + '</h3><div class="tpl-grid">' + items.map(function (x) {
@@ -1394,6 +1580,7 @@
       }
       if (gesture.type === "drag" || gesture.type === "resize") {
         if (!gesture.moved && Math.hypot(dx, dy) * view.s < 3) return;
+        let ddx = dx, ddy = dy;
         if (!gesture.moved) {
           gesture.moved = true;
           els.ctx.hidden = true;
@@ -1411,18 +1598,24 @@
             gesture.ids.forEach(function (k) { if (typeOf(S.stickies[k]) !== "frame") S.stickies[k].z = ++z; });
           }
           gesture.ids.forEach(function (k) { if (els.objs[k]) els.objs[k].classList.add("lifting"); });
+          if (gesture.type === "drag") {
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            gesture.ids.forEach(function (k) { const o = S.stickies[k]; if (!o || typeOf(o) === "arrow") return; const r = rectOf(o); x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); });
+            gesture.box = isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+          }
         }
+        if (gesture.type === "drag") { const sn = snapDrag(gesture, dx, dy, e.ctrlKey || e.metaKey); ddx = sn.dx; ddy = sn.dy; }
         gesture.ids.forEach(function (k) {
           const o = S.stickies[k], o0 = gesture.orig[k], el = els.objs[k];
           if (!o || !el) return;
           const tp = typeOf(o);
           if (gesture.type === "drag") {
             if (tp === "arrow") {
-              if (!o.from) { o.x1 = Math.round(o0.x1 + dx); o.y1 = Math.round(o0.y1 + dy); }
-              if (!o.to) { o.x2 = Math.round(o0.x2 + dx); o.y2 = Math.round(o0.y2 + dy); }
+              if (!o.from) { o.x1 = Math.round(o0.x1 + ddx); o.y1 = Math.round(o0.y1 + ddy); }
+              if (!o.to) { o.x2 = Math.round(o0.x2 + ddx); o.y2 = Math.round(o0.y2 + ddy); }
               renderArrow(o, el);
             } else {
-              o.x = Math.round(o0.x + dx); o.y = Math.round(o0.y + dy);
+              o.x = Math.round(o0.x + ddx); o.y = Math.round(o0.y + ddy);
               el.style.left = o.x + "px"; el.style.top = o.y + "px"; el.style.zIndex = zFor(o);
             }
           } else {
@@ -1478,6 +1671,7 @@
         return;
       }
       if (g.type === "drag" || g.type === "resize") {
+        clearGuides();
         g.ids.forEach(function (k) { if (els.objs[k]) els.objs[k].classList.remove("lifting"); });
         if (g.moved) {
           const ch = [];
@@ -1642,6 +1836,7 @@
     $("#addSwatches").onclick = function (e) { const b = e.target.closest("button"); if (b) { placeColor = b.dataset.c; setTool("sticky"); toast("Click on the board to place the post-it"); } };
     $("#shapeFly").onclick = function (e) { const b = e.target.closest("button"); if (b) { placeShape = b.dataset.shape; setTool("shape"); toast("Click on the board to place the shape"); } };
     $("#tbTemplates").onclick = templatesModal;
+    $("#tbTidy").onclick = tidyButton;
     $("#tbIcons").onclick = iconModal;
     $("#tbImage").onclick = function () { if (!canEdit()) return viewerBlock(); $("#fileImage").click(); };
     $("#imgFly").onclick = function (e) {

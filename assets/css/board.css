@@ -435,3 +435,13 @@ body.canvas-dark .frameobj .ftitle .txt { color: #fff; background: rgba(14,26,51
 .modal .chip input:checked + span { background: #1c2033; border-color: #1c2033; color: #fff; }
 .modal .fb-scale input:checked + span { background: #e8c468; border-color: #e8c468; color: #1c2033; }
 @media (max-width: 760px) { .topbar .btn.fb-top span { display: none; } }
+
+/* v6 – align / tidy up / smart guides */
+#guides { position: absolute; inset: 0; pointer-events: none; z-index: 99999; }
+#guides .gd { position: absolute; background: #e5484d; }
+.ctx-alw { position: relative; display: inline-flex; }
+.ctx-fly { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 6px; background: #fff; border-radius: 12px; box-shadow: 0 6px 24px rgba(20,24,50,.18); white-space: nowrap; }
+.cb.on { background: #eef1ff; color: #4262ff; }
+.shapeobj .txt { white-space: pre-wrap; }
+.shapeobj[data-align="left"] { justify-content: flex-start; align-items: flex-start; text-align: left; padding: 10px 14px; }
+.shapeobj[data-align="left"] .txt { width: 100%; }
