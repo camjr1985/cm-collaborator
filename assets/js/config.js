@@ -38,3 +38,5 @@ window.CMCOLLAB_FIREBASE = {
 
 /* Dot-voting: how many votes each participant gets per board */
 window.CMCOLLAB_VOTES_PER_USER = 5;
+/* E-mail that receives an alert for each new beta sign-up (via formsubmit.co). Empty string = no alerts. */
+window.CMCOLLAB_NOTIFY = "carlosalexandrejunior@gmail.com";

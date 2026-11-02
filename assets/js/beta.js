@@ -11,6 +11,25 @@
     box.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   function fail(msg) { err.textContent = t(msg); err.hidden = false; }
+  /* E-mail alert to the admin for each new sign-up (FormSubmit; address set in config.js). Fire-and-forget. */
+  const ROLE_NAMES = { ux: "UX", ui: "UI", designer: "Designer", architect: "Arquiteto(a)", pm: "Gestor(a) de projeto (GP)", process: "Analista de processos", other: "Outro" };
+  function notify(d) {
+    const to = window.CMCOLLAB_NOTIFY;
+    if (!to || !(A && A.enabled)) return;
+    try {
+      fetch("https://formsubmit.co/ajax/" + to, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({
+          _subject: "Nova inscrição no beta CM Collaborator: " + d.name,
+          _template: "table", _captcha: "false",
+          "Nome": d.name, "E-mail": d.email, "Função": ROLE_NAMES[d.role] || d.role,
+          "Origem": d.src, "Idioma": d.lang,
+          "Dar acesso": new URL("../admin/#signups", location.href).href
+        })
+      }).catch(function () { /* ignore */ });
+    } catch (x) { /* ignore */ }
+  }
   f.onsubmit = function (e) {
     e.preventDefault();
     err.hidden = true;
@@ -38,7 +57,7 @@
       if (list.some(function (s) { return s.email === email; })) p = Promise.reject({ code: "PERMISSION_DENIED" });
       else { list.push(data); try { localStorage.setItem("cmcollab:signups", JSON.stringify(list)); } catch (x) { /* ignore */ } p = Promise.resolve(); }
     }
-    p.then(function () { done(email, false); }, function (x) {
+    p.then(function () { notify(data); done(email, false); }, function (x) {
       const denied = x && (x.code === "PERMISSION_DENIED" || /permission/i.test(x.message || ""));
       if (denied) return done(email, true);
       btn.disabled = false; btn.textContent = t("Request my access");
