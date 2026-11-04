@@ -45,7 +45,7 @@
           return parseJSON(r.response.text());
         }, function (err) {
           const m = String((err && err.message) || err);
-          if (/not found|404|not supported|is not available|unknown model|does not exist/i.test(m)) return tryModel(i + 1);
+          if (!/app.?check|\[401|\[403|quota|429/i.test(m) && /not found|\[404|not supported|unknown model|does not exist/i.test(m)) return tryModel(i + 1);
           throw err;
         });
       }
@@ -204,8 +204,8 @@
     console.warn(err);
     const m = String((err && err.message) || err);
     let msg = L("The AI could not answer. Please try again in a moment.", "A IA não conseguiu responder. Tente novamente daqui a pouco.");
-    if (/app.?check|recaptcha|attestation|401|403/i.test(m)) msg = L("The AI is protected and could not verify this browser (App Check). Reload the page and try again.", "A IA está protegida e não conseguiu validar este navegador (App Check). Recarregue a página e tente de novo.");
-    if (/quota|429|exhausted|rate/i.test(m)) msg = L("The free AI quota was reached for now. Try again later.", "A quota gratuita da IA foi atingida por agora. Tente mais tarde.");
+    if (/quota|429|resource.?exhausted|rate limit/i.test(m)) msg = L("The free AI quota was reached for now. Try again later.", "A quota gratuita da IA foi atingida por agora. Tente mais tarde.");
+    if (/app.?check|recaptcha|attestation|\[401|\[403/i.test(m)) msg = L("The AI is protected and could not verify this browser (App Check). Reload the page and try again.", "A IA está protegida e não conseguiu validar este navegador (App Check). Recarregue a página e tente de novo.");
     out.innerHTML = '<p class="ai-err">' + esc(msg) + '</p><p class="ai-meta">' + esc(m.slice(0, 160)) + "</p>";
   }
   function frameList(frames) {
