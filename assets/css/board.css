@@ -445,3 +445,27 @@ body.canvas-dark .frameobj .ftitle .txt { color: #fff; background: rgba(14,26,51
 .shapeobj .txt { white-space: pre-wrap; }
 .shapeobj[data-align="left"] { justify-content: flex-start; align-items: flex-start; text-align: left; padding: 10px 14px; }
 .shapeobj[data-align="left"] .txt { width: 100%; }
+
+/* v7 – AI assistant */
+.tb.ai-tb { color: #8b5cf6; }
+.ai-card { max-width: 760px; }
+.ai-tabs { display: flex; gap: 6px; margin: 4px 0 14px; flex-wrap: wrap; }
+.ai-tabs button { border: 1px solid #dfe2ea; background: #fff; border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: 13px; color: #3c4159; cursor: pointer; }
+.ai-tabs button.on { background: #1c2033; color: #fff; border-color: #1c2033; }
+.ai-form label { display: block; font-size: 13px; font-weight: 700; color: #3c4159; margin-bottom: 10px; }
+.ai-form textarea, .ai-form input, .ai-form select { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 9px 11px; border: 1px solid #dfe2ea; border-radius: 10px; font: inherit; font-weight: 400; }
+.ai-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.ai-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -2px 0 12px; }
+.ai-chips button { border: 1px dashed #c9cede; background: #f7f8fb; border-radius: 999px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: #4a5068; }
+.ai-out { margin-top: 14px; max-height: 46vh; overflow: auto; }
+.ai-busy { display: flex; align-items: center; gap: 10px; color: #6b7280; font-size: 14px; padding: 18px 4px; }
+.ai-busy i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #c9cede; border-top-color: #8b5cf6; animation: aispin .8s linear infinite; }
+@keyframes aispin { to { transform: rotate(360deg); } }
+.ai-opt { border: 1px solid #e5e8ef; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.ai-opt h4 { margin: 0 0 4px; font-size: 15px; }
+.ai-opt p { margin: 4px 0; font-size: 13px; color: #4a5068; }
+.ai-opt ol { margin: 6px 0 8px 18px; padding: 0; font-size: 13px; color: #3c4159; }
+.ai-meta { font-size: 12px; color: #8b90a5; }
+.ai-err { color: #c62828; font-size: 13px; }
+.ai-note { font-size: 12px; color: #8b90a5; margin-top: 10px; }
+@media (max-width: 640px) { .ai-row { grid-template-columns: 1fr; } }

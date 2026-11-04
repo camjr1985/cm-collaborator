@@ -460,6 +460,8 @@
     "I agree to receive the beta invitation and a short feedback request by e-mail. My data is used only for this beta.": "Aceito receber por e-mail o convite para o beta e um pedido curto de feedback. Os meus dados são usados só para este beta.",
     "Request my access": "Pedir o meu acesso",
     "Pricing": "Preços",
+    "AI assistant – build, suggest dynamics, analyse": "Assistente IA – construir, sugerir dinâmicas, analisar",
+    "AI assistant is not available": "O assistente IA não está disponível",
     "Team sizing": "Tamanho da equipa",
     "How many people will use it?": "Quantas pessoas vão usar?",
     "Choose the size of your team – the price per user drops as your team grows.": "Escolha o tamanho da sua equipa – o preço por utilizador desce à medida que a equipa cresce.",

@@ -85,6 +85,7 @@
     alB: '<path d="M3 20h18"/><rect x="6" y="5" width="4" height="12" rx="1"/><rect x="14" y="10" width="4" height="7" rx="1"/>',
     disH: '<path d="M3 4v16M21 4v16"/><rect x="9" y="7" width="6" height="10" rx="1"/>',
     disV: '<path d="M4 3h16M4 21h16"/><rect x="7" y="9" width="10" height="6" rx="1"/>',
+    ai: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
     tidy: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     select: '<path d="M5 3l14 8-6 1.5L10 19z"/>',
     hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6 7-2.5 0-4-1-5.5-3L3 14.5a1.6 1.6 0 0 1 2.5-2L8 15"/>',
@@ -163,6 +164,7 @@
       '<button class="tb" data-tool="arrow" title="Connector / arrow (L) – drag from one item to another">' + ico("arrow") + "</button>" +
       '<button class="tb" data-tool="frame" title="Frame (F) – drag to draw a white area">' + ico("frame") + "</button>" +
       '<button class="tb" id="tbIcons" title="Icons & emoji">' + ico("smile") + "</button>" +
+      '<button class="tb ai-tb" id="tbAI" title="AI assistant – build, suggest dynamics, analyse">' + ico("ai") + "</button>" +
       '<button class="tb" id="tbTidy" title="Auto-align – tidy up post-its (select items or a frame; nothing selected = every frame)">' + ico("tidy") + "</button>" +
       '<div class="tool-fly"><button class="tb" id="tbImage" title="Image or GIF (I)">' + ico("image") + '</button><div class="fly menu" id="imgFly">' +
       '<button data-img="upload">' + ico("upload") + '<span>Upload image / GIF</span></button><button data-img="link">' + ico("link") + "<span>Image / GIF from a link</span></button></div></div>" +
@@ -1092,6 +1094,45 @@
     focusBox({ x: x0 - 60, y: y0 - 80, w: x1 - x0 + 120, h: y1 - y0 + 140 }, 1);
     toast("Template added – everything is editable");
   }
+  /* ---- objects created elsewhere (AI assistant) are placed next to the existing content ---- */
+  function insertObjects(objs, msg) {
+    if (!objs || !objs.length || !canEdit()) return false;
+    const b = contentBox();
+    const ox = b.empty ? 0 : Math.round(b.x + b.w + 200), oy = b.empty ? 0 : Math.round(b.y + 40);
+    const list = instantiate(objs, ox, oy);
+    if (!commit(list.map(function (o) { return { path: "stickies/" + o.id, value: o, before: null }; }))) return false;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    list.forEach(function (o) { if (o.type === "arrow") return; x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); x1 = Math.max(x1, o.x + o.w); y1 = Math.max(y1, o.y + (o.h || 40)); });
+    setSel([]);
+    focusBox({ x: x0 - 60, y: y0 - 80, w: x1 - x0 + 120, h: y1 - y0 + 140 }, 1);
+    if (msg) toast(msg);
+    return true;
+  }
+  /* plain description of the board for the AI (frames, notes, votes, comments) */
+  function boardSnapshot(onlySel) {
+    const ids = onlySel && sel.size ? Array.from(sel) : Object.keys(S.stickies);
+    const all = ids.map(function (k) { return S.stickies[k]; }).filter(Boolean);
+    const frames = Object.keys(S.stickies).map(function (k) { return S.stickies[k]; }).filter(function (o) { return typeOf(o) === "frame"; });
+    function frameOf(o) {
+      const r = rectOf(o); let best = null;
+      frames.forEach(function (f) { if (f.id === o.id) return; const fr = rectOf(f); if (inside(r, fr) && (!best || fr.w * fr.h < best.w * best.h)) best = { t: f.title || "", w: fr.w, h: fr.h }; });
+      return best ? best.t : "";
+    }
+    const items = [];
+    all.forEach(function (o) {
+      const tp = typeOf(o); if (tp === "frame" || tp === "arrow" || tp === "image") return;
+      const text = String(o.text || o.title || "").trim(); if (!text) return;
+      const it = { type: tp, text: text.slice(0, 300), area: frameOf(o) };
+      const v = totalVotes(o); if (v) it.votes = v;
+      if (o.comments) it.comments = Object.keys(o.comments).map(function (c) { return String(o.comments[c].text || "").slice(0, 200); }).slice(0, 5);
+      items.push(it);
+    });
+    return { title: CFG.title || "", areas: frames.map(function (f) { return f.title || ""; }).filter(Boolean).slice(0, 60), items: items.slice(0, 400) };
+  }
+  window.CMBoardAPI = {
+    canEdit: canEdit, modal: modal, closeModal: closeModal, toast: toast, insert: insertObjects, snapshot: boardSnapshot,
+    hasSelection: function () { return sel.size > 0; }, isAdmin: function () { return !!CFG.isAdmin; }, boardId: function () { return CFG.id; }
+  };
   function templatesModal() {
     if (!canEdit()) return toast("View only – you can read this board but not edit it");
     const list = window.MBTemplateList ? window.MBTemplateList().filter(function (x) { return x.kind === "kit"; }) : [];
@@ -1837,6 +1878,7 @@
     $("#shapeFly").onclick = function (e) { const b = e.target.closest("button"); if (b) { placeShape = b.dataset.shape; setTool("shape"); toast("Click on the board to place the shape"); } };
     $("#tbTemplates").onclick = templatesModal;
     $("#tbTidy").onclick = tidyButton;
+    $("#tbAI").onclick = function () { if (window.CMAI) window.CMAI.open(); else toast("AI assistant is not available"); };
     $("#tbIcons").onclick = iconModal;
     $("#tbImage").onclick = function () { if (!canEdit()) return viewerBlock(); $("#fileImage").click(); };
     $("#imgFly").onclick = function (e) {

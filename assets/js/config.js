@@ -40,3 +40,12 @@ window.CMCOLLAB_FIREBASE = {
 window.CMCOLLAB_VOTES_PER_USER = 5;
 /* E-mail that receives an alert for each new beta sign-up (via formsubmit.co). Empty string = no alerts. */
 window.CMCOLLAB_NOTIFY = "carlosalexandrejunior@gmail.com";
+/* Product name shown in the interface – change here when the system is renamed. */
+window.CMCOLLAB_BRAND = "CM Collaborator";
+/* Embedded AI (Firebase AI Logic · Gemini Developer API, protected by App Check / reCAPTCHA Enterprise). */
+window.CMCOLLAB_AI = {
+  sdk: "12.19.0",
+  models: ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"],
+  recaptchaKey: "6Ld0ghAuAAAAAJWR24GvK5vExkmQPAg184s0obUr",
+  dailyLimit: { free: 10, pro: 100, team: 300, enterprise: 1000, admin: 1000 }
+};
