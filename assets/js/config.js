@@ -41,6 +41,8 @@ window.CMCOLLAB_VOTES_PER_USER = 5;
 /* E-mail that receives an alert for each new beta sign-up (via formsubmit.co). Empty string = no alerts. */
 window.CMCOLLAB_NOTIFY = "carlosalexandrejunior@gmail.com";
 /* Product name shown in the interface – change here when the system is renamed. */
+/* Platform e-mail notifier (Google Apps Script web app under the platform account – see notifier/README.md). Empty = off. */
+window.CMCOLLAB_MAILER = "";
 window.CMCOLLAB_BRAND = "CM Collaborator";
 /* Embedded AI (Firebase AI Logic · Gemini Developer API, protected by App Check / reCAPTCHA Enterprise). */
 window.CMCOLLAB_AI = {

@@ -111,7 +111,7 @@
     u["workspaces/" + wsId + "/members/" + k] = { email: email, name: name || email.split("@")[0], role: role, invitedAt: TS(), invitedBy: me.email, expires: expires };
     u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
     f.reset();
-    update(u).then(function () { inviteAndTell([email]); });
+    update(u).then(function () { inviteAndTell([email], wsId); });
   }
   function extendMember(wsId, k, days) {
     const m = ws[wsId].members[k], u = {};
@@ -216,8 +216,29 @@
         .then(function () { return true; }, function (e) { console.warn(e); return false; });
     } catch (e) { return Promise.resolve(false); }
   }
-  function inviteAndTell(emails) {
+  /* Automatic welcome e-mail sent by the platform notifier (Apps Script under the platform's own account). */
+  function mailWelcome(wsId, emails) {
+    const url = window.CMCOLLAB_MAILER;
+    if (!url || !wsId || !emails.length) return Promise.resolve(null);
+    return window.firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken: tok, ws: wsId, to: emails, lang: PT ? "pt" : "en" }) });
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) throw new Error(j.error || "notifier error");
+      const st = {}; (j.sent || []).forEach(function (em) { st["workspaces/" + wsId + "/members/" + A.key(em) + "/welcomed"] = TS(); });
+      if (Object.keys(st).length) db.ref().update(st).catch(function () { /* ignore */ });
+      return j;
+    }).catch(function (e) { console.warn("welcome mail", e); return { ok: false, error: String(e.message || e) }; });
+  }
+  function sendWelcome(wsId, emails) {
+    if (!window.CMCOLLAB_MAILER) return toast(t("The e-mail notifier is not configured yet."));
+    mailWelcome(wsId, emails).then(function (j) {
+      if (j && j.ok) { toast(t("Welcome e-mail sent to") + " " + j.sent.length + " " + t("people")); load(); }
+      else toast(t("Could not send the welcome e-mail") + (j && j.error ? " – " + j.error : ""));
+    });
+  }
+  function inviteAndTell(emails, wsId) {
     let ok = 0;
+    mailWelcome(wsId, emails);
     return emails.reduce(function (p, em) { return p.then(function () { return sendInviteEmail(em).then(function (r) { if (r) ok++; }); }); }, Promise.resolve())
       .then(function () {
         if (ok === emails.length) toast(emails.length === 1 ? t("Invitation e-mailed to") + " " + emails[0] : ok + " " + t("invitations e-mailed"));
@@ -263,7 +284,7 @@
     const wsId = betaWsDefault(); if (!wsId) return toast("Create a workspace first");
     const x = Object.assign({ k: k }, signups[k]), u = {};
     const mk = grantUpdates(wsId, x, u);
-    update(u).then(function () { inviteAndTell([x.email]); });
+    update(u).then(function () { inviteAndTell([x.email], wsId); });
   }
   function grantAllPending() {
     const wsId = betaWsDefault(); if (!wsId) return toast("Create a workspace first");
@@ -273,7 +294,7 @@
     if (!window.confirm(t("Give access to all pending requests?") + " (" + pend.length + ") – " + (dd ? t("Temporary") + " · " + dd + " " + t("days") : t("Full access")))) return;
     const u = {};
     pend.forEach(function (x) { grantUpdates(wsId, x, u); });
-    update(u).then(function () { inviteAndTell(pend.map(function (x) { return x.email; })); });
+    update(u).then(function () { inviteAndTell(pend.map(function (x) { return x.email; }), wsId); });
   }
   function openBulkInvite(wsId, emails) {
     const w = ws[wsId], days = suDays(wsId), until = days ? fmtDate(Date.now() + days * DAY) : "";
@@ -408,7 +429,7 @@
         const m = members[k];
         return '<li class="member"><span class="av sm no-i18n">' + esc((m.name || m.email)[0].toUpperCase()) + '</span><span class="m-who"><b class="no-i18n">' + esc(m.name || "") + '</b><span class="muted no-i18n">' + esc(m.email) + "</span></span>" +
           roleSelect("", m.role, 'data-role="' + id + "|" + k + '"') +
-          '<button class="btn sm" data-invite="' + id + "|" + k + '">Resend invite</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
+          '<button class="btn sm" data-invite="' + id + "|" + k + '">Resend invite</button><button class="btn sm" data-welcome="' + id + "|" + k + '" title="' + esc(m.welcomed ? t("Welcome e-mail sent on") + " " + fmtDate(m.welcomed) : t("Welcome e-mail not sent yet")) + '">' + (m.welcomed ? "✓ " : "✉ ") + t("Welcome") + '</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
           '<span class="m-exp">' + expiryBadge(m) + '<button class="link" data-ext="' + id + "|" + k + '|7">' + t("+7 days") + "</button>" + (m.expires ? '<button class="link" data-ext="' + id + "|" + k + '|0">' + t("Make full access") + "</button>" : "") + "</span></li>";
       }).join("");
       return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2>" + (w.info.accessDays ? '<span class="xp">' + esc(t("Default access")) + ": " + w.info.accessDays + " " + esc(t("days")) + "</span>" : "") + "</div>" +
@@ -419,7 +440,7 @@
         '<select name="template" aria-label="Template">' + templateOptions() + '</select>' +
         '<input name="bid" placeholder="' + esc(t("Link id (optional)")) + '" autocomplete="off" pattern="[a-z0-9-]{2,60}">' +
         '<button class="btn primary">New board</button></form></div>' +
-        '<div><h3>People with access <span class="count">' + mIds.length + "</span></h3>" +
+        '<div><h3>People with access <span class="count">' + mIds.length + "</span>" + (mIds.length ? ' <button class="btn sm" data-welcomeall="' + id + '">✉ ' + t("Send welcome to all") + "</button>" : "") + "</h3>" +
         '<ul class="members">' + (ml || '<li class="muted small">No one has access yet.</li>') + "</ul>" +
         '<form class="form-grid3" data-add="' + id + '"><input name="name" placeholder="' + esc(t("Name")) + '" autocomplete="off"><input name="email" type="email" required placeholder="name@email.com" autocomplete="off">' +
         roleSelect("role", "editor") + daysSelect("days", w.info.accessDays) + '<button class="btn primary">Grant access</button></form></div></div></section>';
@@ -440,7 +461,16 @@
     el.querySelectorAll("form[data-add]").forEach(function (f) { f.onsubmit = function (e) { e.preventDefault(); addMember(f.dataset.add, f); }; });
     function pair(s) { return s.split("|"); }
     el.querySelectorAll("[data-role]").forEach(function (s) { s.onchange = function () { const p = pair(s.dataset.role); setRole(p[0], p[1], s.value); }; });
-    el.querySelectorAll("[data-invite]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.invite); const m = ((ws[p[0]] || {}).members || {})[p[1]]; if (m) inviteAndTell([m.email]); openInvite(p[0], p[1]); }; });
+    el.querySelectorAll("[data-invite]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.invite); const m = ((ws[p[0]] || {}).members || {})[p[1]]; if (m) inviteAndTell([m.email], p[0]); openInvite(p[0], p[1]); }; });
+    el.querySelectorAll("[data-welcome]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.welcome); const m = ((ws[p[0]] || {}).members || {})[p[1]]; if (m) sendWelcome(p[0], [m.email]); }; });
+    el.querySelectorAll("[data-welcomeall]").forEach(function (b) { b.onclick = function () {
+      const id = b.dataset.welcomeall, mm = (ws[id] || {}).members || {};
+      const list = Object.keys(mm).map(function (k) { return mm[k]; }).filter(function (m) { return m.email !== me.email && (!m.expires || m.expires > Date.now()); });
+      const pend = list.filter(function (m) { return !m.welcomed; });
+      const use = pend.length ? pend : list;
+      if (!use.length) return toast("No one has access yet.");
+      if (window.confirm(t("Send the welcome e-mail to") + " " + use.length + " " + t("people") + "?\n\n" + use.map(function (m) { return m.email; }).join("\n"))) sendWelcome(id, use.map(function (m) { return m.email; }));
+    }; });
     el.querySelectorAll("[data-remove]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.remove); removeMember(p[0], p[1]); }; });
     el.querySelectorAll("[data-delb]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delb); deleteBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });
