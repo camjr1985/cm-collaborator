@@ -96,6 +96,10 @@
         ".read": "auth != null && auth.token.email_verified == true && ($k == auth.token.email.toLowerCase().replace('.', ',') || root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true)",
         ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true"
       }
+    },
+    "announcement": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true"
     }
   }
 }

@@ -154,6 +154,7 @@
   }
   function userBar(user, admin) {
     return '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(user.email) + "</b></span>" + planBadge() +
+      '<button class="btn" data-howto>❓ <span>' + esc(LL("How to start", "Como começar")) + "</span></button>" +
       '<button class="btn" data-feedback>💬 <span>Give feedback</span></button>' +
       (admin ? '<a class="btn" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';
   }
@@ -181,6 +182,39 @@
     dlg.onclick = function (e) { if (e.target === dlg) close(); };
     window.MBFeedback.render(document.getElementById("fbBox"), { board: "hub" });
   }
+  /* ---------------- welcome / how-to and announcements ---------------- */
+  function LL(en, pt) { return window.MB_LANG === "pt" ? pt : en; }
+  let FIRST_BOARD = null, WELCOME_ENTRY = null;
+  function welcomeDialog(user) {
+    if (document.getElementById("welDlg")) return;
+    const brand = window.CMCOLLAB_BRAND || "CM Collaborator";
+    const first = (user.displayName || "").split(" ")[0];
+    const e = WELCOME_ENTRY, days = e && e.expires ? Math.max(0, Math.ceil((e.expires - Date.now()) / 86400000)) : null;
+    const steps = [
+      ["🚀", LL("Open your first board", "Abra o seu primeiro quadro"), LL("Start with “1 · Start here – missions & feedback wall”: it has 5 short missions to explore everything.", "Comece pelo “1 · Comece aqui – missões e mural de feedback”: tem 5 missões curtas para explorar tudo.")],
+      ["🧩", LL("Use the templates", "Use os templates"), LL("Templates button (left bar): Kanban, retrospective, PI Planning, PDCA executive meeting, architecture, cloud, data…", "Botão Templates (barra da esquerda): Kanban, retrospetiva, PI Planning, reunião executiva PDCA, arquitetura, cloud, dados…")],
+      ["🟨", LL("Add and organise post-its", "Crie e organize post-its"), LL("N = post-it, T = text, F = frame, L = arrow. Drag to move; the “Tidy up” button aligns everything.", "N = post-it, T = texto, F = frame, L = seta. Arraste para mover; o botão “Organizar” alinha tudo.")],
+      ["✨", LL("Try the AI assistant", "Experimente o Assistente IA"), LL("The ✨ button builds a board from your goal, suggests dynamics and analyses the results.", "O botão ✨ monta um quadro a partir do seu objetivo, sugere dinâmicas e analisa os resultados.")],
+      ["👥", LL("Collaborate in real time", "Colabore em tempo real"), LL("Everyone invited sees the same board live: cursors, comments, votes and timer.", "Todos os convidados veem o mesmo quadro ao vivo: cursores, comentários, votos e cronómetro.")],
+      ["💬", LL("Share your feedback", "Dê a sua opinião"), LL("Before your access ends: 5 quick questions (3 minutes) with the “Give feedback” button.", "Antes de o acesso terminar: 5 perguntas rápidas (3 minutos) no botão “Dar feedback”.")]
+    ];
+    document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="welDlg"><div class="card wel-card"><div class="br-head"><div><span class="eyebrow sm">' + esc(LL("Welcome", "Boas-vindas")) + "</span><h2>" + esc(LL("Welcome to the " + brand + " beta", "Bem-vindo(a) ao beta do " + brand)) + (first ? ", <span class=\"no-i18n\">" + esc(first) + "</span>" : "") + "! 🎉</h2>" +
+      '<p class="muted">' + esc(LL("Thank you for helping us test. Here is how to get the most out of it", "Obrigado por nos ajudar a testar. Veja como tirar o máximo partido")) + (days !== null ? " – " + esc(LL("your access is active for", "o seu acesso está ativo durante")) + " <b>" + days + " " + esc(LL(days === 1 ? "day" : "days", days === 1 ? "dia" : "dias")) + "</b>" : "") + '.</p></div><button class="btn sm ghost" id="welX">✕</button></div>' +
+      '<ol class="wel-steps">' + steps.map(function (x) { return '<li><span class="wi">' + x[0] + "</span><div><b>" + esc(x[1]) + "</b><p>" + esc(x[2]) + "</p></div></li>"; }).join("") + "</ol>" +
+      '<p class="muted small">' + esc(LL("Tip: install it on your phone – browser menu → “Add to Home screen”. Questions? Reply to the invitation e-mail.", "Dica: instale no telemóvel – menu do navegador → “Adicionar ao ecrã principal”. Dúvidas? Responda ao e-mail do convite.")) + "</p>" +
+      '<div class="row-end"><button class="btn" id="welLater">' + esc(LL("Later", "Mais tarde")) + "</button>" + (FIRST_BOARD ? '<a class="btn primary" href="../board/?id=' + encodeURIComponent(FIRST_BOARD) + '">' + esc(LL("Start now", "Começar agora")) + " →</a>" : '<button class="btn primary" id="welOk">' + esc(LL("Let's go", "Vamos lá")) + "</button>") + "</div></div></div>");
+    const d = document.getElementById("welDlg");
+    function close() { d.remove(); try { localStorage.setItem("cmcollab:welcome:" + A.key(user.email), "1"); } catch (x) { /* ignore */ } }
+    ["welX", "welLater", "welOk"].forEach(function (id) { const b = document.getElementById(id); if (b) b.onclick = close; });
+    d.querySelectorAll("a.btn.primary").forEach(function (a) { a.addEventListener("click", close); });
+    d.onclick = function (ev) { if (ev.target === d) close(); };
+  }
+  function announcementBanner(a, key) {
+    if (!a || !a.on || !(a.title || a.text)) return "";
+    let seen = null; try { seen = localStorage.getItem("cmcollab:ann:" + key); } catch (x) { /* ignore */ }
+    if (seen && Number(seen) >= Number(a.t || 0)) return "";
+    return '<div class="ann-banner"><span class="bb-ic">📣</span><div><b>' + esc(a.title || LL("Announcement", "Comunicado")) + '</b><p class="muted small ann-text">' + esc(a.text || "").replace(/\n/g, "<br>") + '</p></div><button class="btn sm ghost" id="annX" data-t="' + esc(a.t || 0) + '">' + esc(LL("Got it", "Entendi")) + "</button></div>";
+  }
   function bindFeedback() { el.querySelectorAll("[data-feedback]").forEach(function (b) { b.onclick = feedbackDialog; }); }
   function list(user) {
     const db = A.db();
@@ -207,10 +241,25 @@
         const ids = Object.keys(wss).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
         const allowed = {};
         ids.forEach(function (w) { const bs = wss[w].boards || {}; Object.keys(bs).forEach(function (b) { allowed[b] = { title: bs[b].title, template: bs[b].template, ws: (wss[w].info || {}).name }; }); });
-        el.innerHTML = userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + recentRows(allowed) +
+        const firstBeta = entries.filter(function (e) { return e.expires && e.expires > Date.now(); })[0];
+        WELCOME_ENTRY = firstBeta || null;
+        if (firstBeta && wss[firstBeta.id]) {
+          const bs = Object.keys(wss[firstBeta.id].boards || {}).sort();
+          FIRST_BOARD = bs.filter(function (b) { return /comece|start|^1-/.test(b); })[0] || bs[0] || null;
+        }
+        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + recentRows(allowed) +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
             : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
         bindFeedback();
+        el.querySelectorAll("[data-howto]").forEach(function (b) { b.onclick = function () { welcomeDialog(user); }; });
+        db.ref("announcement").once("value").then(function (s) {
+          const slot = document.getElementById("annSlot"); if (!slot) return;
+          slot.innerHTML = announcementBanner(s.val(), A.key(user.email));
+          const x = document.getElementById("annX");
+          if (x) x.onclick = function () { try { localStorage.setItem("cmcollab:ann:" + A.key(user.email), x.dataset.t); } catch (e) { /* ignore */ } slot.innerHTML = ""; };
+        }, function () { /* no announcement */ });
+        let welcomed = null; try { welcomed = localStorage.getItem("cmcollab:welcome:" + A.key(user.email)); } catch (x) { /* ignore */ }
+        if (!admin && firstBeta && !welcomed) setTimeout(function () { welcomeDialog(user); }, 400);
         document.getElementById("soBtn").onclick = A.signOut;
         el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, wss); }; });
         el.querySelectorAll("[data-newin]").forEach(function (b) {

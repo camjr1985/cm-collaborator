@@ -6,7 +6,7 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, ws = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, OWNER = false, PLAN = null, MEK = null;
+  let db, me, ws = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-PT" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
@@ -62,11 +62,12 @@
       }).then(function (rows) { ws = {}; rows.forEach(function (x) { if (x[1]) ws[x[0]] = x[1]; }); render(); });
     }
     return Promise.all([
+      db.ref("announcement").once("value").catch(function () { return { val: function () { return null; } }; }),
       db.ref("plans").once("value").catch(function () { return { val: function () { return {}; } }; }),
       db.ref("workspaces").once("value"),
       db.ref("feedback").once("value").catch(function () { return { val: function () { return {}; } }; }),
       db.ref("signups").once("value").catch(function () { return { val: function () { return {}; } }; })
-    ]).then(function (r) { plans = r[0].val() || {}; ws = r[1].val() || {}; feedback = r[2].val() || {}; signups = r[3].val() || {}; render(); });
+    ]).then(function (r) { announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; render(); });
   }
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { if (okMsg) toast(okMsg); return load(); }).catch(fail);
@@ -163,6 +164,13 @@
     document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="limDlg"><div class="card"><h2>' + esc(t("Plan limit reached")) + '</h2><p class="muted">' + esc(msg) + " " + esc(t("Upgrade to create more and invite your team.")) + '</p><div class="row-end"><button class="btn" id="limX">' + esc(t("Close")) + '</button><a class="btn primary" href="../pricing/">' + esc(t("See plans")) + "</a></div></div></div>");
     const d = document.getElementById("limDlg"); document.getElementById("limX").onclick = function () { d.remove(); };
   }
+  /* ---------------- announcement to all users (admin) ---------------- */
+  function annSection() {
+    const a = announcement || {};
+    return '<section class="card fb-report" id="announce"><div class="br-head"><div><span class="eyebrow sm">' + t("Communication") + "</span><h2>" + t("Announcement to users") + '</h2><p class="muted small">' + t("Shown at the top of “My workspaces” for everyone signed in, until they click “Got it”. Saving a new text shows it again to everyone.") + "</p></div></div>" +
+      '<form id="annForm" class="ann-form"><input name="title" maxlength="120" placeholder="' + esc(t("Title")) + '" value="' + esc(a.title || "") + '"><textarea name="text" rows="4" maxlength="1500" placeholder="' + esc(t("Message")) + '">' + esc(a.text || "") + '</textarea><label class="consent"><input type="checkbox" name="on"' + (a.on ? " checked" : "") + "><span>" + t("Show to users") + '</span></label><div class="row-end"><button class="btn primary">' + t("Save announcement") + "</button></div></form></section>";
+  }
+
   /* ---------------- plans & licences (admin) ---------------- */
   function plansSection() {
     const P = window.CM_PLANS || {}, keys = Object.keys(plans).sort();
@@ -382,7 +390,7 @@
       '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div><a class=\"stat\" href=\"#signups\"><b>" + Object.keys(signups).length + "</b><span>Sign-ups</span></a><a class=\"stat\" href=\"#feedback\"><b>" + Object.keys(feedback).length + "</b><span>Feedback</span></a></div>" +
       '<p class="muted small">Only invited e-mails can open a workspace. Admins are managed in the Firebase console.</p></section></div>';
 
-    if (!OWNER) h += signupsSection() + plansSection();
+    if (!OWNER) h += annSection() + signupsSection() + plansSection();
     if (!ids.length) h += '<div class="card empty-big" style="margin-top:24px"><h3>No workspaces yet</h3><p class="muted">Create the first one above – for example "Mentoring".</p></div>';
 
     h += ids.map(function (id) {
@@ -423,6 +431,8 @@
     el.innerHTML = h;
 
     document.getElementById("newWs").onsubmit = function (e) { e.preventDefault(); createWorkspace(e.target); };
+    const af = document.getElementById("annForm");
+    if (af) af.onsubmit = function (e) { e.preventDefault(); db.ref("announcement").set({ title: af.title.value.trim(), text: af.text.value.trim(), on: af.on.checked, t: TS(), by: me.email }).then(function () { toast("Announcement saved"); load(); }, fail); };
     const pf = document.getElementById("planForm"); if (pf) pf.onsubmit = function (e) { e.preventDefault(); savePlan(pf); };
     el.querySelectorAll("[data-delplan]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Remove this plan? The customer goes back to Free."))) db.ref("plans/" + b.dataset.delplan).remove().then(load, fail); }; });
     document.getElementById("soBtn").onclick = A.signOut;

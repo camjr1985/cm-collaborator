@@ -376,3 +376,42 @@ a.stat { text-decoration: none !important; color: inherit !important; }
 .plan-badge.adm { background: rgba(232,196,104,.2); }
 .own-tag { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(232,196,104,.2); color: #e8c468; }
 .userbar > span.plan-badge { flex: 0 0 auto; min-width: 0; }
+
+/* v8 – welcome & announcements */
+.wel-card { max-width: 640px; width: calc(100% - 32px); max-height: 90vh; overflow: auto; }
+.wel-steps { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 12px; }
+.wel-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.wel-steps .wi { font-size: 22px; line-height: 1; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: rgba(44,196,179,.12); flex: none; }
+.wel-steps b { display: block; margin-bottom: 2px; }
+.wel-steps p { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.45; }
+.ann-banner { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(232,196,104,.45); background: rgba(232,196,104,.10); margin-bottom: 14px; }
+.ann-banner > div { flex: 1; } .ann-banner p { margin: 4px 0 0; }
+.ann-form { display: grid; gap: 10px; margin-top: 10px; }
+.ann-form input, .ann-form textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+
+/* v8 – responsive header & hero */
+.brand > span:last-child { white-space: nowrap; }
+@media (max-width: 640px) {
+  .nav-in { gap: 10px; padding: 10px 14px; }
+  .brand { font-size: 16px; gap: 8px; }
+  .brand .logo { width: 30px; height: 30px; font-size: 12px; }
+  .nav-in > .btn { padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+  .lang button { padding: 4px 8px; }
+  h1, .beta-hero h1 { font-size: clamp(28px, 8.4vw, 36px); line-height: 1.12; overflow-wrap: anywhere; }
+  .hero { padding: 40px 0 28px; }
+  .hero-grid { gap: 28px; }
+  .hero-grid > * { min-width: 0; }
+  .beta-mock, .hero-art { max-width: 100%; overflow: hidden; }
+  html, body { overflow-x: hidden; }
+}
+@media (max-width: 400px) {
+  .brand > span:last-child { font-size: 15px; }
+  .nav-in { gap: 8px; padding: 10px 12px; }
+  .nav-in > .btn { padding: 7px 10px; font-size: 12px; }
+  .brand .logo { display: none; }
+}
+.wel-card .br-head { flex-wrap: nowrap; }
+.wel-card .br-head > div { min-width: 0; flex: 1; }
+.modal-lite .wel-card { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
+.wel-card h2 { font-size: clamp(20px, 4.6vw, 26px); margin: 6px 0 8px; }
+.wel-card .row-end { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
