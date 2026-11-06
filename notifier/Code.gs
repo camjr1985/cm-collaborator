@@ -33,6 +33,8 @@ function doPost(e) {
     var brand = String(req.brand || "").replace(/[^\w À-ÿ&.·-]/g, "").trim().slice(0, 40) || CFG.brand;
     var who = verify(req.idToken);
     if (req.kind === "assign" || req.kind === "due") return json(planNotify(req, who, brand));
+    if (req.kind === "digest") return json(digestManual(req, who, brand));
+    if (req.kind === "digest-status") return json({ ok: true, daily: ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "dailyDigest"; }) });
     if (/^jira-/.test(String(req.kind || ""))) return json(jiraHandle(req, who));
     if (/^azure-/.test(String(req.kind || ""))) return json(azureHandle(req, who));
     if (/^kanbanize-/.test(String(req.kind || ""))) return json(kbHandle(req, who));
@@ -275,7 +277,32 @@ function jiraHandle(req, who) {
     }
     return { ok: true, moved: moved };
   }
+  if (req.kind === "jira-create") {
+    var ci = integNewItem(req, tok, "jira"), S = get("planning/" + req.plan + "/data/settings/jira", tok) || {};
+    var pkey = String(S.project || "").replace(/[^A-Za-z0-9_]/g, "");
+    if (!pkey) { var its = get("planning/" + req.plan + "/data/items", tok) || {}; Object.keys(its).some(function (x) { var e = its[x].ext; if (e && e.source === "jira" && e.key) { pkey = String(e.key).split("-")[0]; return true; } return false; }); }
+    if (!pkey) throw new Error("choose a Jira project in the import settings first");
+    var meta = jira(conn, "GET", "/rest/api/3/issue/createmeta/" + encodeURIComponent(pkey) + "/issuetypes?maxResults=100");
+    var types = (meta.issueTypes || meta.values || []).filter(function (x) { return !x.subtask; });
+    var want = { initiative: [/initiative|iniciativa/i, 2], epic: [/epic|épico/i, 1], phase: [/epic|épico/i, 1], story: [/story|história|historia/i, 0], bug: [/bug|defeito/i, 0], task: [/task|tarefa/i, 0], milestone: [/task|tarefa|milestone|marco/i, 0] }[ci.item.type] || [/task|tarefa/i, 0];
+    var pick = types.filter(function (x) { return want[0].test(x.name); })[0] || types.filter(function (x) { return x.hierarchyLevel === want[1]; })[0] || types.filter(function (x) { return x.hierarchyLevel === 0; })[0];
+    if (!pick) throw new Error("no suitable issue type in project " + pkey);
+    var fields = { project: { key: pkey }, summary: ci.item.title, issuetype: { id: pick.id } };
+    if (ci.parentExt && ci.parentExt.key) fields.parent = { key: ci.parentExt.key };
+    var extra = {}; if (ci.item.end) extra.duedate = ci.item.end; if (F.start && ci.item.start) extra[F.start] = ci.item.start;
+    var created;
+    try { created = jira(conn, "POST", "/rest/api/3/issue", { fields: Object.assign({}, fields, extra) }); }
+    catch (e) { created = jira(conn, "POST", "/rest/api/3/issue", { fields: fields }); } // dates not on the create screen
+    return { ok: true, key: created.key, ref: created.id, url: conn.site + "/browse/" + created.key };
+  }
   throw new Error("unknown action");
+}
+function integNewItem(req, tok, source) {
+  var item = get("planning/" + req.plan + "/data/items/" + String(req.item || ""), tok);
+  if (!item) throw new Error("item not found");
+  if (item.ext) throw new Error("this item is already linked to " + item.ext.source);
+  var par = item.parent ? get("planning/" + req.plan + "/data/items/" + item.parent, tok) : null;
+  return { item: item, parentExt: par && par.ext && par.ext.source === source ? par.ext : null };
 }
 function jira(conn, method, path, body) {
   var o = { method: method.toLowerCase(), muteHttpExceptions: true, headers: { Authorization: "Basic " + Utilities.base64Encode(conn.email + ":" + conn.token), Accept: "application/json" } };
@@ -406,6 +433,22 @@ function azureHandle(req, who) {
     }
     return { ok: true, moved: !!pick };
   }
+  if (req.kind === "azure-create") {
+    var ci = integNewItem(req, acc.tok, "azure"), S = get("planning/" + req.plan + "/data/settings/azure", acc.tok) || {}, project = S.project;
+    if (!project) throw new Error("choose an Azure DevOps project in the import settings first");
+    var names = (az("GET", "/" + encodeURIComponent(project) + "/_apis/wit/workitemtypes?api-version=7.1").value || []).map(function (x) { return x.name; });
+    var cand = { initiative: ["Epic"], epic: ["Feature", "Epic"], phase: ["Feature", "Epic"], story: ["User Story", "Product Backlog Item", "Requirement", "Issue"], task: ["Task", "Issue"], bug: ["Bug", "Issue"], milestone: ["Task", "Issue"] }[ci.item.type] || ["Task", "Issue"];
+    var wt = cand.filter(function (n) { return names.indexOf(n) >= 0; })[0] || names.filter(function (n) { return /task|issue/i.test(n); })[0];
+    if (!wt) throw new Error("no suitable work item type in project " + project);
+    var ops = [{ op: "add", path: "/fields/System.Title", value: ci.item.title }];
+    if (ci.parentExt && ci.parentExt.ref) ops.push({ op: "add", path: "/relations/-", value: { rel: "System.LinkTypes.Hierarchy-Reverse", url: conn.org + "/_apis/wit/workItems/" + ci.parentExt.ref } });
+    var dates = [];
+    if (ci.item.start) dates.push({ op: "add", path: "/fields/Microsoft.VSTS.Scheduling.StartDate", value: ci.item.start + "T00:00:00Z" });
+    if (ci.item.end) dates.push({ op: "add", path: "/fields/Microsoft.VSTS.Scheduling.TargetDate", value: ci.item.end + "T00:00:00Z" });
+    var path = "/" + encodeURIComponent(project) + "/_apis/wit/workitems/$" + encodeURIComponent(wt) + "?api-version=7.1", w;
+    try { w = az("POST", path, ops.concat(dates), "application/json-patch+json"); } catch (e) { w = az("POST", path, ops, "application/json-patch+json"); }
+    return { ok: true, key: "#" + w.id, ref: w.id, project: project, wtype: wt, url: conn.org + "/" + encodeURIComponent(project) + "/_workitems/edit/" + w.id };
+  }
   throw new Error("unknown action");
 }
 
@@ -472,5 +515,113 @@ function kbHandle(req, who) {
     kb("PATCH", "/cards/" + Number(it.ext.ref), body);
     return { ok: true, moved: !!pick };
   }
+  if (req.kind === "kanbanize-create") {
+    var ci = integNewItem(req, acc.tok, "kanbanize"), S = get("planning/" + req.plan + "/data/settings/kanbanize", acc.tok) || {};
+    var b = String(S.project || "").replace(/\D/g, ""); if (!b) throw new Error("choose a Kanbanize board in the import settings first");
+    var sts2 = get("planning/" + req.plan + "/data/settings/statuses", acc.tok) || [], cat2 = "todo";
+    sts2.forEach(function (x) { if (x.id === ci.item.status) cat2 = x.cat; });
+    var cols = arr(kb("GET", "/boards/" + b + "/columns")).filter(function (c) { return !c.parent_column_id; });
+    var secs = { todo: [2, 1], doing: [3], done: [4] }[cat2] || [2, 1], col = null;
+    secs.forEach(function (sc) { cols.forEach(function (c) { if (!col && c.section === sc) col = c; }); });
+    col = col || cols[0]; if (!col) throw new Error("the board has no columns");
+    var lanes = arr(kb("GET", "/boards/" + b + "/lanes")).filter(function (l) { return !l.workflow_id || l.workflow_id === col.workflow_id; });
+    var lane = lanes.filter(function (l) { return !l.parent_lane_id; })[0] || lanes[0]; if (!lane) throw new Error("the board has no lanes");
+    var body2 = { column_id: col.column_id, lane_id: lane.lane_id, title: ci.item.title };
+    if (ci.item.end) body2.deadline = ci.item.end;
+    var r2 = kb("POST", "/cards", body2), d2 = r2 && r2.data, card = Array.isArray(d2) ? d2[0] : d2;
+    if (!card || !card.card_id) throw new Error("Kanbanize did not return the new card");
+    return { ok: true, key: card.custom_id ? String(card.custom_id) : "KB-" + card.card_id, ref: card.card_id, board: Number(b), workflow: col.workflow_id || null, url: conn.url + "/ctrl_board/" + b + "/cards/" + card.card_id + "/details/" };
+  }
   throw new Error("unknown action");
+}
+
+/* ---------------- Planning alerts: milestones, key activities and delays ----------------
+ * Settings per planning in planning/<id>/data/settings/notify:
+ *   { enabled, before:[7,3,1], scope:{milestones,key,all}, overdue:"daily"|"every3"|"weekly"|"off", to:{assignee,owner,watchers:[emails]} }
+ * Items flagged as key activity have prio:true. Sent by dailyDigest() (time trigger) or on demand ("digest"). */
+function dayStr(d) { return Utilities.formatDate(d, "Europe/Lisbon", "yyyy-MM-dd"); }
+function dayDiff(a, b) { return Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 864e5); }
+function digestCompute(planId, P, W, today, test) {
+  var info = P.info || {}, data = P.data || {}, cfg = (data.settings || {}).notify;
+  if (!cfg || !cfg.enabled) return {};
+  var sts = (data.settings || {}).statuses || [], items = data.items || {};
+  var cat = function (id) { for (var i = 0; i < sts.length; i++) if (sts[i].id === id) return sts[i].cat; return "todo"; };
+  var before = (cfg.before || [7, 1]).map(Number), maxB = Math.max.apply(null, before.concat([0]));
+  var sc = cfg.scope || { milestones: true, key: true }, to = cfg.to || { assignee: true, owner: true }, od = cfg.overdue || "daily";
+  var members = W.members || {}, winfo = W.info || {};
+  var memberEmail = function (e) { if (!e) return null; var m = members[key(e)]; if (m && (!m.expires || m.expires > Date.now())) return m.email; if (winfo.ownerEmail && winfo.ownerEmail.toLowerCase() === String(e).toLowerCase()) return winfo.ownerEmail; if (info.createdBy && info.createdBy.toLowerCase() === String(e).toLowerCase()) return info.createdBy; return null; };
+  var owner = winfo.ownerEmail || info.createdBy || null, per = {};
+  Object.keys(items).forEach(function (k) {
+    var it = items[k]; if (!it.end || cat(it.status) === "done") return;
+    var inScope = sc.all || (sc.milestones && it.type === "milestone") || (sc.key && it.prio);
+    if (!inScope) return;
+    var d = dayDiff(it.end, today), send = false, kind = null;
+    if (d < 0) { var late = -d; kind = "late"; send = test || od === "daily" || (od === "every3" && (late === 1 || late % 3 === 1)) || (od === "weekly" && (late === 1 || late % 7 === 1)); }
+    else if (d === 0) { kind = "today"; send = true; }
+    else { kind = "soon"; send = test ? d <= maxB : before.indexOf(d) >= 0; }
+    if (!send) return;
+    var rc = [];
+    if (to.assignee !== false && it.assignee) rc.push(memberEmail(it.assignee));
+    if (to.owner && owner) rc.push(memberEmail(owner) || owner);
+    (to.watchers || []).forEach(function (w) { rc.push(memberEmail(w)); });
+    rc.filter(Boolean).forEach(function (e) { e = e.toLowerCase(); (per[e] = per[e] || []).push({ key: it.key, title: it.title, type: it.type, end: it.end, start: it.start, d: d, kind: kind, prio: !!it.prio, assignee: it.assignee || "" }); });
+  });
+  return per;
+}
+function digestSend(planId, P, W, per, brand, lang) {
+  var info = P.info || {}, pt = lang !== "en", link = CFG.site + "planning/?id=" + encodeURIComponent(planId), sent = [];
+  var members = W.members || {}, nameOf = function (e) { var m = members[key(e)]; return (m && m.name) || String(e).split("@")[0]; };
+  var fd = function (s) { return s ? s.split("-").reverse().join("/") : "–"; };
+  Object.keys(per).slice(0, CFG.maxPerCall).forEach(function (to) {
+    var list = per[to].sort(function (a, b) { return a.d - b.d; });
+    var late = list.filter(function (x) { return x.kind === "late"; }), tod = list.filter(function (x) { return x.kind === "today"; }), soon = list.filter(function (x) { return x.kind === "soon"; });
+    var row = function (x) {
+      var lbl = x.kind === "late" ? (pt ? (-x.d) + " dia(s) de atraso" : (-x.d) + " day(s) late") : x.kind === "today" ? (pt ? "vence hoje" : "due today") : (pt ? "em " + x.d + " dia(s)" : "in " + x.d + " day(s)");
+      var col = x.kind === "late" ? "#e5484d" : x.kind === "today" ? "#c27c00" : "#2f80ed";
+      return '<tr style="border-top:1px solid #e3e7ef"><td style="padding:8px">' + (x.type === "milestone" ? "◆ " : x.prio ? "★ " : "") + "<b>" + esc(x.key || "") + "</b> " + esc(x.title) + '</td><td style="padding:8px">' + (x.assignee ? esc(nameOf(x.assignee)) : "–") + '</td><td style="padding:8px">' + fd(x.end) + '</td><td style="padding:8px;color:' + col + ';font-weight:bold">' + lbl + "</td></tr>";
+    };
+    var sec = function (title, arr) { return arr.length ? '<h3 style="margin:16px 0 4px;font-size:15px">' + title + '</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="background:#f3f5f9;text-align:left"><th style="padding:8px">Item</th><th style="padding:8px">' + (pt ? "Responsável" : "Owner") + '</th><th style="padding:8px">' + (pt ? "Prazo" : "Due") + '</th><th style="padding:8px"></th></tr>' + arr.map(row).join("") + "</table>" : ""; };
+    var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:640px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
+      '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + " · " + (pt ? "Alertas do planejamento" : "Planning alerts") + '</div><div style="padding:20px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
+      "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + (pt ? "Resumo de marcos e atividades principais do planejamento <b>“" : "Milestones and key activities of the planning <b>“") + esc(info.title || planId) + "”</b>:</p>" +
+      sec(pt ? "Em atraso" : "Overdue", late) + sec(pt ? "Vencem hoje" : "Due today", tod) + sec(pt ? "Próximos prazos" : "Coming up", soon) +
+      '<p style="text-align:center;margin:22px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planejamento" : "Open the planning") + " →</a></p></div>" +
+      '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Alerta automático configurado no planejamento (menu Alertas por e-mail) · " : "Automatic alert set up in the planning (E-mail alerts) · ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
+    var subj = (late.length ? (pt ? "⚠ " + late.length + " em atraso · " : "⚠ " + late.length + " overdue · ") : "") + (pt ? "Alertas: " : "Alerts: ") + (info.title || planId);
+    var text = html.replace(/<\/tr>|<\/p>|<\/h3>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
+    var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+    MailApp.sendEmail(to, subj, text, opt); sent.push(to);
+  });
+  return sent;
+}
+function digestManual(req, who, brand) {
+  var acc = integAccess(req, who); if (!acc.isEditor) throw new Error("not allowed");
+  var P = { info: get("planning/" + req.plan + "/info", acc.tok), data: get("planning/" + req.plan + "/data", acc.tok) };
+  var W = { info: get("workspaces/" + acc.wsId + "/info", acc.tok), members: get("workspaces/" + acc.wsId + "/members", acc.tok) };
+  var per = digestCompute(req.plan, P, W, dayStr(new Date()), true);
+  if (!Object.keys(per).length) return { ok: true, sent: [], empty: true };
+  return { ok: true, sent: digestSend(req.plan, P, W, per, brand, req.lang), quota: MailApp.getRemainingDailyQuota() };
+}
+/* Daily automatic run. Needs: this account with "Firebase Realtime Database Viewer" on the Firebase project,
+ * and the scopes in appsscript.json (firebase.database + userinfo.email). Install once with installDaily(). */
+function adminGet(path) {
+  var r = UrlFetchApp.fetch(CFG.db + "/" + path + ".json?access_token=" + encodeURIComponent(ScriptApp.getOAuthToken()), { muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error("database read failed (" + r.getResponseCode() + "): " + r.getContentText().slice(0, 200));
+  return JSON.parse(r.getContentText());
+}
+function dailyDigest() {
+  var today = dayStr(new Date()), plans = adminGet("planning") || {}, wsCache = {}, total = 0;
+  Object.keys(plans).forEach(function (pid) {
+    var P = plans[pid]; if (!P || !P.info || !P.data || !((P.data.settings || {}).notify || {}).enabled) return;
+    var ws = P.info.ws; if (!wsCache[ws]) wsCache[ws] = adminGet("workspaces/" + ws) || {};
+    var per = digestCompute(pid, P, wsCache[ws], today, false);
+    if (Object.keys(per).length && MailApp.getRemainingDailyQuota() > Object.keys(per).length) total += digestSend(pid, P, wsCache[ws], per, CFG.brand, "pt").length;
+  });
+  console.log("daily digest: " + total + " e-mails");
+  return total;
+}
+function installDaily() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === "dailyDigest") ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger("dailyDigest").timeBased().everyDays(1).atHour(8).inTimezone("Europe/Lisbon").create();
+  return dailyDigest();
 }

@@ -10,32 +10,32 @@
 
   const METHODS = {
     hybrid: {
-      id: "hybrid", icon: "🗺️", name: L("Roadmap (Jira-style)", "Roadmap (estilo Jira)"),
+      id: "hybrid", icon: "roadmap", name: L("Roadmap (Jira-style)", "Roadmap (estilo Jira)"),
       desc: L("Epics on a timeline, stories and tasks on a board. Best for product and programme roadmaps.", "Épicos numa linha do tempo, histórias e tarefas num quadro. Ideal para roadmaps de produto e programas."),
       views: ["timeline", "board", "list"], label: { timeline: L("Roadmap", "Roadmap") },
       statuses: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")],
-      types: ["epic", "story", "task", "bug", "milestone"]
+      types: ["initiative", "epic", "story", "task", "bug", "milestone"]
     },
     waterfall: {
-      id: "waterfall", icon: "📅", name: L("Waterfall schedule", "Cronograma Waterfall"),
+      id: "waterfall", icon: "gantt", name: L("Waterfall schedule", "Cronograma Waterfall"),
       desc: L("Phases, tasks, dependencies and milestones on a Gantt chart. Best for projects with a fixed scope and dates.", "Fases, tarefas, dependências e marcos num Gantt. Ideal para projetos com escopo e datas definidos."),
       views: ["timeline", "list", "board"], label: { timeline: L("Schedule", "Cronograma") },
       statuses: [st("todo", "Not started", "Não iniciado", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("late", "At risk", "Em risco", "doing"), st("done", "Done", "Concluído", "done")],
-      types: ["phase", "task", "milestone"]
+      types: ["initiative", "phase", "task", "milestone"]
     },
     scrum: {
-      id: "scrum", icon: "🏃", name: "Scrum",
+      id: "scrum", icon: "sprint", name: "Scrum",
       desc: L("Backlog, sprints and a sprint board. Best for teams working in iterations.", "Backlog, sprints e quadro da sprint. Ideal para equipes que trabalham em iterações."),
       views: ["backlog", "board", "timeline", "list"], label: { timeline: L("Roadmap", "Roadmap") },
       statuses: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")],
-      types: ["epic", "story", "task", "bug"]
+      types: ["initiative", "epic", "story", "task", "bug"]
     },
     kanban: {
-      id: "kanban", icon: "🧱", name: "Kanban",
+      id: "kanban", icon: "kanban", name: "Kanban",
       desc: L("Continuous flow with your own columns and WIP limits. Best for operations and support.", "Fluxo contínuo com colunas próprias e limites de WIP. Ideal para operações e suporte."),
       views: ["board", "list", "timeline"], label: { timeline: L("Timeline", "Linha do tempo") },
       statuses: [st("backlog", "Backlog", "Backlog", "todo"), st("todo", "Ready", "Pronto para fazer", "todo"), st("doing", "In progress", "Em andamento", "doing", 3), st("review", "Review", "Revisão", "doing", 2), st("done", "Done", "Concluído", "done")],
-      types: ["epic", "story", "task", "bug"]
+      types: ["initiative", "epic", "story", "task", "bug"]
     }
   };
 
@@ -76,8 +76,9 @@
       add({ type: "bug", title: L("Example bug", "Bug de exemplo"), status: "backlog" });
     } else {
       const q = [[0, 41], [42, 83], [84, 125]];
+      const ini = add({ type: "initiative", title: L("Strategic initiative", "Iniciativa estratégica"), status: "todo" });
       [L("Discovery", "Descoberta"), L("MVP", "MVP"), L("Scale-up", "Escala")].forEach(function (t, i) {
-        const e = add({ type: "epic", title: t, status: "todo", start: day(q[i][0]), end: day(q[i][1]) });
+        const e = add({ type: "epic", title: t, parent: ini, status: "todo", start: day(q[i][0]), end: day(q[i][1]) });
         add({ type: "story", title: L("First story of ", "Primeira história de ") + t, parent: e, status: "todo", start: day(q[i][0]), end: day(q[i][0] + 13) });
       });
       add({ type: "milestone", title: L("Launch", "Lançamento"), status: "todo", start: day(125), end: day(125) });

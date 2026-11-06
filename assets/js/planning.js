@@ -9,16 +9,19 @@
   const app = document.getElementById("app");
   const ID = (new URLSearchParams(location.search).get("id") || "").toLowerCase();
   const DAY = 86400000;
+  const IC = function (n, sz, c) { return window.CMIcon ? window.CMIcon(n, sz || 15, c) : ""; };
   const TYPES = {
-    epic: { icon: "⚡", name: L("Epic", "Épico"), color: "#7c5cff" },
-    phase: { icon: "▣", name: L("Phase", "Fase"), color: "#0e1a33" },
-    story: { icon: "📗", name: L("Story", "História"), color: "#36b37e" },
-    task: { icon: "✔", name: L("Task", "Tarefa"), color: "#2f80ed" },
-    bug: { icon: "🐞", name: "Bug", color: "#e5484d" },
-    milestone: { icon: "◆", name: L("Milestone", "Marco"), color: "#e8a400" }
+    initiative: { ic: "initiative", name: L("Initiative", "Iniciativa"), color: "#c2410c", level: 2, desc: L("Groups epics around a business outcome.", "Agrupa épicos em torno de um resultado de negócio.") },
+    epic: { ic: "epic", name: L("Epic", "Épico"), color: "#7c5cff", level: 1, desc: L("A large body of work split into stories.", "Um grande bloco de trabalho dividido em histórias.") },
+    phase: { ic: "phase", name: L("Phase", "Fase"), color: "#0e1a33", level: 1, desc: L("A stage of the schedule with its tasks.", "Uma etapa do cronograma com as suas tarefas.") },
+    story: { ic: "story", name: L("Story", "História"), color: "#36b37e", level: 0, desc: L("A user need – “As a…, I want…, so that…”.", "Uma necessidade do usuário – “Como…, quero…, para…”.") },
+    task: { ic: "task", name: L("Task", "Tarefa"), color: "#2f80ed", level: 0, desc: L("A piece of work to be done.", "Um trabalho a ser feito.") },
+    bug: { ic: "bug", name: "Bug", color: "#e5484d", level: 0, desc: L("Something that is not working.", "Algo que não está funcionando.") },
+    milestone: { ic: "milestone", name: L("Milestone", "Marco"), color: "#e8a400", level: 0, desc: L("A key date or delivery.", "Uma data ou entrega importante.") }
   };
+  Object.keys(TYPES).forEach(function (k) { TYPES[k].icon = IC(TYPES[k].ic); });
   const CATC = { todo: "#8a94a6", doing: "#2f80ed", done: "#36b37e" };
-  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Board", "Quadro"), backlog: "Backlog", list: L("List", "Lista") };
+  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Board", "Quadro"), backlog: "Backlog", list: L("List", "Lista"), okr: "OKRs" };
 
   let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
   const pushT = {};
@@ -44,7 +47,10 @@
   function items() { return Object.keys(data.items || {}).map(function (k) { return Object.assign({ id: k }, data.items[k]); }); }
   function byOrder(a, b) { return (a.order || 0) - (b.order || 0) || String(a.key || "").localeCompare(String(b.key || ""), undefined, { numeric: true }); }
   function children(pid) { return items().filter(function (i) { return i.parent === pid; }).sort(byOrder); }
-  function isContainer(it) { return it.type === "epic" || it.type === "phase"; }
+  function isContainer(it) { return it.type === "epic" || it.type === "phase" || it.type === "initiative"; }
+  function lvl(t) { return (TYPES[t] || TYPES.task).level; }
+  function parentChoices(type, selfId) { const l = lvl(type); return items().filter(function (i) { return i.id !== selfId && isContainer(i) && lvl(i.type) > l; }).sort(byOrder); }
+  function childType(p) { if (p.type === "initiative") return method().types.indexOf("epic") >= 0 ? "epic" : "phase"; if (p.type === "phase") return "task"; return method().types.indexOf("story") >= 0 ? "story" : "task"; }
   function memberName(email) {
     if (!email) return "";
     const m = members[A.key(email)];
@@ -90,7 +96,11 @@
     return nextKey().then(function (k) {
       const it = Object.assign({ type: "task", title: L("New item", "Novo item"), status: statuses()[0].id, order: Date.now(), created: TS(), by: me.email, key: k }, o);
       Object.keys(it).forEach(function (x) { if (it[x] === undefined || it[x] === "") delete it[x]; });
-      return ref("items/" + id).set(it).then(function () { if (it.assignee && it.assignee !== me.email) notify("assign", { item: id }); return id; });
+      return ref("items/" + id).set(it).then(function () {
+        if (it.assignee && it.assignee !== me.email) notify("assign", { item: id });
+        Object.keys(PROV).forEach(function (k) { const S = data.settings && data.settings[k]; if (S && S.autoCreate) setTimeout(function () { createInTool(k, id, true); }, 300); });
+        return id;
+      });
     }).catch(fail);
   }
 
@@ -122,30 +132,35 @@
   /* ---------------- shell ---------------- */
   function shell() {
     const m = method();
-    const views = m.views;
+    const views = m.views.concat(["okr"]);
     if (!view) { try { view = localStorage.getItem("cmcollab:plview:" + ID); } catch (e) { /* ignore */ } }
     if (views.indexOf(view) < 0) view = views[0];
     const who = {}; items().forEach(function (i) { if (i.assignee) who[i.assignee] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = 1; });
     app.innerHTML =
       '<header class="pl-top"><a class="pl-back" href="../workspaces/" title="' + L("My boards", "Meus quadros") + '">←</a><span class="pl-logo">CM</span>' +
-      '<div class="pl-title"><span class="pl-ws">' + esc(wsInfo.name || info.ws) + " · " + m.icon + " " + esc(m.name) + '</span><h1>' + esc(info.title) + "</h1></div>" +
-      '<nav class="pl-tabs">' + views.map(function (v) { return '<button data-view="' + v + '" class="' + (v === view ? "on" : "") + '">' + esc((m.label && m.label[v]) || VIEWN[v]) + "</button>"; }).join("") + "</nav>" +
-      '<div class="pl-actions">' + (canEdit ? '<button class="pl-btn primary" id="newBtn">+ ' + L("Create", "Criar") + "</button>" : '<span class="pl-ro">' + L("View only", "Só leitura") + "</span>") +
+      '<div class="pl-title"><span class="pl-ws">' + esc(wsInfo.name || info.ws) + " · " + IC(m.icon, 13) + " " + esc(m.name) + '</span><h1>' + esc(info.title) + "</h1></div>" +
+      '<nav class="pl-tabs">' + views.map(function (v) { return '<button data-view="' + v + '" class="' + (v === view ? "on" : "") + '">' + esc((m.label && m.label[v]) || VIEWN[v]) + (v === "okr" && window.CMNewBadge ? window.CMNewBadge("okr") : "") + "</button>"; }).join("") + "</nav>" +
+      '<div class="pl-actions">' + (canEdit ? '<button class="pl-btn primary" id="newBtn">' + IC("plus", 16) + " " + L("Create", "Criar") + " ▾</button>" : '<span class="pl-ro">' + L("View only", "Só leitura") + "</span>") +
+      (canEdit ? '<button class="pl-btn icon" id="alertBtn" title="' + L("E-mail alerts", "Alertas por e-mail") + '">' + IC("bell", 17) + (data.settings && data.settings.notify && data.settings.notify.enabled ? '<span class="on-dot"></span>' : (window.CMIsNew && window.CMIsNew("alerts") ? '<span class="new-dot" data-new-id="alerts"></span>' : "")) + "</button>" : "") +
       '<button class="pl-btn icon" id="moreBtn" title="' + L("More", "Mais") + '">⋯' + (window.CMIsNew && window.CMIsNew("integrations") ? '<span class="new-dot" data-new-id="integrations"></span>' : "") + '</button></div></header>' +
       '<div class="pl-bar"><input id="q" type="search" placeholder="' + L("Search items", "Pesquisar itens") + '" value="' + esc(filter.q) + '">' +
       '<select id="who"><option value="">' + L("Everyone", "Todas as pessoas") + '</option><option value="_none"' + (filter.who === "_none" ? " selected" : "") + ">" + L("Unassigned", "Sem responsável") + "</option>" +
       Object.keys(who).sort().map(function (e) { return '<option value="' + esc(e) + '"' + (filter.who === e ? " selected" : "") + ">" + esc(memberName(e)) + "</option>"; }).join("") + "</select>" +
       (view === "timeline" ? '<div class="pl-seg" id="scale">' + [["week", L("Weeks", "Semanas")], ["month", L("Months", "Meses")], ["quarter", L("Quarters", "Trimestres")]].map(function (s) { return '<button data-s="' + s[0] + '" class="' + (scale === s[0] ? "on" : "") + '">' + s[1] + "</button>"; }).join("") + '</div><button class="pl-btn sm" id="todayBtn">' + L("Today", "Hoje") + "</button>" : "") +
-      (canEdit ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button class="pl-btn sm" data-sync="' + k + '" title="' + L("Pull the latest from ", "Trazer as últimas alterações do ") + PROV[k].name + '">↻ ' + PROV[k].short + "</button>"; }).join("") : "") +
+      (canEdit ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button class="pl-btn sm" data-sync="' + k + '" title="' + L("Pull the latest from ", "Trazer as últimas alterações do ") + PROV[k].name + '">' + IC("sync", 14) + " " + PROV[k].short + "</button>"; }).join("") : "") +
       '<span class="pl-sum" id="sum"></span></div>' +
+      hintBar() +
       '<main id="view" class="pl-view"></main>';
     app.querySelectorAll("[data-view]").forEach(function (b) { b.onclick = function () { view = b.dataset.view; try { localStorage.setItem("cmcollab:plview:" + ID, view); } catch (e) { /* ignore */ } shell(); }; });
     const q = document.getElementById("q"); q.oninput = function () { filter.q = q.value; renderView(); };
     document.getElementById("who").onchange = function (e) { filter.who = e.target.value; renderView(); };
     const sc = document.getElementById("scale"); if (sc) sc.onclick = function (e) { const b = e.target.closest("button"); if (b) { scale = b.dataset.s; shell(); } };
     const tb = document.getElementById("todayBtn"); if (tb) tb.onclick = function () { scrollToday(true); };
-    const nb = document.getElementById("newBtn"); if (nb) nb.onclick = function () { quickCreate(); };
+    const nb = document.getElementById("newBtn"); if (nb) nb.onclick = function (e) { e.stopPropagation(); createMenu(nb); };
+    const hc = document.getElementById("hintGo"); if (hc) hc.onclick = function () { integrationsDialog(); };
+    const hx = document.getElementById("hintX"); if (hx) hx.onclick = function () { try { localStorage.setItem("cmcollab:inthint:" + ID, "1"); } catch (x) { /* ignore */ } const h = document.getElementById("intHint"); if (h) h.remove(); };
     document.getElementById("moreBtn").onclick = moreMenu;
+    const ab = document.getElementById("alertBtn"); if (ab) ab.onclick = alertsDialog;
     app.querySelectorAll("[data-sync]").forEach(function (b) { b.onclick = function () { const k = b.dataset.sync, S = data.settings[k]; b.disabled = true; extRun(k, { project: S.project, query: S.query || S.jql }, S.push !== false).then(function () { b.disabled = false; }); }; });
     renderView();
   }
@@ -156,7 +171,8 @@
     const done = all.filter(function (i) { return i.type !== "milestone" && cat(i) === "done"; }).length, tot = all.filter(function (i) { return i.type !== "milestone"; }).length;
     const late = all.filter(overdue).length;
     document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "");
-    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else list(v);
+    if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
+    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else list(v);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
@@ -217,9 +233,9 @@
       const it = r.it, T = TYPES[it.type] || TYPES.task, s = statusOf(it), sp = span(it), top = i * RH;
       left += '<div class="tl-row' + (openItem === it.id ? " sel" : "") + '" style="height:' + RH + 'px" data-open="' + it.id + '"><span class="ind" style="width:' + r.depth * 18 + 'px"></span>' +
         (r.kids ? '<button class="tw" data-tw="' + it.id + '">' + (collapsed[it.id] ? "▸" : "▾") + "</button>" : '<span class="tw"></span>') +
-        '<span class="ti" style="color:' + T.color + '" title="' + esc(T.name) + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="tt">' + esc(it.title) + "</span>" +
+        '<span class="ti" style="color:' + T.color + '" title="' + esc(T.name) + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="tt">' + (it.prio ? '<span class="star" title="' + L("Key activity", "Atividade principal") + '">★</span>' : "") + esc(it.title) + "</span>" +
         (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") +
-        (canEdit && isContainer(it) ? '<button class="addc" data-addc="' + it.id + '" title="' + L("Add child item", "Adicionar item filho") + '">+</button>' : "") + "</div>";
+        (canEdit && isContainer(it) ? '<button class="addc" data-addc="' + it.id + '" title="' + L("Add child item", "Adicionar item filho") + '">' + IC("plus", 14) + "</button>" : "") + "</div>";
       if (sp) {
         const bx = x(sp.s), bw = Math.max(R.px, x(sp.e + DAY) - bx), col = isContainer(it) ? T.color : CATC[s.cat];
         const prog = s.cat === "done" ? 100 : Number(it.progress) || (s.cat === "doing" ? 0 : 0);
@@ -242,7 +258,7 @@
       });
     });
     const H = Math.max(rs.length * RH, 200);
-    v.innerHTML = '<div class="tl"><div class="tl-left"><div class="tl-lh">' + L("Items", "Itens") + (canEdit ? '<button class="pl-btn sm" id="addTop">+ ' + esc(method().types.indexOf("epic") >= 0 ? TYPES.epic.name : TYPES.phase.name) + "</button>" : "") + '</div><div class="tl-lb" id="tlLeft">' + left +
+    v.innerHTML = '<div class="tl"><div class="tl-left"><div class="tl-lh">' + L("Items", "Itens") + (canEdit ? '<span class="tl-add">' + (method().types.indexOf("initiative") >= 0 ? '<button class="pl-btn sm" data-addtop="initiative" title="' + esc(TYPES.initiative.desc) + '">' + TYPES.initiative.icon + " " + esc(TYPES.initiative.name) + "</button>" : "") + '<button class="pl-btn sm" data-addtop="' + (method().types.indexOf("epic") >= 0 ? "epic" : "phase") + '">' + (method().types.indexOf("epic") >= 0 ? TYPES.epic.icon + " " + esc(TYPES.epic.name) : TYPES.phase.icon + " " + esc(TYPES.phase.name)) + "</button></span>" : "") + '</div><div class="tl-lb" id="tlLeft">' + left +
       (rs.length ? "" : '<div class="pl-empty">' + L("Nothing here yet.", "Ainda não há nada aqui.") + "</div>") + "</div></div>" +
       '<div class="tl-right" id="tlRight"><div class="tl-head" style="width:' + W + 'px"><div class="h1">' + head1 + '</div><div class="h2">' + head2 + "</div></div>" +
       '<div class="tl-body" id="tlBody" style="width:' + W + "px;height:" + H + 'px">' + grid +
@@ -253,9 +269,9 @@
     right$.onscroll = function () { left$.scrollTop = right$.scrollTop; };
     left$.onwheel = function (e) { right$.scrollTop += e.deltaY; e.preventDefault(); };
     v.querySelectorAll("[data-tw]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); collapsed[b.dataset.tw] = !collapsed[b.dataset.tw]; renderView(); }; });
-    v.querySelectorAll("[data-addc]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); const p = data.items[b.dataset.addc]; collapsed[b.dataset.addc] = false; createItem({ type: p.type === "phase" ? "task" : "story", parent: b.dataset.addc, title: L("New item", "Novo item") }).then(function (id) { if (id) openDrawer(id, true); }); }; });
+    v.querySelectorAll("[data-addc]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); const p = data.items[b.dataset.addc]; collapsed[b.dataset.addc] = false; const ct = childType(p); createItem({ type: ct, parent: b.dataset.addc, title: TYPES[ct].name }).then(function (id) { if (id) openDrawer(id, true); }); }; });
     v.querySelectorAll(".tl-row").forEach(function (r) { r.onclick = function () { openDrawer(r.dataset.open); }; });
-    const at = document.getElementById("addTop"); if (at) at.onclick = function () { const ty = method().types.indexOf("epic") >= 0 ? "epic" : "phase"; createItem({ type: ty, title: TYPES[ty].name + " " + (items().filter(function (i) { return i.type === ty; }).length + 1), start: today(), end: n2d(d2n(today()) + 27 * DAY) }).then(function (id) { if (id) openDrawer(id, true); }); };
+    v.querySelectorAll("[data-addtop]").forEach(function (b) { b.onclick = function () { quickCreate(b.dataset.addtop); }; });
     if (canEdit) bindBars(v, R, RH);
     v.querySelectorAll("[data-bar]").forEach(function (b) { b.addEventListener("dblclick", function () { openDrawer(b.dataset.bar); }); });
     if (!timeline._scrolled) { timeline._scrolled = 1; scrollToday(false); }
@@ -371,7 +387,7 @@
   }
   function inlineAdd(btn, base) {
     const box = document.createElement("form"); box.className = "kb-new";
-    box.innerHTML = '<textarea rows="2" placeholder="' + L("What needs to be done?", "O que é preciso fazer?") + '"></textarea><div class="pl-row-end"><select>' + method().types.filter(function (t) { return t !== "epic" && t !== "phase" && t !== "milestone"; }).map(function (t) { return '<option value="' + t + '">' + TYPES[t].icon + " " + TYPES[t].name + "</option>"; }).join("") + '</select><button class="pl-btn primary sm">' + L("Create", "Criar") + "</button></div>";
+    box.innerHTML = '<textarea rows="2" placeholder="' + L("What needs to be done?", "O que é preciso fazer?") + '"></textarea><div class="pl-row-end"><select>' + method().types.filter(function (t) { return t !== "epic" && t !== "phase" && t !== "milestone"; }).map(function (t) { return '<option value="' + t + '">' + TYPES[t].name + "</option>"; }).join("") + '</select><button class="pl-btn primary sm">' + L("Create", "Criar") + "</button></div>";
     btn.replaceWith(box);
     const ta = box.querySelector("textarea"); ta.focus();
     ta.onkeydown = function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); box.requestSubmit(); } if (e.key === "Escape") renderView(); };
@@ -484,23 +500,26 @@
     const it0 = data.items[id]; if (!it0) { openItem = null; closeDrawer(); return; }
     openItem = id;
     const it = Object.assign({ id: id }, it0), T = TYPES[it.type] || TYPES.task, dis = canEdit ? "" : " disabled";
-    const parents = items().filter(function (i) { return isContainer(i) && i.id !== id; });
+    const parents = parentChoices(it0.type, id);
     const others = items().filter(function (i) { return i.id !== id && !isContainer(i); }).sort(byOrder);
     const ppl = Object.keys(members).map(function (k) { return members[k]; });
     const sps = Object.keys(data.sprints || {}).filter(function (k) { return data.sprints[k].state !== "closed"; });
     let d = document.getElementById("drawer");
     if (!d) { d = document.createElement("aside"); d.id = "drawer"; d.className = "pl-drawer"; document.body.appendChild(d); }
-    d.innerHTML = '<header><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="sp"></span>' + (canEdit ? '<button class="pl-btn sm ghost danger" id="dDel">' + L("Delete", "Excluir") + "</button>" : "") + '<button class="pl-btn icon" id="dX">✕</button></header>' +
+    d.innerHTML = '<header><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="sp"></span>' + (canEdit ? '<button class="pl-btn sm ghost danger" id="dDel">' + L("Delete", "Excluir") + "</button>" : "") + '<button class="pl-btn icon" id="dX">' + IC("close", 16) + "</button></header>" +
       '<form class="pl-form" id="dF"><textarea name="title" class="d-title" rows="2"' + dis + ">" + esc(it.title) + "</textarea>" +
-      '<div class="g2"><label>' + L("Type", "Tipo") + '<select name="type"' + dis + ">" + Object.keys(TYPES).filter(function (t) { return method().types.indexOf(t) >= 0 || t === it.type; }).map(function (t) { return '<option value="' + t + '"' + (t === it.type ? " selected" : "") + ">" + TYPES[t].icon + " " + TYPES[t].name + "</option>"; }).join("") + "</select></label>" +
+      '<div class="g2"><label>' + L("Type", "Tipo") + '<select name="type"' + dis + ">" + Object.keys(TYPES).filter(function (t) { return method().types.indexOf(t) >= 0 || t === it.type; }).map(function (t) { return '<option value="' + t + '"' + (t === it.type ? " selected" : "") + ">" + TYPES[t].name + "</option>"; }).join("") + "</select></label>" +
       "<label>" + L("Status", "Estado") + '<select name="status"' + dis + ">" + statuses().map(function (s) { return '<option value="' + s.id + '"' + (statusOf(it).id === s.id ? " selected" : "") + ">" + esc(s.name) + "</option>"; }).join("") + "</select></label></div>" +
       "<label>" + L("Assignee", "Responsável") + '<select name="assignee"' + dis + '><option value="">' + L("Unassigned", "Sem responsável") + "</option>" + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + (m.email === it.assignee ? " selected" : "") + ">" + esc(m.name || m.email) + " · " + esc(m.email) + "</option>"; }).join("") + "</select></label>" +
       '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start" value="' + esc(it.start || "") + '"' + dis + "></label><label>" + L("Due / end", "Prazo / fim") + '<input type="date" name="end" value="' + esc(it.end || "") + '"' + dis + "></label></div>" +
       '<div class="g2"><label>' + L("Progress %", "Progresso %") + '<input type="number" min="0" max="100" step="5" name="progress" value="' + esc(it.progress == null ? "" : it.progress) + '"' + dis + "></label><label>" + L("Story points", "Story points") + '<input type="number" min="0" step="1" name="points" value="' + esc(it.points == null ? "" : it.points) + '"' + dis + "></label></div>" +
-      (isContainer(it) ? "" : "<label>" + L("Parent (epic / phase)", "Pai (épico / fase)") + '<select name="parent"' + dis + '><option value="">—</option>' + parents.map(function (p) { return '<option value="' + p.id + '"' + (p.id === it.parent ? " selected" : "") + ">" + esc((p.key ? p.key + " · " : "") + p.title) + "</option>"; }).join("") + "</select></label>") +
+      (it.type === "initiative" ? "" : "<label>" + (lvl(it.type) === 1 ? L("Initiative", "Iniciativa") : L("Parent (initiative / epic / phase)", "Pai (iniciativa / épico / fase)")) + '<select name="parent"' + dis + '><option value="">—</option>' + parents.map(function (p) { return '<option value="' + p.id + '"' + (p.id === it.parent ? " selected" : "") + ">" + esc((p.key ? p.key + " · " : "") + p.title) + "</option>"; }).join("") + "</select></label>") +
       (sps.length && !isContainer(it) ? "<label>Sprint<select name=\"sprint\"" + dis + '><option value="">Backlog</option>' + sps.map(function (k) { return '<option value="' + k + '"' + (k === it.sprint ? " selected" : "") + ">" + esc(data.sprints[k].name) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Depends on (finish → start)", "Depende de (fim → início)") + '<select name="deps" multiple size="4"' + dis + ">" + others.map(function (o) { return '<option value="' + o.id + '"' + ((it.deps || {})[o.id] ? " selected" : "") + ">" + esc((o.key ? o.key + " · " : "") + o.title) + "</option>"; }).join("") + "</select></label>" +
+      '<label class="chk prio"><input type="checkbox" name="prio"' + (it.prio ? " checked" : "") + dis + "> ★ " + L("Key activity – include in the e-mail alerts", "Atividade principal – incluir nos alertas por e-mail") + "</label>" +
+      (allKrs().length ? "<label>" + L("Contributes to (OKR)", "Contribui para (OKR)") + '<select name="krs" multiple size="' + Math.min(5, allKrs().length) + '"' + dis + ">" + allKrs().map(function (k) { return '<option value="' + k.ref + '"' + ((it.krs || {})[k.ref] ? " selected" : "") + ">" + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +
+      (canEdit && !it.ext ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button type="button" class="pl-btn sm" data-mk="' + k + '">' + IC("send", 14) + " " + L("Create in ", "Criar no ") + PROV[k].short + "</button>"; }).join(" ") : "") +
       '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc((PROV[it.ext.source] ? PROV[it.ext.source].short : it.ext.source) + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Assignee in ", "Responsável no ") + (PROV[it.ext.source] ? PROV[it.ext.source].short : "") + ": " + esc(it.ext.assigneeName) : "") + "</p></form>";
     document.getElementById("dX").onclick = closeDrawer;
     document.querySelectorAll(".tl-row.sel").forEach(function (r) { r.classList.remove("sel"); });
@@ -510,7 +529,8 @@
     f.querySelectorAll("input,select,textarea").forEach(function (inp) {
       inp.onchange = function () {
         const n = inp.name, o = {};
-        if (n === "deps") { const dd = {}; Array.prototype.forEach.call(inp.selectedOptions, function (op) { dd[op.value] = true; }); o.deps = Object.keys(dd).length ? dd : null; }
+        if (n === "deps" || n === "krs") { const dd = {}; Array.prototype.forEach.call(inp.selectedOptions, function (op) { dd[op.value] = true; }); o[n] = Object.keys(dd).length ? dd : null; }
+        else if (inp.type === "checkbox") o[n] = inp.checked || null;
         else if (inp.type === "number") o[n] = inp.value === "" ? null : Number(inp.value);
         else o[n] = n === "title" ? (inp.value.trim() || it.title) : (inp.value || null);
         if (n === "status") { const st = statuses().find(function (s) { return s.id === inp.value; }); if (st && st.cat === "done") o.progress = 100; }
@@ -520,6 +540,7 @@
       };
     });
     f.title.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); f.title.blur(); } };
+    f.querySelectorAll("[data-mk]").forEach(function (b) { b.onclick = function () { b.disabled = true; createInTool(b.dataset.mk, id).then(function () { b.disabled = false; }); }; });
     if (focusTitle) { f.title.focus(); f.title.select(); }
     document.getElementById("dDel").onclick = function () {
       const kids = children(id);
@@ -545,47 +566,70 @@
     if (bind) bind(w, close);
     const f = w.querySelector("input,textarea,select"); if (f) setTimeout(function () { f.focus(); }, 30);
   }
-  function quickCreate() {
+  function createMenu(anchor) {
+    const old = document.getElementById("crMenu"); if (old) { old.remove(); return; }
     const types = method().types;
-    const parents = items().filter(isContainer);
-    modal("<h2>" + L("Create item", "Criar item") + '</h2><form class="pl-form" id="qcF"><div class="g2"><label>' + L("Type", "Tipo") + '<select name="type">' + types.map(function (t) { return '<option value="' + t + '">' + TYPES[t].icon + " " + TYPES[t].name + "</option>"; }).join("") + "</select></label>" +
-      "<label>" + L("Parent", "Pai") + '<select name="parent"><option value="">—</option>' + parents.map(function (p) { return '<option value="' + p.id + '">' + esc(p.title) + "</option>"; }).join("") + "</select></label></div>" +
+    const m = document.createElement("div"); m.id = "crMenu"; m.className = "cr-menu";
+    m.innerHTML = '<div class="cr-h">' + L("Create", "Criar") + "</div>" + types.map(function (t) { const T = TYPES[t]; return '<button data-ct="' + t + '"><span class="ti" style="color:' + T.color + '">' + T.icon + "</span><span><b>" + esc(T.name) + "</b><small>" + esc(T.desc) + "</small></span></button>"; }).join("") +
+      '<div class="cr-sep"></div><button data-ct="_okr"><span class="ti" style="color:#0f766e">' + IC("objective") + "</span><span><b>" + L("Objective (OKR)", "Objetivo (OKR)") + "</b><small>" + L("A goal with measurable key results.", "Uma meta com resultados-chave mensuráveis.") + "</small></span></button>";
+    document.body.appendChild(m);
+    const r = anchor.getBoundingClientRect(); m.style.top = r.bottom + 6 + "px"; m.style.left = Math.max(8, Math.min(window.innerWidth - 300, r.right - 290)) + "px";
+    m.onclick = function (e) { const b = e.target.closest("[data-ct]"); if (!b) return; m.remove(); if (b.dataset.ct === "_okr") objDialog(); else quickCreate(b.dataset.ct); };
+    setTimeout(function () { document.addEventListener("click", function off(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener("click", off); } }); }, 0);
+  }
+  function quickCreate(preType) {
+    const types = method().types;
+    let type = preType && types.indexOf(preType) >= 0 ? preType : (types.indexOf("story") >= 0 ? "story" : "task");
+    modal("<h2>" + L("Create item", "Criar item") + '</h2><form class="pl-form" id="qcF"><div class="type-chips">' + types.map(function (t) { const T = TYPES[t]; return '<button type="button" data-tc="' + t + '" class="' + (t === type ? "on" : "") + '" style="--c:' + T.color + '">' + T.icon + " " + esc(T.name) + "</button>"; }).join("") + '</div><p class="muted small" id="tcDesc"></p>' +
+      '<label id="parL">' + L("Parent", "Pai") + '<select name="parent"></select></label>' +
       "<label>" + L("Title", "Título") + '<input name="title" required autocomplete="off"></label>' +
       "<label>" + L("Assignee", "Responsável") + '<select name="assignee"><option value="">' + L("Unassigned", "Sem responsável") + "</option>" + Object.keys(members).map(function (k) { return '<option value="' + esc(members[k].email) + '">' + esc(members[k].name || members[k].email) + "</option>"; }).join("") + "</select></label>" +
       '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start"></label><label>' + L("Due / end", "Prazo / fim") + '<input type="date" name="end"></label></div>' +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Create", "Criar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#qcF");
-      f.querySelector("[name=title]").focus();
+      function sync() {
+        box.querySelectorAll("[data-tc]").forEach(function (b) { b.classList.toggle("on", b.dataset.tc === type); });
+        box.querySelector("#tcDesc").textContent = TYPES[type].desc;
+        const ps = parentChoices(type);
+        box.querySelector("#parL").hidden = type === "initiative" || !ps.length;
+        f.parent.innerHTML = '<option value="">—</option>' + ps.map(function (p) { return '<option value="' + p.id + '">' + esc(TYPES[p.type].name + " · " + (p.key ? p.key + " " : "") + p.title) + "</option>"; }).join("");
+      }
+      box.querySelectorAll("[data-tc]").forEach(function (b) { b.onclick = function () { type = b.dataset.tc; sync(); }; });
+      sync();
+      setTimeout(function () { f.querySelector("[name=title]").focus(); }, 40);
       f.onsubmit = function (e) {
         e.preventDefault();
-        const o = { type: f.type.value, title: f.title.value.trim(), parent: f.parent.value || undefined, assignee: f.assignee.value || undefined, start: f.start.value || undefined, end: f.end.value || f.start.value || undefined };
+        const o = { type: type, title: f.title.value.trim(), parent: f.parent.value || undefined, assignee: f.assignee.value || undefined, start: f.start.value || undefined, end: f.end.value || f.start.value || undefined };
         if (o.type === "milestone") o.end = o.start = o.end || o.start;
         if (info.method === "scrum" && !isContainer(o) && activeSprint() && view === "board") o.sprint = activeSprint();
-        createItem(o).then(close);
+        createItem(o).then(function (nid) { close(); if (nid && o.parent) collapsed[o.parent] = false; });
       };
     });
   }
   function moreMenu() {
     const owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email));
     modal("<h2>" + L("Planning options", "Opções do planejamento") + '</h2><div class="pl-menu">' +
-      (canEdit ? '<button data-act="workflow">⚙️ ' + L("Workflow and columns", "Fluxo e colunas") + "</button>" : "") +
-      (canEdit ? '<button data-act="remind">🔔 ' + L("Send deadline reminders by e-mail", "Enviar lembretes de prazo por e-mail") + "</button>" : "") +
-      (canEdit ? '<button data-act="import">📥 ' + L("Import CSV (Jira, Azure DevOps, Kanbanize, Excel)", "Importar CSV (Jira, Azure DevOps, Kanbanize, Excel)") + "</button>" : "") +
-      '<button data-act="export">📤 ' + L("Export CSV", "Exportar CSV") + "</button>" +
-      '<button data-act="print">🖨️ ' + L("Print / PDF", "Imprimir / PDF") + "</button>" +
-      '<button data-act="integrations">🔗 ' + L("Integrations (Jira, Azure DevOps, Kanbanize)", "Integrações (Jira, Azure DevOps, Kanbanize)") + (window.CMNewBadge ? window.CMNewBadge("integrations") : "") + "</button>" +
-      (owner ? '<button data-act="rename">✏️ ' + L("Rename", "Renomear") + "</button>" : "") +
+      (canEdit ? '<button data-act="workflow">' + IC("settings") + " " + L("Workflow and columns", "Fluxo e colunas") + "</button>" : "") +
+      (canEdit ? '<button data-act="alerts">' + IC("bell") + " " + L("E-mail alerts (milestones, key activities, delays)", "Alertas por e-mail (marcos, atividades principais, atrasos)") + "</button>" : "") +
+      (canEdit ? '<button data-act="remind">' + IC("send") + " " + L("Send deadline reminders now", "Enviar lembretes de prazo agora") + "</button>" : "") +
+      (canEdit ? '<button data-act="import">' + IC("import") + " " + L("Import CSV (Jira, Azure DevOps, Kanbanize, Excel)", "Importar CSV (Jira, Azure DevOps, Kanbanize, Excel)") + "</button>" : "") +
+      '<button data-act="export">' + IC("export") + " " + L("Export CSV", "Exportar CSV") + "</button>" +
+      '<button data-act="print">' + IC("print") + " " + L("Print / PDF", "Imprimir / PDF") + "</button>" +
+      '<button data-act="integrations">' + IC("integration") + " " + L("Integrations (Jira, Azure DevOps, Kanbanize)", "Integrações (Jira, Azure DevOps, Kanbanize)") + (window.CMNewBadge ? window.CMNewBadge("integrations") : "") + "</button>" +
+      (canEdit ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button data-act="bulk" data-p="' + k + '">' + IC("send") + " " + L("Create in ", "Criar no ") + PROV[k].short + L(" the items created here", " os itens criados aqui") + "</button>"; }).join("") : "") +
+      (owner ? '<button data-act="rename">' + IC("pencil") + " " + L("Rename", "Renomear") + "</button>" : "") +
+      (owner ? '<button data-act="delete" class="danger">' + IC("trash") + " " + L("Delete planning", "Excluir planejamento") + "</button>" : "") +
       '</div><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Close", "Fechar") + "</button></div>", function (box, close) {
       box.querySelectorAll("[data-act]").forEach(function (b) {
         b.onclick = function () {
           close();
-          ({ workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog })[b.dataset.act]();
+          ({ workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog, delete: deletePlanning, alerts: alertsDialog, bulk: function () { bulkCreate(b.dataset.p); } })[b.dataset.act]();
         };
       });
     });
   }
   function renameDialog() {
-    modal("<h2>" + L("Rename planning", "Renomear do planejamento") + '</h2><form class="pl-form" id="rnF"><input name="t" required value="' + esc(info.title) + '"><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+    modal("<h2>" + L("Rename planning", "Renomear planejamento") + '</h2><form class="pl-form" id="rnF"><input name="t" required value="' + esc(info.title) + '"><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#rnF");
       f.onsubmit = function (e) { e.preventDefault(); const v = f.t.value.trim(); const u = {}; u["planning/" + ID + "/info/title"] = v; u["workspaces/" + info.ws + "/plannings/" + ID + "/title"] = v; db.ref().update(u).then(function () { info.title = v; close(); shell(); }, fail); };
     });
@@ -687,6 +731,7 @@
     modal("<h2>" + L("Import from ", "Importar do ") + P.name + '</h2><form class="pl-form" id="exF"><label>' + P.pick + '<select name="proj"><option value="">' + L("Loading…", "Carregando…") + "</option></select></label>" +
       (P.query ? "<label>" + P.query + '<textarea name="query" rows="3" placeholder="' + esc(P.queryPh) + '">' + esc(S.query || "") + '</textarea><span class="muted small" style="font-weight:400">' + P.queryNote + "</span></label>" : "") +
       '<label class="chk"><input type="checkbox" name="push"' + (S.push === false ? "" : " checked") + "> " + L("Send changes made here back to ", "Enviar para o ") + P.short + L(" (title, status, dates)", " as alterações feitas aqui (título, status, datas)") + "</label>" +
+      '<label class="chk"><input type="checkbox" name="auto"' + (S.autoCreate ? " checked" : "") + "> " + L("Automatically create in ", "Criar automaticamente no ") + P.short + L(" the initiatives, epics and stories created here", " as iniciativas, épicos e histórias criados aqui") + "</label>" +
       '<p class="muted small">' + L("Epics become epics/phases and children keep their parent. Items already imported are updated – nothing is duplicated.", "Épicos viram épicos/fases e os filhos mantêm o pai. Itens já importados são atualizados – nada é duplicado.") + "</p>" +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Import", "Importar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#exF");
@@ -702,6 +747,7 @@
         if (k !== "jira" && !pr) return toast(L("Choose a ", "Escolha um ") + P.pick.toLowerCase());
         const params = { project: pr, projectName: pr ? f.proj.selectedOptions[0].textContent : "", query: k === "jira" ? (q || 'project = "' + pr + '" ORDER BY Rank ASC') : q };
         const b = f.querySelector(".pl-btn.primary"); b.disabled = true; b.textContent = L("Importing…", "Importando…");
+        params.autoCreate = f.auto.checked;
         extRun(k, params, f.push.checked).then(function (ok) { if (ok) close(); else { b.disabled = false; b.textContent = L("Import", "Importar"); } });
       };
     });
@@ -712,7 +758,7 @@
     return notify(k + "-import", { project: params.project, query: params.query, jql: params.query }).then(function (j) {
       if (!j || !j.ok) { toast(P.short + ": " + ((j && j.error) || "error")); return false; }
       return mergeExt(k, j.issues).then(function (n) {
-        const S = { project: params.project || "", query: params.query || "", push: !!push, lastSync: Date.now(), site: j.site || "" };
+        const S = { project: params.project || "", query: params.query || "", push: !!push, lastSync: Date.now(), site: j.site || "", autoCreate: params.autoCreate === undefined ? !!(data.settings[k] || {}).autoCreate : !!params.autoCreate };
         if (params.projectName || (data.settings[k] || {}).projectName) S.projectName = params.projectName || data.settings[k].projectName;
         if (k === "jira") S.jql = S.query;
         return save("settings/" + k, S).then(function () {
@@ -727,7 +773,8 @@
     const emails = {}; Object.keys(members).forEach(function (k) { emails[members[k].email.toLowerCase()] = members[k].email; });
     function tp(x) {
       const n = (x.type || "").toLowerCase();
-      if (x.level >= 1 || /epic|épico|feature|initiative|iniciativa/.test(n)) return types.indexOf("epic") >= 0 ? "epic" : "phase";
+      if ((x.level >= 2 || /initiative|iniciativa/.test(n)) && types.indexOf("initiative") >= 0) return "initiative";
+      if (x.level >= 1 || /epic|épico|feature/.test(n)) return types.indexOf("epic") >= 0 ? "epic" : "phase";
       if (/bug|defeito|defect/.test(n)) return types.indexOf("bug") >= 0 ? "bug" : "task";
       if (/story|história|historia|backlog item|requirement|requisito/.test(n)) return types.indexOf("story") >= 0 ? "story" : "task";
       if (/milestone|marco/.test(n)) return "milestone";
@@ -753,6 +800,170 @@
       Object.keys(o).forEach(function (kk) { if (o[kk] !== undefined) u[Pp + kk] = o[kk]; });
     });
     return db.ref("planning/" + ID + "/data").update(u).then(function () { return res; });
+  }
+
+  /* ---------------- integration hint ---------------- */
+  function hintBar() {
+    if (!canEdit) return "";
+    const linked = Object.keys(PROV).some(function (k) { return data.settings && data.settings[k]; });
+    let off = null; try { off = localStorage.getItem("cmcollab:inthint:" + ID); } catch (e) { /* ignore */ }
+    if (linked || off) return "";
+    return '<div class="pl-hint" id="intHint">' + IC("integration", 18) + '<div><b>' + L("Connect this planning to Jira, Azure DevOps or Kanbanize", "Integre este planejamento com Jira, Azure DevOps ou Kanbanize") + "</b>" + (window.CMNewBadge ? window.CMNewBadge("integrations") : "") +
+      '<span>' + L("Import initiatives, epics and stories, keep status and dates in sync both ways and create there the items you create here.", "Importe iniciativas, épicos e histórias, sincronize status e datas nos dois sentidos e crie lá os itens que criar aqui.") + '</span></div><button class="pl-btn sm primary" id="hintGo">' + L("Connect", "Conectar") + '</button><button class="pl-btn icon ghost" id="hintX" title="' + L("Hide", "Ocultar") + '">' + IC("close", 14) + "</button></div>";
+  }
+
+  /* ---------------- OKRs: objectives with key results, linked to items ---------------- */
+  function okrs() { const o = data.okrs || {}; return Object.keys(o).map(function (k) { return Object.assign({ id: k }, o[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); }); }
+  function krList(o) { const k = o.krs || {}; return Object.keys(k).map(function (id) { return Object.assign({ id: id }, k[id]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); }); }
+  function allKrs() { const out = []; okrs().forEach(function (o) { krList(o).forEach(function (k) { out.push({ ref: o.id + "|" + k.id, label: o.title + " › " + k.title }); }); }); return out; }
+  function linkedItems(oid, kid) { return items().filter(function (i) { return i.krs && i.krs[oid + "|" + kid]; }); }
+  function krProgress(o, kr) {
+    if (kr.auto) { const li = linkedItems(o.id, kr.id).filter(function (i) { return i.type !== "milestone"; }); return li.length ? Math.round(li.filter(function (i) { return cat(i) === "done"; }).length / li.length * 100) : 0; }
+    const s0 = Number(kr.start) || 0, t = Number(kr.target), c = Number(kr.current);
+    if (isNaN(t) || t === s0 || isNaN(c)) return 0;
+    return Math.max(0, Math.min(100, Math.round((c - s0) / (t - s0) * 100)));
+  }
+  function objProgress(o) { const ks = krList(o); return ks.length ? Math.round(ks.reduce(function (n, k) { return n + krProgress(o, k); }, 0) / ks.length) : 0; }
+  function pcol(p) { return p >= 70 ? "#36b37e" : p >= 40 ? "#e8a400" : "#e5484d"; }
+  function quarters() { const d = new Date(), y = d.getFullYear(), q = Math.floor(d.getMonth() / 3) + 1, out = []; for (let i = -1; i < 6; i++) { const qq = ((q - 1 + i) % 4 + 4) % 4 + 1, yy = y + Math.floor((q - 1 + i) / 4); out.push(yy + "-Q" + qq); } out.push(String(y), String(y + 1)); return out; }
+  function okrView(v) {
+    const os = okrs();
+    v.innerHTML = '<div class="okr"><div class="okr-head"><div><h2>' + IC("objective", 20) + " OKRs</h2><p class=\"muted\">" + L("Objectives and key results for this planning. Link initiatives, epics and stories to the key results they move.", "Objetivos e resultados-chave deste planejamento. Ligue iniciativas, épicos e histórias aos resultados-chave que eles movem.") + "</p></div>" +
+      (canEdit ? '<button class="pl-btn primary" id="okrNew">' + IC("plus", 16) + " " + L("Objective", "Objetivo") + "</button>" : "") + "</div>" +
+      (os.length ? os.map(objCard).join("") : '<div class="pl-empty big">' + IC("objective", 40, "big") + "<h2>" + L("No objectives yet", "Ainda não há objetivos") + "</h2><p>" + L("Example: “Delight our customers” – KR: NPS from 30 to 50.", "Exemplo: “Encantar nossos clientes” – KR: NPS de 30 para 50.") + "</p></div>") + "</div>";
+    const nb = document.getElementById("okrNew"); if (nb) nb.onclick = function () { objDialog(); };
+    v.querySelectorAll("[data-obj]").forEach(function (b) { b.onclick = function () { objDialog(b.dataset.obj); }; });
+    v.querySelectorAll("[data-addkr]").forEach(function (b) { b.onclick = function () { krDialog(b.dataset.addkr); }; });
+    v.querySelectorAll("[data-kr]").forEach(function (b) { b.onclick = function (e) { if (e.target.closest("[data-open]")) return; const p = b.dataset.kr.split("|"); krDialog(p[0], p[1]); }; });
+    v.querySelectorAll("[data-open]").forEach(function (a) { a.onclick = function (e) { e.preventDefault(); openDrawer(a.dataset.open); }; });
+  }
+  function objCard(o) {
+    const pr = objProgress(o), ks = krList(o);
+    return '<section class="okr-card"><header>' + '<span class="ti" style="color:#0f766e">' + IC("objective", 18) + '</span><div class="okr-t"><b>' + esc(o.title) + "</b><span class=\"muted small\">" + esc(o.period || "") + (o.owner ? " · " + esc(memberName(o.owner)) : "") + "</span></div>" +
+      '<div class="okr-pr"><span class="pbar"><i style="width:' + pr + "%;background:" + pcol(pr) + '"></i></span><b>' + pr + "%</b></div>" + (canEdit ? '<button class="pl-btn sm ghost" data-obj="' + o.id + '">' + IC("pencil", 14) + "</button>" : "") + "</header>" +
+      ks.map(function (k) {
+        const p = krProgress(o, k), li = linkedItems(o.id, k.id);
+        return '<div class="kr-row" data-kr="' + o.id + "|" + k.id + '"><span class="ti" style="color:#0f766e">' + IC("kr", 16) + '</span><div class="kr-t"><span>' + esc(k.title) + '</span><span class="muted small">' +
+          (k.auto ? L("measured by linked items: ", "medido pelos itens ligados: ") + li.filter(function (i) { return cat(i) === "done"; }).length + "/" + li.length + L(" done", " concluídos") : esc(String(k.current == null ? (k.start || 0) : k.current)) + " / " + esc(String(k.target)) + " " + esc(k.unit || "") + L(" (from ", " (de ") + esc(String(k.start || 0)) + ")") + "</span>" +
+          (li.length ? '<span class="kr-items">' + li.slice(0, 6).map(function (i) { const T = TYPES[i.type] || TYPES.task; return '<a href="#" data-open="' + i.id + '" style="--c:' + T.color + '">' + T.icon + " " + esc(i.key || "") + "</a>"; }).join("") + (li.length > 6 ? "<span>+" + (li.length - 6) + "</span>" : "") + "</span>" : "") + "</div>" +
+          '<div class="okr-pr sm"><span class="pbar"><i style="width:' + p + "%;background:" + pcol(p) + '"></i></span><b>' + p + "%</b></div></div>";
+      }).join("") + (canEdit ? '<button class="kb-add" data-addkr="' + o.id + '">' + IC("plus", 14) + " " + L("Key result", "Resultado-chave") + "</button>" : "") + "</section>";
+  }
+  function objDialog(oid) {
+    const o = oid ? (data.okrs || {})[oid] || {} : {}, qs = quarters();
+    if (!o.period) o.period = qs[1];
+    modal("<h2>" + (oid ? L("Edit objective", "Editar objetivo") : L("New objective", "Novo objetivo")) + '</h2><form class="pl-form" id="obF"><label>' + L("Objective", "Objetivo") + '<input name="title" required value="' + esc(o.title || "") + '" placeholder="' + L("e.g. Delight our customers", "ex.: Encantar nossos clientes") + '"></label>' +
+      '<div class="g2"><label>' + L("Period", "Período") + '<select name="period">' + qs.map(function (q) { return "<option" + (q === o.period ? " selected" : "") + ">" + q + "</option>"; }).join("") + "</select></label><label>" + L("Owner", "Responsável") + '<select name="owner"><option value="">—</option>' + Object.keys(members).map(function (k) { return '<option value="' + esc(members[k].email) + '"' + (members[k].email === o.owner ? " selected" : "") + ">" + esc(members[k].name || members[k].email) + "</option>"; }).join("") + "</select></label></div>" +
+      (oid ? "" : '<label>' + L("First key result (optional)", "Primeiro resultado-chave (opcional)") + '<input name="kr" placeholder="' + L("e.g. NPS from 30 to 50", "ex.: NPS de 30 para 50") + '"></label>') +
+      '<div class="pl-row-end">' + (oid ? '<button type="button" class="pl-btn ghost danger" id="obDel">' + L("Delete", "Excluir") + '</button><span class="sp"></span>' : "") + '<button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#obF");
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const id = oid || db.ref().push().key, u = {};
+        u["okrs/" + id + "/title"] = f.title.value.trim(); u["okrs/" + id + "/period"] = f.period.value; u["okrs/" + id + "/owner"] = f.owner.value || null;
+        if (!oid) { u["okrs/" + id + "/order"] = Date.now(); u["okrs/" + id + "/created"] = TS(); u["okrs/" + id + "/by"] = me.email; }
+        if (!oid && f.kr.value.trim()) { const m = f.kr.value.match(/(-?[\d.,]+)\D+(-?[\d.,]+)\s*(%|\w+)?\s*$/); const k = db.ref().push().key; u["okrs/" + id + "/krs/" + k] = { title: f.kr.value.trim(), start: m ? Number(m[1].replace(",", ".")) : 0, target: m ? Number(m[2].replace(",", ".")) : 100, current: m ? Number(m[1].replace(",", ".")) : 0, unit: m && m[3] ? m[3] : (m ? "" : "%"), order: Date.now() }; }
+        db.ref("planning/" + ID + "/data").update(u).then(function () { close(); if (view !== "okr") { view = "okr"; shell(); } }, fail);
+      };
+      const del = box.querySelector("#obDel");
+      if (del) del.onclick = function () {
+        const u = {}; u["okrs/" + oid] = null;
+        items().forEach(function (i) { Object.keys(i.krs || {}).forEach(function (r) { if (r.indexOf(oid + "|") === 0) u["items/" + i.id + "/krs/" + r] = null; }); });
+        db.ref("planning/" + ID + "/data").update(u).then(close, fail);
+      };
+    });
+  }
+  function krDialog(oid, kid) {
+    const k = kid ? ((data.okrs[oid].krs || {})[kid] || {}) : { start: 0, target: 100, current: 0, unit: "%" };
+    const li = kid ? linkedItems(oid, kid) : [];
+    modal("<h2>" + (kid ? L("Key result", "Resultado-chave") : L("New key result", "Novo resultado-chave")) + '</h2><p class="muted small">' + esc(data.okrs[oid].title) + '</p><form class="pl-form" id="krF"><label>' + L("Key result", "Resultado-chave") + '<input name="title" required value="' + esc(k.title || "") + '" placeholder="' + L("e.g. Raise NPS", "ex.: Aumentar o NPS") + '"></label>' +
+      '<label class="chk"><input type="checkbox" name="auto"' + (k.auto ? " checked" : "") + "> " + L("Measure by the progress of the linked items", "Medir pelo progresso dos itens ligados") + "</label>" +
+      '<div class="g2" id="krNums"><label>' + L("Start value", "Valor inicial") + '<input type="number" step="any" name="start" value="' + esc(k.start == null ? 0 : k.start) + '"></label><label>' + L("Target", "Meta") + '<input type="number" step="any" name="target" value="' + esc(k.target == null ? 100 : k.target) + '"></label><label>' + L("Current value", "Valor atual") + '<input type="number" step="any" name="current" value="' + esc(k.current == null ? (k.start || 0) : k.current) + '"></label><label>' + L("Unit", "Unidade") + '<input name="unit" value="' + esc(k.unit || "") + '" placeholder="%, R$, pts, NPS…"></label></div>' +
+      (li.length ? '<p class="small"><b>' + L("Linked items", "Itens ligados") + ":</b> " + li.map(function (i) { return esc((i.key ? i.key + " " : "") + i.title); }).join(" · ") + "</p>" : '<p class="muted small">' + L("Link items to this key result in each item's panel (field “Contributes to (OKR)”).", "Ligue itens a este resultado-chave no painel de cada item (campo “Contribui para (OKR)”).") + "</p>") +
+      '<div class="pl-row-end">' + (kid ? '<button type="button" class="pl-btn ghost danger" id="krDel">' + L("Delete", "Excluir") + '</button><span class="sp"></span>' : "") + '<button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary"' + (canEdit ? "" : " disabled") + ">" + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#krF"), nums = box.querySelector("#krNums");
+      function tg() { nums.style.opacity = f.auto.checked ? ".45" : "1"; }
+      f.auto.onchange = tg; tg();
+      f.onsubmit = function (e) {
+        e.preventDefault(); const id = kid || db.ref().push().key;
+        const o = { title: f.title.value.trim(), auto: f.auto.checked || null, start: Number(f.start.value) || 0, target: Number(f.target.value), current: f.current.value === "" ? null : Number(f.current.value), unit: f.unit.value.trim(), order: k.order || Date.now() };
+        save("okrs/" + oid + "/krs/" + id, o).then(close);
+      };
+      const del = box.querySelector("#krDel");
+      if (del) del.onclick = function () {
+        const u = {}; u["okrs/" + oid + "/krs/" + kid] = null;
+        items().forEach(function (i) { if ((i.krs || {})[oid + "|" + kid]) u["items/" + i.id + "/krs/" + oid + "|" + kid] = null; });
+        db.ref("planning/" + ID + "/data").update(u).then(close, fail);
+      };
+    });
+  }
+
+  /* ---------------- e-mail alerts settings ---------------- */
+  function alertsDialog() {
+    if (window.CMMarkSeen) window.CMMarkSeen("alerts");
+    const N = Object.assign({ enabled: false, before: [7, 1], scope: { milestones: true, key: true, all: false }, overdue: "daily", to: { assignee: true, owner: true, watchers: [] } }, (data.settings && data.settings.notify) || {});
+    const ppl = Object.keys(members).map(function (k) { return members[k]; });
+    const nMs = items().filter(function (i) { return i.type === "milestone"; }).length, nKey = items().filter(function (i) { return i.prio; }).length;
+    modal("<h2>" + IC("bell", 20) + " " + L("E-mail alerts", "Alertas por e-mail") + '</h2><p class="muted small">' + L("Get warned in advance about milestones and key activities, and when something is late. Sent every morning (08:00, Lisbon time) by the platform.", "Seja avisado com antecedência dos marcos e atividades principais, e quando algo atrasar. Enviado todas as manhãs (08h, horário de Lisboa) pela plataforma.") + "</p>" +
+      '<form class="pl-form" id="alF"><label class="chk big"><input type="checkbox" name="enabled"' + (N.enabled ? " checked" : "") + "> <b>" + L("Alerts on for this planning", "Alertas ativos neste planejamento") + "</b></label>" +
+      '<fieldset><legend>' + L("What to watch", "O que acompanhar") + '</legend><label class="chk"><input type="checkbox" name="ms"' + (N.scope.milestones ? " checked" : "") + "> ◆ " + L("Milestones", "Marcos") + ' <span class="muted">(' + nMs + ')</span></label><label class="chk"><input type="checkbox" name="key"' + (N.scope.key ? " checked" : "") + "> ★ " + L("Key activities (mark ★ in the item)", "Atividades principais (marque ★ no item)") + ' <span class="muted">(' + nKey + ')</span></label><label class="chk"><input type="checkbox" name="all"' + (N.scope.all ? " checked" : "") + "> " + L("All items with a due date", "Todos os itens com prazo") + "</label></fieldset>" +
+      '<fieldset><legend>' + L("Warn in advance", "Avisar com antecedência") + '</legend><div class="day-chips">' + [14, 7, 5, 3, 2, 1].map(function (d) { return '<label><input type="checkbox" name="b' + d + '"' + (N.before.indexOf(d) >= 0 ? " checked" : "") + "><span>" + d + " " + L(d === 1 ? "day" : "days", d === 1 ? "dia" : "dias") + "</span></label>"; }).join("") + '</div><p class="muted small">' + L("Plus a warning on the due date itself.", "Mais um aviso no próprio dia do prazo.") + "</p></fieldset>" +
+      '<fieldset><legend>' + L("When something is late", "Quando algo atrasar") + '</legend><select name="overdue">' + [["daily", L("Warn every day until it is done", "Avisar todos os dias até concluir")], ["every3", L("Warn every 3 days", "Avisar a cada 3 dias")], ["weekly", L("Warn once a week", "Avisar uma vez por semana")], ["off", L("Don't warn about delays", "Não avisar atrasos")]].map(function (o) { return '<option value="' + o[0] + '"' + (N.overdue === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></fieldset>" +
+      '<fieldset><legend>' + L("Who receives", "Quem recebe") + '</legend><label class="chk"><input type="checkbox" name="toA"' + (N.to.assignee !== false ? " checked" : "") + "> " + L("The person responsible for each item", "O responsável de cada item") + '</label><label class="chk"><input type="checkbox" name="toO"' + (N.to.owner ? " checked" : "") + "> " + L("The planning owner", "O dono do planejamento") + "</label>" +
+      '<label>' + L("Also notify (e.g. PMO, sponsor)", "Avisar também (ex.: PMO, sponsor)") + '<select name="watchers" multiple size="' + Math.min(5, Math.max(2, ppl.length)) + '">' + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + ((N.to.watchers || []).indexOf(m.email) >= 0 ? " selected" : "") + ">" + esc((m.name || m.email) + " · " + m.email) + "</option>"; }).join("") + "</select></label></fieldset>" +
+      '<p class="muted small" id="alStatus"></p>' +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" id="alTest">' + IC("send", 14) + " " + L("Send now (test)", "Enviar agora (teste)") + '</button><span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#alF");
+      function read() {
+        return { enabled: f.enabled.checked, before: [14, 7, 5, 3, 2, 1].filter(function (d) { return f["b" + d].checked; }), scope: { milestones: f.ms.checked, key: f.key.checked, all: f.all.checked }, overdue: f.overdue.value,
+          to: { assignee: f.toA.checked, owner: f.toO.checked, watchers: Array.prototype.map.call(f.watchers.selectedOptions, function (o) { return o.value; }) }, by: me.email, at: Date.now() };
+      }
+      notify("digest-status", {}).then(function (j) { const st = box.querySelector("#alStatus"); if (!st) return; st.innerHTML = j && j.ok && j.daily ? "✅ " + L("Automatic daily sending is active.", "Envio diário automático ativo.") : "⏳ " + L("Automatic daily sending is being activated by the administrator – meanwhile use “Send now”.", "O envio diário automático está sendo ativado pelo administrador – enquanto isso, use “Enviar agora”."); });
+      f.onsubmit = function (e) { e.preventDefault(); save("settings/notify", read()).then(function () { toast(L("Alerts saved", "Alertas salvos")); close(); shell(); }); };
+      box.querySelector("#alTest").onclick = function () {
+        const b = this; b.disabled = true;
+        save("settings/notify", Object.assign(read(), { enabled: true })).then(function () { return notify("digest", {}); }).then(function (j) {
+          b.disabled = false;
+          if (j && j.ok) toast(j.empty ? L("Nothing to warn about right now (no milestone/key activity due soon or late).", "Nada para avisar agora (nenhum marco/atividade principal a vencer ou atrasado).") : L("Alert sent to ", "Alerta enviado para ") + j.sent.length + L(" people", " pessoas"));
+          else toast(L("Could not send: ", "Não foi possível enviar: ") + ((j && j.error) || ""));
+        });
+      };
+    });
+  }
+
+  /* ---------------- delete planning ---------------- */
+  function deletePlanning() {
+    modal("<h2>" + L("Delete planning", "Excluir planejamento") + "</h2><p>" + L("This permanently deletes the planning, its items, sprints and OKRs. Type the name to confirm:", "Isto exclui definitivamente o planejamento, os itens, sprints e OKRs. Digite o nome para confirmar:") + " <b>" + esc(info.title) + '</b></p><form class="pl-form" id="dpF"><input name="t" autocomplete="off"><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary danger">' + L("Delete", "Excluir") + "</button></div></form>", function (box) {
+      const f = box.querySelector("#dpF");
+      f.onsubmit = function (e) {
+        e.preventDefault(); if (f.t.value.trim() !== info.title) return toast(L("The name does not match", "O nome não confere"));
+        db.ref("planning/" + ID + "/data").off();
+        const u = {}; u["planning/" + ID] = null; u["workspaces/" + info.ws + "/plannings/" + ID] = null;
+        db.ref().update(u).then(function () { location.href = "../workspaces/"; }, fail);
+      };
+    });
+  }
+
+  /* ---------------- create in Jira / Azure DevOps / Kanbanize the items created here ---------------- */
+  function createInTool(k, id, quiet) {
+    const it = data.items[id]; if (!it || it.ext) return Promise.resolve(false);
+    if (it.parent && data.items[it.parent] && !data.items[it.parent].ext) return createInTool(k, it.parent, true).then(function () { return createInTool(k, id, quiet); });
+    return notify(k + "-create", { item: id }).then(function (j) {
+      if (!j || !j.ok) { toast(PROV[k].short + ": " + ((j && j.error) || "error")); return false; }
+      const u = {}; u["items/" + id + "/ext"] = { source: k, key: j.key, ref: j.ref || null, url: j.url || null, project: j.project || null, wtype: j.wtype || null, board: j.board || null, workflow: j.workflow || null }; u["items/" + id + "/key"] = j.key;
+      return db.ref("planning/" + ID + "/data").update(u).then(function () { if (!quiet) toast(L("Created in ", "Criado no ") + PROV[k].short + ": " + j.key); return true; });
+    });
+  }
+  function bulkCreate(k) {
+    const todo = items().filter(function (i) { return !i.ext; }).sort(function (a, b) { return lvl(b.type) - lvl(a.type) || byOrder(a, b); });
+    if (!todo.length) return toast(L("Every item is already linked.", "Todos os itens já estão ligados."));
+    modal("<h2>" + L("Create in ", "Criar no ") + PROV[k].name + "</h2><p>" + todo.length + L(" items created here will be created in ", " itens criados aqui serão criados no ") + PROV[k].short + L(", keeping the hierarchy (initiative → epic → story).", ", mantendo a hierarquia (iniciativa → épico → história).") + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="bkGo">' + L("Create", "Criar") + "</button></div>", function (box, close) {
+      box.querySelector("#bkGo").onclick = function () {
+        this.disabled = true; let ok = 0;
+        todo.reduce(function (p, i) { return p.then(function () { return createInTool(k, i.id, true).then(function (r) { if (r) ok++; }); }); }, Promise.resolve())
+          .then(function () { close(); toast(ok + L(" items created in ", " itens criados no ") + PROV[k].short); });
+      };
+    });
   }
 
   /* ---------------- CSV import / export ---------------- */
@@ -892,6 +1103,7 @@
           canEdit = isAdm || wsInfo.owner === mk || !!(m && m.role === "editor" && (!m.expires || m.expires > Date.now()));
           document.title = info.title + " · " + (window.CMCOLLAB_BRAND || "CM Collaborator");
           if (window.CMMarkSeen) window.CMMarkSeen("planning");
+          try { let r = JSON.parse(localStorage.getItem("cmcollab:recent")) || []; r = r.filter(function (x) { return x.id !== ID; }); r.unshift({ id: ID, title: info.title, t: Date.now(), kind: "planning", method: info.method }); localStorage.setItem("cmcollab:recent", JSON.stringify(r.slice(0, 12))); } catch (e) { /* ignore */ }
           db.ref("planning/" + ID + "/data").on("value", function (snap) {
             data = snap.val() || { settings: {}, items: {}, sprints: {} };
             if (!data.items) data.items = {}; if (!data.settings) data.settings = {};

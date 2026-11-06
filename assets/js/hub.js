@@ -33,11 +33,29 @@
         return '<button class="tpl-tile' + (x.id === "blank" ? " blank" : "") + '" data-new="' + x.id + '"><span class="tpl-pv">' + pv(x.id) + '</span><b class="no-i18n">' + esc(x.name) + "</b></button>";
       }).join("") + "</div></section>";
   }
+  function planStrip(canCreate) {
+    if (!canCreate || !window.PLAN_ORDER) return "";
+    const M = window.PLAN_METHODS;
+    return '<section class="hub-sec plan-sec"><div class="hub-sec-head"><h2>' + (window.CMIcon ? window.CMIcon("planning", 20) : "") + " " + esc(LL("Planning", "Planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</h2><span class="muted small">' + esc(LL("Roadmaps, schedules, sprints and Kanban – with OKRs, e-mail alerts and Jira, Azure DevOps and Kanbanize integration.", "Roadmaps, cronogramas, sprints e Kanban – com OKRs, alertas por e-mail e integração com Jira, Azure DevOps e Kanbanize.")) + "</span></div>" +
+      '<div class="tpl-strip">' + window.PLAN_ORDER.map(function (k) {
+        const m = M[k];
+        return '<button class="tpl-tile plan-tile" data-newplanm="' + k + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + '</span><b class="no-i18n">' + (window.CMIcon ? window.CMIcon(m.icon, 15) : "") + " " + esc(m.name) + "</b></button>";
+      }).join("") + "</div></section>";
+  }
+  function planCard(id, p, wsName) {
+    const m = (window.PLAN_METHODS || {})[p.method] || {};
+    return '<a class="board-card is-plan" href="../planning/?id=' + encodeURIComponent(id) + '" data-title="' + esc((p.title || "").toLowerCase()) + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(p.method) : "") + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("planning", 12) : "") + " Planning</span></span>" +
+      '<span class="bc-t"><b class="no-i18n">' + esc(p.title || id) + '</b><span class="muted small no-i18n">' + esc(wsName ? wsName + " · " : "") + esc(m.name || "Planning") + "</span></span></a>";
+  }
   function recentRows(allowed) {
     const r = recents().filter(function (x) { return !allowed || allowed[x.id]; }).slice(0, 6);
     if (!r.length) return "";
     return '<section class="hub-sec"><div class="hub-sec-head"><h2>Jump back to recents</h2></div><div class="recent-list">' + r.map(function (x) {
       const info = allowed ? allowed[x.id] : x;
+      if (x.kind === "planning" || (info && info.kind === "planning")) {
+        const m = (window.PLAN_METHODS || {})[(info && info.method) || x.method] || {};
+        return '<a class="recent-row" href="../planning/?id=' + encodeURIComponent(x.id) + '"><span class="rr-pv">' + (window.CMPlanPreview ? window.CMPlanPreview((info && info.method) || x.method) : "") + '</span><span class="rr-t"><b class="no-i18n">' + esc((info && info.title) || x.title) + '</b><span class="muted small no-i18n">Planning · ' + esc((info && info.ws) || m.name || "") + '</span></span><span class="muted small">' + ago(x.t) + "</span></a>";
+      }
       return '<a class="recent-row" href="' + boardUrl(x.id, x.template) + '"><span class="rr-pv">' + pv((info && info.template) || x.template) + '</span><span class="rr-t"><b class="no-i18n">' + esc((info && info.title) || x.title) + '</b><span class="muted small no-i18n">' + esc((info && info.ws) || tplName(x.template)) + '</span></span><span class="muted small">' + ago(x.t) + "</span></a>";
     }).join("") + "</div></section>";
   }
@@ -46,21 +64,12 @@
       '<span class="bc-t"><b class="no-i18n">' + esc(b.title || id) + '</b><span class="muted small no-i18n">' + esc(wsName || tplName(b.template)) + "</span></span></a>";
   }
   let ME = null, PLAN = null, OWNED = {};
-  function planRow(pl) {
-    const ids = Object.keys(pl || {}).sort(function (a, b) { return (pl[b].created || 0) - (pl[a].created || 0); });
-    if (!ids.length) return "";
-    const M = window.PLAN_METHODS || {};
-    return '<div class="plan-row"><span class="pr-h">🗺️ Planning</span>' + ids.map(function (id) {
-      const p = pl[id], m = M[p.method] || {};
-      return '<a class="plan-card board-card" data-title="' + esc((p.title || "").toLowerCase()) + '" href="../planning/?id=' + encodeURIComponent(id) + '"><span class="pc-ic">' + (m.icon || "🗺️") + '</span><span class="bc-t"><b class="no-i18n">' + esc(p.title || id) + '</b><span class="muted small">' + esc(m.name || "") + "</span></span></a>";
-    }).join("") + "</div>";
-  }
-  function planDialog(wss, presetWs) {
+  function planDialog(wss, presetWs, presetMethod) {
     const canIn = function (id) { return PLAN === "admin" || isOwner(id, wss[id]); };
     const wsIds = Object.keys(wss || {}).filter(canIn);
     const M = window.PLAN_METHODS, order = window.PLAN_ORDER;
     document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="planDlg"><div class="card plan-new"><h2>' + esc(LL("New planning", "Novo planejamento")) + '</h2><p class="muted small">' + esc(LL("Choose how you want to plan. You can change columns and workflow later.", "Escolha como quer planear. Pode mudar colunas e fluxo depois.")) + '</p><form id="planForm">' +
-      '<div class="pm-grid">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="method" value="' + k + '"' + (i === 0 ? " checked" : "") + '><span class="pm-ic">' + m.icon + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div>" +
+      '<div class="pm-grid">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="method" value="' + k + '"' + ((presetMethod ? k === presetMethod : i === 0) ? " checked" : "") + '><span class="pm-ic">' + (window.CMIcon ? window.CMIcon(m.icon, 22) : "") + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div>" +
       '<label class="lbl-f">' + esc(LL("Name", "Nome")) + '<input name="title" required autocomplete="off" placeholder="' + esc(LL("e.g. Product roadmap 2027", "ex.: Roadmap do produto 2027")) + '"></label>' +
       '<label class="lbl-f">Workspace<select name="ws">' + wsIds.map(function (id) { return '<option value="' + id + '"' + (id === presetWs ? " selected" : "") + ">" + esc(wss[id].info.name) + "</option>"; }).join("") + "</select></label>" +
       '<div class="row-end"><button type="button" class="btn" id="planX">' + esc(LL("Cancel", "Cancelar")) + '</button><button class="btn primary">' + esc(LL("Create planning", "Criar planejamento")) + "</button></div></form></div></div>");
@@ -71,6 +80,8 @@
     f.onsubmit = function (e) {
       e.preventDefault();
       const title = f.title.value.trim(), ws = f.ws.value, method = f.method.value; if (!title || !ws) return;
+      const lim = PLAN && PLAN !== "admin" ? PLAN : null;
+      if (lim && Object.keys((wss[ws] || {}).boards || {}).length + Object.keys((wss[ws] || {}).plannings || {}).length >= lim.boards) return planLimit(t("Your plan allows") + " " + lim.boards + " " + t("boards per workspace") + ".");
       const id = (slug(title) || "planning") + "-" + rnd(), TS = window.firebase.database.ServerValue.TIMESTAMP, me = A.user(), u = {};
       u["planning/" + id + "/info"] = { title: title, ws: ws, method: method, created: TS, createdBy: me.email };
       u["planning/" + id + "/data"] = window.PLAN_INITIAL(method, title);
@@ -82,14 +93,16 @@
   function isOwner(id, w) { return !!(w && w.info && ME && w.info.owner === ME); }
   function wsSection(id, w, adminAll) {
     const admin = adminAll || isOwner(id, w);
-    const boards = w.boards || {};
+    const boards = w.boards || {}, pls = w.plannings || {};
     const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
+    const all = ids.map(function (b) { return { k: "b", id: b, c: boards[b].created || 0 }; }).concat(Object.keys(pls).map(function (pid) { return { k: "p", id: pid, c: pls[pid].created || 0 }; })).sort(function (a, b) { return b.c - a.c; });
+    const np = Object.keys(pls).length;
     const name = (w.info || {}).name || id;
-    return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + "</span>" +
-      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">🗺️ ' + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" href="../admin/#ws-' + id + '">👥 <span>Manage people</span></a>' : "") +
+    return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + (np ? " · " + np + " " + esc(LL(np === 1 ? "planning" : "plannings", np === 1 ? "planejamento" : "planejamentos")) : "") + "</span>" +
+      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
       (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + "</div>" +
-      (ids.length ? '<div class="board-grid">' + ids.map(function (b) { return boardCard(b, boards[b], tplName(boards[b].template)); }).join("") + "</div>"
-        : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + planRow(w.plannings) + "</section>";
+      (all.length ? '<div class="board-grid">' + all.map(function (x) { return x.k === "b" ? boardCard(x.id, boards[x.id], tplName(boards[x.id].template)) : planCard(x.id, pls[x.id]); }).join("") + "</div>"
+        : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
   }
   function searchBar() {
     return '<div class="hub-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="hubSearch" type="search" placeholder="' + esc(t("Search boards")) + '"></div>';
@@ -273,14 +286,14 @@
       return p.then(function (wss) {
         const ids = Object.keys(wss).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
         const allowed = {};
-        ids.forEach(function (w) { const bs = wss[w].boards || {}; Object.keys(bs).forEach(function (b) { allowed[b] = { title: bs[b].title, template: bs[b].template, ws: (wss[w].info || {}).name }; }); });
+        ids.forEach(function (w) { const bs = wss[w].boards || {}; Object.keys(bs).forEach(function (b) { allowed[b] = { title: bs[b].title, template: bs[b].template, ws: (wss[w].info || {}).name }; }); const ps = wss[w].plannings || {}; Object.keys(ps).forEach(function (pid) { allowed[pid] = { title: ps[pid].title, method: ps[pid].method, kind: "planning", ws: (wss[w].info || {}).name }; }); });
         const firstBeta = entries.filter(function (e) { return e.expires && e.expires > Date.now(); })[0];
         WELCOME_ENTRY = firstBeta || null;
         if (firstBeta && wss[firstBeta.id]) {
           const bs = Object.keys(wss[firstBeta.id].boards || {}).sort();
           FIRST_BOARD = bs.filter(function (b) { return /comece|start|^1-/.test(b); })[0] || bs[0] || null;
         }
-        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + recentRows(allowed) +
+        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + planStrip(Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }) || !entries.length) + startStrip(true) + recentRows(allowed) +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
             : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
         bindFeedback();
@@ -296,6 +309,7 @@
         document.getElementById("soBtn").onclick = A.signOut;
         el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, wss); }; });
         el.querySelectorAll("[data-newplan]").forEach(function (b) { b.onclick = function () { planDialog(wss, b.dataset.newplan); }; });
+        el.querySelectorAll("[data-newplanm]").forEach(function (b) { b.onclick = function () { const strip = el.querySelector(".tpl-strip"); planDialog(wss, strip && strip.dataset.ws, b.dataset.newplanm); }; });
         el.querySelectorAll("[data-newin]").forEach(function (b) {
           b.onclick = function () {
             const strip = el.querySelector(".tpl-strip");

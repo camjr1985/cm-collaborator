@@ -148,12 +148,39 @@
     u["workspaces/" + wsId + "/boards/" + id] = null;
     update(u, "Board deleted");
   }
+  function planList(wsId, w) {
+    const pl = w.plannings || {}, ids = Object.keys(pl).sort(function (a, b) { return (pl[b].created || 0) - (pl[a].created || 0); }), M = window.PLAN_METHODS || {};
+    const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 15) : ""; };
+    return '<h3 class="pl-adm-h">' + ic("planning") + " " + t("Plannings") + ' <span class="count">' + ids.length + "</span>" + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + "</h3>" +
+      '<ul class="members">' + (ids.map(function (pid) {
+        const p = pl[pid], m = M[p.method] || {};
+        return '<li class="brow"><span class="b-ic plan" aria-hidden="true">' + ic(m.icon || "planning") + '</span><span class="m-who"><b class="no-i18n">' + esc(p.title || pid) + '</b><span class="muted">' + esc(m.name || "") + ' · <span class="no-i18n">' + esc(pid) + "</span></span></span>" +
+          '<a class="btn sm primary" href="../planning/?id=' + encodeURIComponent(pid) + '">Open</a>' +
+          '<button class="btn sm" data-copyp="' + pid + '">Copy link</button>' +
+          '<button class="btn sm ghost" data-renp="' + wsId + "|" + pid + '">Rename</button>' +
+          '<button class="btn sm ghost danger-t" data-delp="' + wsId + "|" + pid + '">Delete</button></li>';
+      }).join("") || '<li class="muted small">' + t("No plannings yet – create one in “My boards” → Planning.") + "</li>") + "</ul>";
+  }
+  function renamePlanning(wsId, id) {
+    const cur = ((ws[wsId] || {}).plannings || {})[id] || {};
+    const v = window.prompt(t("New name for the planning"), cur.title || "");
+    if (!v || !v.trim()) return;
+    const u = {}; u["planning/" + id + "/info/title"] = v.trim(); u["workspaces/" + wsId + "/plannings/" + id + "/title"] = v.trim();
+    update(u, "Planning renamed");
+  }
+  function deletePlanningAdm(wsId, id) {
+    const typed = window.prompt(t("This permanently deletes the planning, its items, sprints and OKRs. Type the planning id to confirm:") + " " + id);
+    if (typed !== id) return;
+    const u = {}; u["planning/" + id] = null; u["workspaces/" + wsId + "/plannings/" + id] = null;
+    update(u, "Planning deleted");
+  }
   function deleteWorkspace(wsId) {
     const w = ws[wsId];
     const typed = window.prompt(t("This permanently deletes the workspace, all its boards and removes everyone's access. Type the workspace name to confirm:") + " " + w.info.name);
     if (typed !== w.info.name) return;
     const u = {};
     Object.keys(w.boards || {}).forEach(function (id) { u["boards/" + id] = null; });
+    Object.keys(w.plannings || {}).forEach(function (id) { u["planning/" + id] = null; });
     Object.keys(w.members || {}).forEach(function (k) { u["userWorkspaces/" + k + "/" + wsId] = null; });
     if (OWNER) u["userWorkspaces/" + MEK + "/" + wsId] = null;
     u["workspaces/" + wsId] = null;
@@ -439,7 +466,7 @@
         '<form class="form-grid3" data-newboard="' + id + '"><input name="title" required placeholder="' + esc(t("Board name, e.g. Project kickoff")) + '" autocomplete="off">' +
         '<select name="template" aria-label="Template">' + templateOptions() + '</select>' +
         '<input name="bid" placeholder="' + esc(t("Link id (optional)")) + '" autocomplete="off" pattern="[a-z0-9-]{2,60}">' +
-        '<button class="btn primary">New board</button></form></div>' +
+        '<button class="btn primary">New board</button></form>' + planList(id, w) + "</div>" +
         '<div><h3>People with access <span class="count">' + mIds.length + "</span>" + (mIds.length ? ' <button class="btn sm" data-welcomeall="' + id + '">✉ ' + t("Send welcome to all") + "</button>" : "") + "</h3>" +
         '<ul class="members">' + (ml || '<li class="muted small">No one has access yet.</li>') + "</ul>" +
         '<form class="form-grid3" data-add="' + id + '"><input name="name" placeholder="' + esc(t("Name")) + '" autocomplete="off"><input name="email" type="email" required placeholder="name@email.com" autocomplete="off">' +
@@ -472,6 +499,9 @@
       if (window.confirm(t("Send the welcome e-mail to") + " " + use.length + " " + t("people") + "?\n\n" + use.map(function (m) { return m.email; }).join("\n"))) sendWelcome(id, use.map(function (m) { return m.email; }));
     }; });
     el.querySelectorAll("[data-remove]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.remove); removeMember(p[0], p[1]); }; });
+    el.querySelectorAll("[data-delp]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delp); deletePlanningAdm(p[0], p[1]); }; });
+    el.querySelectorAll("[data-renp]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.renp); renamePlanning(p[0], p[1]); }; });
+    el.querySelectorAll("[data-copyp]").forEach(function (b) { b.onclick = function () { const u = abs("../planning/?id=" + encodeURIComponent(b.dataset.copyp)); (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { toast("Link copied"); }, function () { window.prompt("Link", u); }); }; });
     el.querySelectorAll("[data-delb]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delb); deleteBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-delws]").forEach(function (b) { b.onclick = function () { deleteWorkspace(b.dataset.delws); }; });

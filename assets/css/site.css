@@ -435,3 +435,13 @@ a.stat { text-decoration: none !important; color: inherit !important; }
 .new-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #ff5f6d; box-shadow: 0 0 0 0 rgba(255,95,109,.55); animation: newpulse 2.2s ease-out infinite; }
 @keyframes newpulse { 0% { box-shadow: 0 0 0 0 rgba(255,95,109,.55); } 70% { box-shadow: 0 0 0 7px rgba(255,95,109,0); } 100% { box-shadow: 0 0 0 0 rgba(255,95,109,0); } }
 @media (prefers-reduced-motion: reduce) { .new-badge, .new-dot { animation: none; } }
+
+/* v10 – planning inside "My boards" */
+.cm-ic { display: inline-block; vertical-align: -3px; flex: none; }
+.board-card.is-plan .tpl-pv { position: relative; }
+.pv-tag { position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; gap: 4px; background: rgba(14,26,51,.88); color: #fff; font: 700 10px/1 Inter, sans-serif; padding: 4px 7px; border-radius: 99px; letter-spacing: .02em; }
+.plan-sec .hub-sec-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+.plan-tile b { display: inline-flex; align-items: center; gap: 6px; }
+.pm-opt .pm-ic { color: var(--gold); }
+.pl-adm-h { display: flex; align-items: center; gap: 6px; margin-top: 18px; }
+.b-ic.plan { display: inline-grid; place-items: center; background: rgba(232,196,104,.15); color: var(--gold); }
