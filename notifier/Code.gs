@@ -1,8 +1,9 @@
 /**
  * CM Collaborator – automatic e-mail notifier (free, Google Apps Script).
  *
- * Runs under a DEDICATED Google account of the platform (e.g. a "cm.collaborator…@gmail.com"),
- * so e-mails go out as "CM Collaborator" from that account – never from a personal mailbox.
+ * Runs under the company's DEDICATED Google account (Digital Agile Technology), so e-mails go out
+ * with the product name as sender – never from a personal mailbox. The product name comes from the
+ * site (window.CMCOLLAB_BRAND), so renaming the product needs no change here.
  * Free quota: ~100 recipients/day on a consumer Google account.
  *
  * Security: the site sends the signed-in user's Firebase ID token. This script
@@ -15,7 +16,8 @@
  * Copy the /exec URL into assets/js/config.js → window.CMCOLLAB_MAILER.
  */
 var CFG = {
-  brand: "CM Collaborator",
+  brand: "CM Collaborator",          // fallback only – the site sends its current product name
+  company: "Digital Agile Technology",
   apiKey: "AIzaSyCd46gn1BXzMEq1JNbjcQ9WTCUa7fvjcNg",
   db: "https://cm-collaborator-default-rtdb.europe-west1.firebasedatabase.app",
   site: "https://camjr1985.github.io/cm-collaborator/",
@@ -28,6 +30,7 @@ function doGet() { return json({ ok: true, service: CFG.brand + " notifier", quo
 function doPost(e) {
   try {
     var req = JSON.parse(e.postData.contents || "{}");
+    var brand = String(req.brand || "").replace(/[^\w À-ÿ&.·-]/g, "").trim().slice(0, 40) || CFG.brand;
     var who = verify(req.idToken);
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
@@ -40,8 +43,8 @@ function doPost(e) {
       to = String(to).toLowerCase();
       var m = get("workspaces/" + wsId + "/members/" + key(to), req.idToken);
       if (!m) { skipped.push(to); return; }
-      var mail = welcome(m, info, req.lang === "en" ? "en" : "pt");
-      var opt = { name: CFG.brand, htmlBody: mail.html };
+      var mail = welcome(m, info, req.lang === "en" ? "en" : "pt", brand);
+      var opt = { name: brand, htmlBody: mail.html };
       if (CFG.replyTo) opt.replyTo = CFG.replyTo;
       MailApp.sendEmail(m.email, mail.subject, mail.text, opt);
       sent.push(to);
@@ -69,15 +72,17 @@ function key(email) { return String(email).toLowerCase().replace(/\./g, ","); }
 function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-function welcome(m, info, lang) {
+function welcome(m, info, lang, brand) {
+  brand = brand || CFG.brand;
+  var mark = brand.split(/\s+/).map(function (w) { return w[0]; }).join("").slice(0, 2).toUpperCase();
   var pt = lang === "pt", first = String(m.name || "").split(" ")[0] || "";
   var hub = CFG.site + "workspaces/", fb = CFG.site + "feedback/", guide = CFG.site + "beta/CM-Collaborator-Boas-vindas.pdf";
   var until = m.expires ? Utilities.formatDate(new Date(m.expires), "Europe/Lisbon", "dd/MM/yyyy") : "";
   var wsName = info.name || "";
   var L = pt ? {
-    subject: "Bem-vindo(a) ao " + CFG.brand + " – o seu acesso está ativo ✨",
+    subject: "Bem-vindo(a) ao " + brand + " – o seu acesso está ativo ✨",
     hi: "Olá" + (first ? " " + first : "") + ",",
-    intro: "O seu acesso ao workspace <b>“" + esc(wsName) + "”</b> no " + CFG.brand + " já está ativo! 🎉",
+    intro: "O seu acesso ao workspace <b>“" + esc(wsName) + "”</b> no " + brand + " já está ativo! 🎉",
     until: until ? "O seu acesso de teste é válido até <b>" + until + "</b>." : "O seu acesso não tem prazo de validade.",
     how: "Como entrar",
     s1: "Abra <a href=\"" + hub + "\">" + hub.replace("https://", "") + "</a>",
@@ -89,12 +94,12 @@ function welcome(m, info, lang) {
     guide: "Guia de boas-vindas (PDF, 1 página)",
     fb: "Antes de o acesso terminar, pedimos só <b>3 minutos de feedback</b>: <a href=\"" + fb + "\">dar feedback</a>.",
     cta: "Abrir os meus quadros",
-    bye: "Bons quadros!<br>Equipa " + CFG.brand,
-    auto: "Mensagem automática do " + CFG.brand + ". Recebeu este e-mail porque foi convidado(a) para um workspace."
+    bye: "Bons quadros!<br>Equipa " + brand,
+    auto: "Mensagem automática do " + brand + " · " + CFG.company + ". Recebeu este e-mail porque foi convidado(a) para um workspace."
   } : {
-    subject: "Welcome to " + CFG.brand + " – your access is active ✨",
+    subject: "Welcome to " + brand + " – your access is active ✨",
     hi: "Hi" + (first ? " " + first : "") + ",",
-    intro: "Your access to the workspace <b>“" + esc(wsName) + "”</b> on " + CFG.brand + " is now active! 🎉",
+    intro: "Your access to the workspace <b>“" + esc(wsName) + "”</b> on " + brand + " is now active! 🎉",
     until: until ? "Your test access is valid until <b>" + until + "</b>." : "Your access has no end date.",
     how: "How to sign in",
     s1: "Open <a href=\"" + hub + "\">" + hub.replace("https://", "") + "</a>",
@@ -106,14 +111,14 @@ function welcome(m, info, lang) {
     guide: "Welcome guide (PDF, 1 page)",
     fb: "Before your access ends, please give us <b>3 minutes of feedback</b>: <a href=\"" + fb + "\">give feedback</a>.",
     cta: "Open my boards",
-    bye: "Happy boarding!<br>The " + CFG.brand + " team",
-    auto: "Automatic message from " + CFG.brand + ". You received it because you were invited to a workspace."
+    bye: "Happy boarding!<br>The " + brand + " team",
+    auto: "Automatic message from " + brand + " · " + CFG.company + ". You received it because you were invited to a workspace."
   };
   var html =
     '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">' +
     '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
-    '<div style="background:#0e1a33;padding:22px 24px;color:#ffffff"><span style="display:inline-block;background:#2cc4b3;color:#0e1a33;font-weight:bold;border-radius:8px;padding:6px 8px;font-size:13px">CM</span>' +
-    ' <span style="font-size:18px;font-weight:bold;vertical-align:middle">' + CFG.brand + '</span></div>' +
+    '<div style="background:#0e1a33;padding:22px 24px;color:#ffffff"><span style="display:inline-block;background:#2cc4b3;color:#0e1a33;font-weight:bold;border-radius:8px;padding:6px 8px;font-size:13px">' + esc(mark) + '</span>' +
+    ' <span style="font-size:18px;font-weight:bold;vertical-align:middle">' + esc(brand) + '</span></div>' +
     '<div style="padding:24px;color:#1d2433;font-size:15px;line-height:1.55">' +
     "<p>" + L.hi + "</p><p>" + L.intro + "</p><p>" + L.until + "</p>" +
     '<h3 style="margin:18px 0 6px;font-size:16px">' + L.how + "</h3><ol style=\"padding-left:20px;margin:0\"><li>" + L.s1 + "</li><li>" + L.s2 + "</li><li>" + L.s3 + "</li></ol>" +

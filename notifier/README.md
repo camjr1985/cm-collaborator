@@ -1,10 +1,10 @@
 # CM Collaborator – e-mail notifier (free)
 
-Automatic welcome e-mails sent **by the platform** (sender name "CM Collaborator"), not from a personal mailbox.
+Automatic welcome e-mails sent **by the platform** (the sender name is the product name in `window.CMCOLLAB_BRAND`, so a rename needs no change here), not from a personal mailbox.
 It is a Google Apps Script web app that runs under a dedicated Google account of the platform. Free quota: about 100 e-mails per day.
 
 ## Setup (once, about 5 minutes)
-1. Create (or use) a dedicated Google account for the platform, e.g. `cm.collaborator.app@gmail.com`.
+1. Use the company's dedicated Google account (Digital Agile Technology), not a personal one.
 2. Signed in with that account, open https://script.google.com → **New project** → name it `CM Collaborator notifier`.
 3. Replace the contents of `Code.gs` with this folder's `Code.gs` → **Save**.
 4. Select the function `testToMe` → **Run** → authorise. You receive a sample welcome e-mail in that account.

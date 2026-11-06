@@ -221,7 +221,7 @@
     const url = window.CMCOLLAB_MAILER;
     if (!url || !wsId || !emails.length) return Promise.resolve(null);
     return window.firebase.auth().currentUser.getIdToken().then(function (tok) {
-      return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken: tok, ws: wsId, to: emails, lang: PT ? "pt" : "en" }) });
+      return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken: tok, ws: wsId, to: emails, lang: PT ? "pt" : "en", brand: window.CMCOLLAB_BRAND || "" }) });
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j.ok) throw new Error(j.error || "notifier error");
       const st = {}; (j.sent || []).forEach(function (em) { st["workspaces/" + wsId + "/members/" + A.key(em) + "/welcomed"] = TS(); });
