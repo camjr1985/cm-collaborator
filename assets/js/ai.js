@@ -168,7 +168,7 @@
   }
 
   /* ---------------- UI ---------------- */
-  const AUD = [["team", L("Agile team", "Equipa ágil")], ["exec", L("Directors / executives", "Diretores / executivos")], ["mentor", L("Mentoring", "Mentoria")], ["ux", L("Customers / UX", "Clientes / UX")], ["tech", L("Architecture / IT", "Arquitetura / TI")]];
+  const AUD = [["team", L("Agile team", "Equipe ágil")], ["exec", L("Directors / executives", "Diretores / executivos")], ["mentor", L("Mentoring", "Mentoria")], ["ux", L("Customers / UX", "Clientes / UX")], ["tech", L("Architecture / IT", "Arquitetura / TI")]];
   const EX = PT ? ["Retrospetiva da sprint 12 com 8 pessoas", "Decisão de investimento com diretores (PDCA)", "Mapear o processo de onboarding de clientes", "Plano de desenvolvimento do mentorado", "Revisão da arquitetura de migração para cloud"]
     : ["Sprint 12 retrospective with 8 people", "Investment decision with directors (PDCA)", "Map the customer onboarding process", "Mentee development plan", "Cloud migration architecture review"];
   let tab = "build", last = null;
@@ -199,7 +199,7 @@
     root.querySelectorAll("[data-ex]").forEach(function (b) { b.onclick = function () { root.querySelector("[name=goal]").value = b.dataset.ex; }; });
     root.querySelector("#aiForm").onsubmit = function (e) { e.preventDefault(); run(root, e.target); };
   }
-  function busy(out, on) { out.innerHTML = on ? '<div class="ai-busy"><i></i>' + L("The AI is thinking…", "A IA está a pensar…") + "</div>" : ""; }
+  function busy(out, on) { out.innerHTML = on ? '<div class="ai-busy"><i></i>' + L("The AI is thinking…", "A IA está pensando…") + "</div>" : ""; }
   function fail(out, err) {
     console.warn(err);
     const m = String((err && err.message) || err);

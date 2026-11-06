@@ -82,7 +82,7 @@
       }
     },
     piplanning: {
-      name: "PI Planning", desc: L("SAFe program board: iterations × teams, objectives and ROAM.", "Program board SAFe: iterações × equipas, objetivos e ROAM."), cat: "agile",
+      name: "PI Planning", desc: L("SAFe program board: iterations × teams, objectives and ROAM.", "Program board SAFe: iterações × equipes, objetivos e ROAM."), cat: "agile",
       build: function () {
         const k = kit();
         const gx = 40, gy = 110, lw = 200, cw = 300, hh = 60;
@@ -112,7 +112,7 @@
         k.S(cx(3), cells[3].y + 20, L("Feature: reports", "Feature: relatórios"), C.blue);
         const d1 = k.S(cx(1), cells[3].y + 20, L("Dependency", "Dependência"), C.red);
         k.A(f1, f2); k.A(d1, f2);
-        k.F(gx, yObj, 900, 280, L("🎯 PI objectives (team · objective · business value)", "🎯 Objetivos do PI (equipa · objetivo · valor de negócio)"), BG.green);
+        k.F(gx, yObj, 900, 280, L("🎯 PI objectives (team · objective · business value)", "🎯 Objetivos do PI (equipe · objetivo · valor de negócio)"), BG.green);
         k.S(gx + 20, yObj + 30, L("Alpha · Launch login · BV 8", "Alpha · Lançar login · BV 8"), C.green, 200, 100);
         const roam = [[L("Resolved", "Resolvido"), BG.green], [L("Owned", "Assumido"), BG.blue], [L("Accepted", "Aceite"), BG.yellow], [L("Mitigated", "Mitigado"), BG.purple]];
         const rx = gx + 940, rw = (W - gx - rx) / 4;
@@ -143,7 +143,7 @@
         const k = kit();
         k.F(0, 0, 1320, 720, L("Process flow", "Fluxo de processo"));
         k.F(40, 70, 1240, 280, L("Customer", "Cliente"), BG.gray);
-        k.F(40, 400, 1240, 280, L("Team", "Equipa"), BG.blue);
+        k.F(40, 400, 1240, 280, L("Team", "Equipe"), BG.blue);
         const start = k.Sh(80, 175, 140, 70, "pill", L("Start", "Início"), "#C8EBA1");
         const submit = k.Sh(280, 165, 180, 90, "round", L("Submit request", "Enviar pedido"), "#ffffff");
         const adjust = k.Sh(540, 165, 180, 90, "round", L("Adjust request", "Ajustar pedido"), "#ffffff");
@@ -173,12 +173,12 @@
       }
     },
     journey: {
-      name: "Customer journey", desc: L("Stages × actions, touchpoints, emotions, pains and opportunities.", "Etapas × ações, pontos de contacto, emoções, dores e oportunidades."), cat: "diagram",
+      name: "Customer journey", desc: L("Stages × actions, touchpoints, emotions, pains and opportunities.", "Etapas × ações, pontos de contato, emoções, dores e oportunidades."), cat: "diagram",
       build: function () {
         const k = kit();
         const gx = 40, gy = 100, lw = 200, cw = 280, hh = 60, rh = 160;
         const stages = [L("Awareness", "Descoberta"), L("Consideration", "Consideração"), L("Purchase", "Compra"), L("Retention", "Retenção"), L("Advocacy", "Recomendação")];
-        const rows = [L("Actions", "Ações"), L("Touchpoints", "Pontos de contacto"), L("Emotions", "Emoções"), L("Pain points", "Dores"), L("Opportunities", "Oportunidades")];
+        const rows = [L("Actions", "Ações"), L("Touchpoints", "Pontos de contato"), L("Emotions", "Emoções"), L("Pain points", "Dores"), L("Opportunities", "Oportunidades")];
         k.F(0, 0, gx * 2 + lw + cw * 5, gy + hh + rh * rows.length + 40, L("Customer journey map", "Mapa da jornada do cliente"));
         k.T(gx, 26, L("Customer journey map", "Mapa da jornada do cliente"), 34, 900);
         stages.forEach(function (s, i) { k.Sh(gx + lw + i * cw + 4, gy, cw - 8, hh - 8, "round", s, "#1c2033", "#ffffff"); });
@@ -257,7 +257,7 @@
       }
     },
     pdca: {
-      name: "PDCA executive meeting", desc: L("Plan-Do-Check-Act review with KPIs, decision required, options and decision log for directors.", "Revisão Plan-Do-Check-Act com KPIs, decisão necessária, opções e registo de decisões para diretores."), cat: "executive",
+      name: "PDCA executive meeting", desc: L("Plan-Do-Check-Act review with KPIs, decision required, options and decision log for directors.", "Revisão Plan-Do-Check-Act com KPIs, decisão necessária, opções e registro de decisões para diretores."), cat: "executive",
       build: function () {
         const k = kit();
         k.F(0, 0, 1960, 1240, L("PDCA – Executive decision meeting", "PDCA – Reunião executiva de decisão"));
@@ -265,7 +265,7 @@
         k.T(40, 82, L("Programme / initiative: ________   ·   Date: __/__/____   ·   Sponsor: ________   ·   Participants: Directors / Executive committee", "Programa / iniciativa: ________   ·   Data: __/__/____   ·   Sponsor: ________   ·   Participantes: Diretores / Comité executivo"), 17, 1500, "#4a5068");
         // KPI strip
         k.F(40, 140, 1880, 150, L("📊 Key indicators vs target", "📊 Indicadores-chave vs meta"), BG.gray);
-        const kpis = [[L("Budget\n92% of plan ●", "Orçamento\n92% do plano ●"), "#C8EBA1"], [L("Schedule\n+2 weeks ●", "Prazo\n+2 semanas ●"), "#FFF59D"], [L("Scope\n85% delivered ●", "Âmbito\n85% entregue ●"), "#C8EBA1"], [L("Quality\n3 critical defects ●", "Qualidade\n3 defeitos críticos ●"), "#F7A8B0"], [L("Risk level\nMedium ●", "Nível de risco\nMédio ●"), "#FFF59D"], [L("Benefits\nROI 1.8x ●", "Benefícios\nROI 1,8x ●"), "#C8EBA1"]];
+        const kpis = [[L("Budget\n92% of plan ●", "Orçamento\n92% do plano ●"), "#C8EBA1"], [L("Schedule\n+2 weeks ●", "Prazo\n+2 semanas ●"), "#FFF59D"], [L("Scope\n85% delivered ●", "Escopo\n85% entregue ●"), "#C8EBA1"], [L("Quality\n3 critical defects ●", "Qualidade\n3 defeitos críticos ●"), "#F7A8B0"], [L("Risk level\nMedium ●", "Nível de risco\nMédio ●"), "#FFF59D"], [L("Benefits\nROI 1.8x ●", "Benefícios\nROI 1,8x ●"), "#C8EBA1"]];
         kpis.forEach(function (q, i) { k.Sh(64 + i * 308, 168, 288, 100, "round", q[0], q[1]); });
         // PDCA quadrants
         const qx = 40, qy = 330, qw = 600, qh = 340;
@@ -300,7 +300,7 @@
         k.S(dx + 330, qy + 500, L("Support / budget needed", "Apoio / orçamento necessário"), C.orange, 290, 110);
         // decision log + risks + next steps
         const ly = 1060;
-        k.F(40, ly, 1220, 160, L("📝 Decision log", "📝 Registo de decisões"), BG.white);
+        k.F(40, ly, 1220, 160, L("📝 Decision log", "📝 Registro de decisões"), BG.white);
         const cols = [[L("Decision", "Decisão"), 520], [L("Owner", "Responsável"), 220], [L("Due date", "Prazo"), 200], [L("Status", "Estado"), 220]];
         let x = 60;
         cols.forEach(function (c) { k.Sh(x, ly + 20, c[1] - 6, 40, "rect", c[0], "#1c2033", "#ffffff"); k.Sh(x, ly + 64, c[1] - 6, 40, "rect", "", "#ffffff"); x += c[1]; });
@@ -315,9 +315,9 @@
         const k = kit();
         k.F(0, 0, 1900, 1080, L("Software architecture – container view", "Arquitetura de software – vista de contentores"));
         k.T(40, 24, L("Software architecture – container view (C4 level 2)", "Arquitetura de software – vista de contentores (C4 nível 2)"), 34, 1400);
-        k.F(40, 100, 300, 860, L("👤 Users & clients", "👤 Utilizadores e clientes"), BG.gray);
+        k.F(40, 100, 300, 860, L("👤 Users & clients", "👤 Usuários e clientes"), BG.gray);
         const user = k.Sh(90, 150, 200, 80, "pill", L("Customer", "Cliente"), "#ffffff");
-        const admin = k.Sh(90, 260, 200, 80, "pill", L("Back-office user", "Utilizador back-office"), "#ffffff");
+        const admin = k.Sh(90, 260, 200, 80, "pill", L("Back-office user", "Usuário back-office"), "#ffffff");
         const web = k.Sh(80, 430, 220, 110, "round", L("Web app\n[React / SPA]", "Aplicação web\n[React / SPA]"), "#A9D1F7");
         const mob = k.Sh(80, 580, 220, 110, "round", L("Mobile app\n[iOS / Android]", "App móvel\n[iOS / Android]"), "#A9D1F7");
         k.F(380, 100, 300, 860, L("🛡 Edge & security", "🛡 Edge e segurança"), BG.purple);
@@ -334,7 +334,7 @@
         const db1 = k.Sh(1310, 160, 240, 120, "ellipse", L("Relational DB\n[PostgreSQL]", "Base relacional\n[PostgreSQL]"), "#FFF59D");
         const cache = k.Sh(1310, 330, 240, 100, "round", L("Cache\n[Redis]", "Cache\n[Redis]"), "#FFF59D");
         const db2 = k.Sh(1310, 480, 240, 120, "ellipse", L("Document DB\n[MongoDB]", "Base documental\n[MongoDB]"), "#FFF59D");
-        const obj = k.Sh(1310, 660, 240, 100, "round", L("Object storage\n[files / backups]", "Object storage\n[ficheiros / backups]"), "#FFF59D");
+        const obj = k.Sh(1310, 660, 240, 100, "round", L("Object storage\n[files / backups]", "Object storage\n[arquivos / backups]"), "#FFF59D");
         k.F(1620, 100, 260, 860, L("🌐 External systems", "🌐 Sistemas externos"), BG.red);
         const psp = k.Sh(1640, 400, 220, 100, "round", L("Payment provider", "Fornecedor de pagamentos"), "#F7A8B0");
         const mail = k.Sh(1640, 560, 220, 100, "round", L("E-mail / SMS service", "Serviço de e-mail / SMS"), "#F7A8B0");
@@ -351,7 +351,7 @@
         k.F(0, 0, 2000, 1000, L("Data lakehouse – medallion architecture", "Data lakehouse – arquitetura medalhão"));
         k.T(40, 24, L("Data lakehouse – medallion architecture (Bronze · Silver · Gold)", "Data lakehouse – arquitetura medalhão (Bronze · Silver · Gold)"), 34, 1500);
         const cols = [
-          [L("📥 Sources", "📥 Fontes"), BG.gray, "#ffffff", [L("ERP / core systems", "ERP / sistemas core"), L("CRM / SaaS apps", "CRM / apps SaaS"), L("APIs & events", "APIs e eventos"), L("IoT / streaming", "IoT / streaming"), L("Files (CSV, JSON)", "Ficheiros (CSV, JSON)")]],
+          [L("📥 Sources", "📥 Fontes"), BG.gray, "#ffffff", [L("ERP / core systems", "ERP / sistemas core"), L("CRM / SaaS apps", "CRM / apps SaaS"), L("APIs & events", "APIs e eventos"), L("IoT / streaming", "IoT / streaming"), L("Files (CSV, JSON)", "Arquivos (CSV, JSON)")]],
           [L("🔄 Ingestion", "🔄 Ingestão"), BG.blue, "#A9D1F7", [L("Batch loads\n(Auto Loader / COPY)", "Cargas batch\n(Auto Loader / COPY)"), L("Streaming\n(Kafka / Event Hubs)", "Streaming\n(Kafka / Event Hubs)"), L("CDC\n(change data capture)", "CDC\n(captura de alterações)")]],
           [L("🥉 Bronze – raw", "🥉 Bronze – bruto"), "#f6e3d1", "#E7B98A", [L("Raw Delta tables\nappend-only", "Tabelas Delta brutas\nappend-only"), L("Full history\n& audit", "Histórico completo\ne auditoria"), L("Schema on read", "Schema on read")]],
           [L("🥈 Silver – cleaned", "🥈 Silver – tratado"), "#eceff3", "#D5DAE3", [L("Cleaned & deduplicated", "Limpo e sem duplicados"), L("Conformed entities\n(customer, product…)", "Entidades conformadas\n(cliente, produto…)"), L("Data quality checks", "Verificações de qualidade")]],
@@ -367,7 +367,7 @@
         });
         for (let i = 0; i < firsts.length - 1; i++) k.A(firsts[i], firsts[i + 1]);
         k.F(40, 850, 940, 120, L("🔐 Governance – catalogue, lineage, access control, PII masking (e.g. Unity Catalog)", "🔐 Governança – catálogo, linhagem, controlo de acessos, mascaramento de PII (ex.: Unity Catalog)"), BG.purple);
-        k.F(1000, 850, 940, 120, L("⏱ Orchestration & ops – jobs/workflows, monitoring, cost (FinOps), CI/CD for data", "⏱ Orquestração e operação – jobs/workflows, monitorização, custos (FinOps), CI/CD de dados"), BG.teal);
+        k.F(1000, 850, 940, 120, L("⏱ Orchestration & ops – jobs/workflows, monitoring, cost (FinOps), CI/CD for data", "⏱ Orquestração e operação – jobs/workflows, monitoramento, custos (FinOps), CI/CD de dados"), BG.teal);
         return k.out;
       }
     },
@@ -399,12 +399,12 @@
         k.F(40, 100, 560, 460, L("☁️ Service models – who manages what", "☁️ Modelos de serviço – quem gere o quê"), BG.blue);
         [[L("IaaS\nYou: OS, runtime, apps, data\nProvider: servers, network, storage", "IaaS\nVocê: SO, runtime, apps, dados\nFornecedor: servidores, rede, storage"), "#A9D1F7"],
          [L("PaaS\nYou: apps and data\nProvider: OS, runtime, scaling", "PaaS\nVocê: apps e dados\nFornecedor: SO, runtime, escala"), "#9FE3D3"],
-         [L("SaaS\nYou: users and configuration\nProvider: everything else", "SaaS\nVocê: utilizadores e configuração\nFornecedor: todo o resto"), "#C8EBA1"]].forEach(function (m, i) { k.SL(60, 140 + i * 135, 520, 120, m[0], m[1], 16); });
+         [L("SaaS\nYou: users and configuration\nProvider: everything else", "SaaS\nVocê: usuários e configuração\nFornecedor: todo o resto"), "#C8EBA1"]].forEach(function (m, i) { k.SL(60, 140 + i * 135, 520, 120, m[0], m[1], 16); });
         k.F(40, 590, 560, 250, L("🏗 Deployment models", "🏗 Modelos de implementação"), BG.gray);
         [[L("Public cloud", "Cloud pública"), "#ffffff"], [L("Private cloud", "Cloud privada"), "#ffffff"], [L("Hybrid", "Híbrida"), "#ffffff"], [L("Multi-cloud", "Multi-cloud"), "#ffffff"]].forEach(function (m, i) { k.Sh(60 + (i % 2) * 265, 630 + Math.floor(i / 2) * 100, 250, 80, "round", m[0], m[1]); });
         // landing zone
         k.F(640, 100, 700, 740, L("🏢 Reference landing zone", "🏢 Landing zone de referência"), BG.white);
-        const users = k.Sh(890, 130, 200, 60, "pill", L("Users", "Utilizadores"), "#ffffff");
+        const users = k.Sh(890, 130, 200, 60, "pill", L("Users", "Usuários"), "#ffffff");
         k.F(670, 220, 640, 600, L("Region · 2+ availability zones", "Região · 2+ zonas de disponibilidade"), "#f4f5f8");
         k.F(690, 270, 600, 530, L("Virtual network (VPC / VNet)", "Rede virtual (VPC / VNet)"), "#eaf2fb");
         k.F(710, 310, 560, 120, L("Public subnet", "Subnet pública"), "#e3f8f2");
@@ -417,8 +417,8 @@
         const dbm = k.Sh(730, 665, 250, 100, "ellipse", L("Managed database", "Base de dados gerida"), "#FFF59D");
         const st = k.Sh(1000, 665, 250, 100, "round", L("Object storage", "Object storage"), "#FFF59D");
         k.A(users, cdn); k.A(cdn, lb); k.A(lb, app); k.A(app, dbm); k.A(fn, st); k.A(app, fn);
-        k.F(40, 870, 1300, 260, L("🛡 Shared services", "🛡 Serviços partilhados"), BG.purple);
-        [L("Identity & access (IAM, SSO, MFA)", "Identidade e acessos (IAM, SSO, MFA)"), L("Security (keys, secrets, policies)", "Segurança (chaves, segredos, políticas)"), L("Monitoring & logging", "Monitorização e logs"), L("CI/CD & infrastructure as code", "CI/CD e infraestrutura como código"), L("Backup & disaster recovery", "Backup e recuperação de desastres"), L("Cost management (FinOps)", "Gestão de custos (FinOps)")].forEach(function (t, i) { k.Sh(60 + (i % 3) * 425, 910 + Math.floor(i / 3) * 105, 405, 85, "round", t, "#ffffff"); });
+        k.F(40, 870, 1300, 260, L("🛡 Shared services", "🛡 Serviços compartilhados"), BG.purple);
+        [L("Identity & access (IAM, SSO, MFA)", "Identidade e acessos (IAM, SSO, MFA)"), L("Security (keys, secrets, policies)", "Segurança (chaves, segredos, políticas)"), L("Monitoring & logging", "Monitoramento e logs"), L("CI/CD & infrastructure as code", "CI/CD e infraestrutura como código"), L("Backup & disaster recovery", "Backup e recuperação de desastres"), L("Cost management (FinOps)", "Gestão de custos (FinOps)")].forEach(function (t, i) { k.Sh(60 + (i % 3) * 425, 910 + Math.floor(i / 3) * 105, 405, 85, "round", t, "#ffffff"); });
         // equivalence table
         k.F(1380, 100, 590, 1030, L("🔁 Equivalent services", "🔁 Serviços equivalentes"), BG.white);
         const rows = [
@@ -432,7 +432,7 @@
           [L("Data warehouse", "Data warehouse"), "Redshift", "Synapse / Fabric", "BigQuery"],
           [L("Messaging", "Mensageria"), "SQS / SNS", "Service Bus", "Pub/Sub"],
           [L("Identity", "Identidade"), "IAM", "Entra ID", "Cloud IAM"],
-          [L("Monitoring", "Monitorização"), "CloudWatch", "Monitor", "Cloud Monitoring"]
+          [L("Monitoring", "Monitoramento"), "CloudWatch", "Monitor", "Cloud Monitoring"]
         ];
         const cws = [150, 130, 140, 140];
         rows.forEach(function (r, i) {

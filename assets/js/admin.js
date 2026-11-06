@@ -198,7 +198,7 @@
     const w = ws[wsId], link = abs("../workspaces/"), fb = abs("../feedback/");
     if (PT) {
       return "Olá " + (m.name || "") + ",\n\nVocê foi convidado(a) para o workspace \"" + w.info.name + "\" no CM Collaborator.\n\n" +
-        "1. Abra: " + link + "\n2. Entre com este e-mail: " + m.email + " (botão Google ou link de acesso por e-mail).\n3. Os seus quadros aparecem em \"Os meus quadros\"." +
+        "1. Abra: " + link + "\n2. Entre com este e-mail: " + m.email + " (botão Google ou link de acesso por e-mail).\n3. Os seus quadros aparecem em \"Meus quadros\"." +
         (m.expires ? "\n\nO seu acesso de teste é válido até " + fmtDate(m.expires) + ". Explore à vontade e, no fim, deixe a sua opinião (5 perguntas, 3 minutos): " + fb : "") +
         "\n\nObrigado!";
     }
@@ -300,7 +300,7 @@
     const w = ws[wsId], days = suDays(wsId), until = days ? fmtDate(Date.now() + days * DAY) : "";
     const link = abs("../workspaces/"), fb = abs("../feedback/");
     const txt = PT
-      ? "Olá,\n\nObrigado por se inscrever no beta do CM Collaborator! O seu acesso de teste já está ativo.\n\n1. Abra: " + link + "\n2. Entre com o e-mail com que se inscreveu (botão Google ou link de acesso por e-mail).\n3. O workspace \"" + w.info.name + "\" aparece em \"Os meus quadros\"." + (until ? "\n\nO acesso é válido até " + until + "." : "") + "\n\nQuando puder, deixe a sua opinião (5 perguntas, 3 minutos): " + fb + "\n\nObrigado!"
+      ? "Olá,\n\nObrigado por se inscrever no beta do CM Collaborator! O seu acesso de teste já está ativo.\n\n1. Abra: " + link + "\n2. Entre com o e-mail com que se inscreveu (botão Google ou link de acesso por e-mail).\n3. O workspace \"" + w.info.name + "\" aparece em \"Meus quadros\"." + (until ? "\n\nO acesso é válido até " + until + "." : "") + "\n\nQuando puder, deixe a sua opinião (5 perguntas, 3 minutos): " + fb + "\n\nObrigado!"
       : "Hi,\n\nThank you for joining the CM Collaborator beta! Your test access is now active.\n\n1. Open: " + link + "\n2. Sign in with the e-mail you signed up with (Google button or e-mail sign-in link).\n3. The workspace \"" + w.info.name + "\" appears under \"My boards\"." + (until ? "\n\nAccess is valid until " + until + "." : "") + "\n\nWhen you can, share your opinion (5 questions, 3 minutes): " + fb + "\n\nThank you!";
     const subject = PT ? "O seu acesso ao beta do CM Collaborator" : "Your CM Collaborator beta access";
     const dlg = document.getElementById("inviteDlg");

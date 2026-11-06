@@ -13,28 +13,28 @@
       id: "hybrid", icon: "🗺️", name: L("Roadmap (Jira-style)", "Roadmap (estilo Jira)"),
       desc: L("Epics on a timeline, stories and tasks on a board. Best for product and programme roadmaps.", "Épicos numa linha do tempo, histórias e tarefas num quadro. Ideal para roadmaps de produto e programas."),
       views: ["timeline", "board", "list"], label: { timeline: L("Roadmap", "Roadmap") },
-      statuses: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em curso", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")],
+      statuses: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")],
       types: ["epic", "story", "task", "bug", "milestone"]
     },
     waterfall: {
       id: "waterfall", icon: "📅", name: L("Waterfall schedule", "Cronograma Waterfall"),
-      desc: L("Phases, tasks, dependencies and milestones on a Gantt chart. Best for projects with a fixed scope and dates.", "Fases, tarefas, dependências e marcos num Gantt. Ideal para projetos com âmbito e datas definidos."),
+      desc: L("Phases, tasks, dependencies and milestones on a Gantt chart. Best for projects with a fixed scope and dates.", "Fases, tarefas, dependências e marcos num Gantt. Ideal para projetos com escopo e datas definidos."),
       views: ["timeline", "list", "board"], label: { timeline: L("Schedule", "Cronograma") },
-      statuses: [st("todo", "Not started", "Não iniciado", "todo"), st("doing", "In progress", "Em curso", "doing"), st("late", "At risk", "Em risco", "doing"), st("done", "Done", "Concluído", "done")],
+      statuses: [st("todo", "Not started", "Não iniciado", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("late", "At risk", "Em risco", "doing"), st("done", "Done", "Concluído", "done")],
       types: ["phase", "task", "milestone"]
     },
     scrum: {
       id: "scrum", icon: "🏃", name: "Scrum",
-      desc: L("Backlog, sprints and a sprint board. Best for teams working in iterations.", "Backlog, sprints e quadro da sprint. Ideal para equipas que trabalham em iterações."),
+      desc: L("Backlog, sprints and a sprint board. Best for teams working in iterations.", "Backlog, sprints e quadro da sprint. Ideal para equipes que trabalham em iterações."),
       views: ["backlog", "board", "timeline", "list"], label: { timeline: L("Roadmap", "Roadmap") },
-      statuses: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em curso", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")],
+      statuses: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")],
       types: ["epic", "story", "task", "bug"]
     },
     kanban: {
       id: "kanban", icon: "🧱", name: "Kanban",
       desc: L("Continuous flow with your own columns and WIP limits. Best for operations and support.", "Fluxo contínuo com colunas próprias e limites de WIP. Ideal para operações e suporte."),
       views: ["board", "list", "timeline"], label: { timeline: L("Timeline", "Linha do tempo") },
-      statuses: [st("backlog", "Backlog", "Backlog", "todo"), st("todo", "Ready", "Pronto para fazer", "todo"), st("doing", "In progress", "Em curso", "doing", 3), st("review", "Review", "Revisão", "doing", 2), st("done", "Done", "Concluído", "done")],
+      statuses: [st("backlog", "Backlog", "Backlog", "todo"), st("todo", "Ready", "Pronto para fazer", "todo"), st("doing", "In progress", "Em andamento", "doing", 3), st("review", "Review", "Revisão", "doing", 2), st("done", "Done", "Concluído", "done")],
       types: ["epic", "story", "task", "bug"]
     }
   };
@@ -47,8 +47,8 @@
     if (method === "waterfall") {
       const phases = [
         [L("Initiation", "Iniciação"), 0, 13, [L("Project charter", "Termo de abertura"), L("Stakeholder map", "Mapa de stakeholders")], L("Kick-off", "Kick-off")],
-        [L("Planning", "Planeamento"), 14, 34, [L("Scope and WBS", "Âmbito e EAP"), L("Schedule and budget", "Cronograma e orçamento"), L("Risk plan", "Plano de riscos")], L("Plan approved", "Plano aprovado")],
-        [L("Execution", "Execução"), 35, 90, [L("Build", "Construção"), L("Testing", "Testes"), L("Training", "Formação")], null],
+        [L("Planning", "Planejamento"), 14, 34, [L("Scope and WBS", "Escopo e EAP"), L("Schedule and budget", "Cronograma e orçamento"), L("Risk plan", "Plano de riscos")], L("Plan approved", "Plano aprovado")],
+        [L("Execution", "Execução"), 35, 90, [L("Build", "Construção"), L("Testing", "Testes"), L("Training", "Treinamento")], null],
         [L("Go-live and closure", "Go-live e encerramento"), 91, 111, [L("Go-live", "Go-live"), L("Lessons learned", "Lições aprendidas")], L("Project closed", "Projeto encerrado")]
       ];
       let prevLast = null;
@@ -68,8 +68,8 @@
       add({ type: "epic", title: L("Epic 2 – next increment", "Épico 2 – próximo incremento"), status: "todo", start: monday(28), end: monday(55) });
       sprints.s1 = { name: "Sprint 1", start: monday(0), end: monday(11), state: "planned", goal: "", order: 1 };
       sprints.s2 = { name: "Sprint 2", start: monday(14), end: monday(25), state: "planned", goal: "", order: 2 };
-      add({ type: "story", title: L("As a user, I want … so that …", "Como utilizador, quero … para …"), parent: e1, status: "todo", sprint: "s1", points: 3 });
-      add({ type: "task", title: L("Set up the team working agreement", "Definir o acordo de trabalho da equipa"), status: "todo", sprint: "s1", points: 1 });
+      add({ type: "story", title: L("As a user, I want … so that …", "Como usuário, quero … para …"), parent: e1, status: "todo", sprint: "s1", points: 3 });
+      add({ type: "task", title: L("Set up the team working agreement", "Definir o acordo de trabalho da equipe"), status: "todo", sprint: "s1", points: 1 });
       add({ type: "story", title: L("Refine the next backlog items", "Refinar os próximos itens do backlog"), parent: e1, status: "todo", points: 2 });
     } else if (method === "kanban") {
       add({ type: "task", title: L("Example card – drag me across the columns", "Cartão de exemplo – arraste-me pelas colunas"), status: "todo" });

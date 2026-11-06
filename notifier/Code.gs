@@ -33,6 +33,7 @@ function doPost(e) {
     var brand = String(req.brand || "").replace(/[^\w À-ÿ&.·-]/g, "").trim().slice(0, 40) || CFG.brand;
     var who = verify(req.idToken);
     if (req.kind === "assign" || req.kind === "due") return json(planNotify(req, who, brand));
+    if (/^jira-/.test(String(req.kind || ""))) return json(jiraHandle(req, who));
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
     var info = get("workspaces/" + wsId + "/info", req.idToken) || {};
@@ -92,13 +93,13 @@ function welcome(m, info, lang, brand) {
     how: "Como entrar",
     s1: "Abra <a href=\"" + hub + "\">" + hub.replace("https://", "") + "</a>",
     s2: "Entre com <b>este mesmo e-mail</b> (" + esc(m.email) + ") – botão Google ou link de acesso por e-mail.",
-    s3: sb ? "Abra o workspace e comece pelo quadro <b>“" + esc(sb.t) + "”</b>" + (tour ? ": missões curtas que mostram tudo." : ".") : "Abra o workspace <b>“" + esc(wsName) + "”</b> para ver os quadros partilhados consigo.",
+    s3: sb ? "Abra o workspace e comece pelo quadro <b>“" + esc(sb.t) + "”</b>" + (tour ? ": missões curtas que mostram tudo." : ".") : "Abra o workspace <b>“" + esc(wsName) + "”</b> para ver os quadros compartilhados com você.",
     aiT: "Novidade ✨ – Assistente IA nos quadros",
     ai: ["<b>Construir um quadro</b> a partir do seu objetivo (frames, instruções e agenda);", "<b>Sugerir dinâmicas</b> para o grupo, com passos e tempos;", "<b>Analisar os resultados</b> depois da sessão: temas, prioridades e plano de ações."],
     aiH: "Clique no botão ✨ da barra de ferramentas do quadro.",
     guide: "One-page de boas-vindas – passo a passo, atalhos e dicas (PDF)",
     fb: "Antes de o acesso terminar, pedimos só <b>3 minutos de feedback</b>: <a href=\"" + fb + "\">dar feedback</a>.",
-    cta: "Abrir os meus quadros",
+    cta: "Abrir meus quadros",
     bye: "Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company,
     auto: "Mensagem automática do " + brand + " · " + CFG.company + ". Recebeu este e-mail porque foi convidado(a) para um workspace."
   } : {
@@ -168,7 +169,7 @@ function planNotify(req, who, brand) {
     var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:620px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
       '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + ' · Planning</div><div style="padding:22px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
       "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + introHtml + "</p>" + table +
-      '<p style="text-align:center;margin:20px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planeamento" : "Open the planning") + " →</a></p></div>" +
+      '<p style="text-align:center;margin:20px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planejamento" : "Open the planning") + " →</a></p></div>" +
       '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Notificação automática do " : "Automatic notification from ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
     var text = html.replace(/<\/tr>|<\/p>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
     var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
@@ -178,8 +179,8 @@ function planNotify(req, who, brand) {
     var it = items[String(req.item || "")];
     if (!it || !it.assignee || !isMember(it.assignee)) return { ok: true, sent: [], skipped: ["not a member"] };
     if (String(it.assignee).toLowerCase() === String(who.email).toLowerCase()) return { ok: true, sent: [] };
-    send(it.assignee, (pt ? "Atribuído a si: " : "Assigned to you: ") + (it.key ? it.key + " · " : "") + it.title,
-      esc(byName) + (pt ? " atribuiu-lhe um item no planeamento <b>“" : " assigned you an item in the planning <b>“") + esc(pinfo.title) + "”</b>.", [it]);
+    send(it.assignee, (pt ? "Atribuído a você: " : "Assigned to you: ") + (it.key ? it.key + " · " : "") + it.title,
+      esc(byName) + (pt ? " atribuiu um item a você no planejamento <b>“" : " assigned you an item in the planning <b>“") + esc(pinfo.title) + "”</b>.", [it]);
   } else {
     var today = Utilities.formatDate(new Date(), "Europe/Lisbon", "yyyy-MM-dd"), lim = Utilities.formatDate(new Date(Date.now() + 3 * 864e5), "Europe/Lisbon", "yyyy-MM-dd");
     var per = {};
@@ -190,9 +191,111 @@ function planNotify(req, who, brand) {
     });
     Object.keys(per).slice(0, CFG.maxPerCall).forEach(function (to) {
       var list = per[to].sort(function (a, b) { return a.end < b.end ? -1 : 1; }), late = list.filter(function (x) { return x.late; }).length;
-      send(to, (pt ? "Prazos no planeamento “" : "Deadlines in the planning “") + pinfo.title + "”" + (late ? (pt ? " – " + late + " em atraso" : " – " + late + " overdue") : ""),
-        (pt ? "Estes itens atribuídos a si estão em atraso ou vencem nos próximos 3 dias no planeamento <b>“" : "These items assigned to you are overdue or due in the next 3 days in the planning <b>“") + esc(pinfo.title) + "”</b>.", list);
+      send(to, (pt ? "Prazos no planejamento “" : "Deadlines in the planning “") + pinfo.title + "”" + (late ? (pt ? " – " + late + " em atraso" : " – " + late + " overdue") : ""),
+        (pt ? "Estes itens atribuídos a você estão atrasados ou vencem nos próximos 3 dias no planejamento <b>“" : "These items assigned to you are overdue or due in the next 3 days in the planning <b>“") + esc(pinfo.title) + "”</b>.", list);
     });
   }
   return { ok: true, sent: sent, quota: MailApp.getRemainingDailyQuota() };
+}
+
+/* ---------------- Jira Cloud integration ----------------
+ * The API token is stored only in this script's properties (per workspace), never in the browser or Firebase.
+ * Admins / workspace owners connect; editors import and push changes. */
+function jiraHandle(req, who) {
+  var tok = req.idToken, me = key(who.email), isAdmin = get("admins/" + me, tok) === true, wsId;
+  if (req.plan) {
+    if (!/^[A-Za-z0-9_-]{1,90}$/.test(String(req.plan))) throw new Error("bad planning");
+    var pinfo = get("planning/" + req.plan + "/info", tok); if (!pinfo) throw new Error("planning not found"); wsId = pinfo.ws;
+  } else wsId = String(req.ws || "");
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
+  var winfo = get("workspaces/" + wsId + "/info", tok) || {}, mm = get("workspaces/" + wsId + "/members/" + me, tok);
+  var isOwner = isAdmin || winfo.owner === me;
+  var isEditor = isOwner || !!(mm && mm.role === "editor" && (!mm.expires || mm.expires > Date.now()));
+  var P = PropertiesService.getScriptProperties(), pk = "jira:" + wsId, conn;
+  if (req.kind === "jira-connect") {
+    if (!isOwner) throw new Error("only the workspace owner or an admin can connect Jira");
+    var site = String(req.site || "").trim().replace(/\/+$/, "").toLowerCase();
+    if (!/^https:\/\/[a-z0-9-]+\.atlassian\.net$/.test(site)) throw new Error("the site must look like https://your-company.atlassian.net");
+    conn = { site: site, email: String(req.email || "").trim(), token: String(req.token || "").trim() };
+    if (!conn.email || !conn.token) throw new Error("e-mail and API token are required");
+    var acc = jira(conn, "GET", "/rest/api/3/myself");
+    conn.by = who.email; conn.at = Date.now();
+    P.setProperty(pk, JSON.stringify(conn));
+    return { ok: true, site: site, account: acc.displayName || conn.email };
+  }
+  if (req.kind === "jira-disconnect") {
+    if (!isOwner) throw new Error("not allowed");
+    P.deleteProperty(pk); return { ok: true };
+  }
+  var raw = P.getProperty(pk); if (!raw) throw new Error("Jira is not connected for this workspace");
+  conn = JSON.parse(raw);
+  if (!isEditor) throw new Error("not allowed");
+  if (req.kind === "jira-projects") {
+    var pr = jira(conn, "GET", "/rest/api/3/project/search?maxResults=100&orderBy=name");
+    return { ok: true, site: conn.site, projects: (pr.values || []).map(function (x) { return { key: x.key, name: x.name }; }) };
+  }
+  var F = jiraFields(conn);
+  if (req.kind === "jira-import") {
+    var jql = String(req.jql || "").slice(0, 3000); if (!jql) throw new Error("JQL is empty");
+    var fields = ["summary", "issuetype", "status", "assignee", "duedate", "parent"];
+    if (F.start) fields.push(F.start); if (F.points) fields.push(F.points);
+    var out = [], next = null, n = 0, r;
+    do {
+      var body = { jql: jql, maxResults: 100, fields: fields }; if (next) body.nextPageToken = next;
+      r = jira(conn, "POST", "/rest/api/3/search/jql", body);
+      (r.issues || []).forEach(function (i) {
+        var f = i.fields || {}, it = f.issuetype || {}, st = f.status || {};
+        out.push({ key: i.key, title: f.summary || i.key, type: it.name || "", level: it.hierarchyLevel, subtask: !!it.subtask,
+          status: st.name || "", cat: (st.statusCategory || {}).key || "new",
+          assignee: f.assignee ? (f.assignee.emailAddress || "") : "", assigneeName: f.assignee ? (f.assignee.displayName || "") : "",
+          start: F.start ? (f[F.start] || null) : null, due: f.duedate || null, points: F.points ? (f[F.points] == null ? null : f[F.points]) : null,
+          parent: f.parent ? f.parent.key : null, url: conn.site + "/browse/" + i.key });
+      });
+      next = r.nextPageToken; n++;
+    } while (next && !r.isLast && n < 10);
+    return { ok: true, site: conn.site, issues: out, startField: !!F.start, pointsField: !!F.points };
+  }
+  if (req.kind === "jira-push") {
+    var item = get("planning/" + req.plan + "/data/items/" + String(req.item || ""), tok);
+    if (!item || !item.ext || item.ext.source !== "jira" || !item.ext.key) throw new Error("not a Jira item");
+    var sts = get("planning/" + req.plan + "/data/settings/statuses", tok) || [], cat = "todo", stName = "";
+    sts.forEach(function (x) { if (x.id === item.status) { cat = x.cat; stName = x.name; } });
+    var k = encodeURIComponent(item.ext.key), upd = { summary: item.title, duedate: item.end || null };
+    if (F.start) upd[F.start] = item.start || null;
+    jira(conn, "PUT", "/rest/api/3/issue/" + k, { fields: upd });
+    var want = { todo: "new", doing: "indeterminate", done: "done" }[cat] || "new", moved = false;
+    var cur = jira(conn, "GET", "/rest/api/3/issue/" + k + "?fields=status").fields.status;
+    if ((cur.statusCategory || {}).key !== want || (stName && cur.name.toLowerCase() !== stName.toLowerCase() && (cur.statusCategory || {}).key !== want)) {
+      var trs = jira(conn, "GET", "/rest/api/3/issue/" + k + "/transitions").transitions || [], pick = null;
+      trs.forEach(function (t) { if (!pick && t.to && stName && t.to.name.toLowerCase() === stName.toLowerCase()) pick = t; });
+      trs.forEach(function (t) { if (!pick && t.to && (t.to.statusCategory || {}).key === want) pick = t; });
+      if (pick) { jira(conn, "POST", "/rest/api/3/issue/" + k + "/transitions", { transition: { id: pick.id } }); moved = true; }
+    }
+    return { ok: true, moved: moved };
+  }
+  throw new Error("unknown action");
+}
+function jira(conn, method, path, body) {
+  var o = { method: method.toLowerCase(), muteHttpExceptions: true, headers: { Authorization: "Basic " + Utilities.base64Encode(conn.email + ":" + conn.token), Accept: "application/json" } };
+  if (body) { o.contentType = "application/json"; o.payload = JSON.stringify(body); }
+  var r = UrlFetchApp.fetch(conn.site + path, o), c = r.getResponseCode(), t = r.getContentText();
+  if (c >= 300) {
+    var m = t;
+    try { var j = JSON.parse(t); var errs = (j.errorMessages || []).concat(Object.keys(j.errors || {}).map(function (x) { return x + ": " + j.errors[x]; })); if (errs.length) m = errs.join("; "); } catch (e) { /* not JSON */ }
+    if (c === 401) m = "invalid e-mail or API token";
+    throw new Error("Jira " + c + ": " + String(m).slice(0, 300));
+  }
+  return t ? JSON.parse(t) : {};
+}
+function jiraFields(conn) {
+  var cache = CacheService.getScriptCache(), ck = "jf:" + conn.site, v = cache.get(ck);
+  if (v) return JSON.parse(v);
+  var F = {};
+  (jira(conn, "GET", "/rest/api/3/field") || []).forEach(function (f) {
+    var n = String(f.name || "").toLowerCase();
+    if (!F.start && (n === "start date" || n === "data de início" || n === "data de inicio" || n === "data inicial")) F.start = f.id;
+    if (!F.points && (n === "story point estimate" || n === "story points" || n === "estimativa de story points" || n === "pontos da história")) F.points = f.id;
+  });
+  cache.put(ck, JSON.stringify(F), 21600);
+  return F;
 }

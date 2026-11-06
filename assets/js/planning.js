@@ -20,7 +20,8 @@
   const CATC = { todo: "#8a94a6", doing: "#2f80ed", done: "#36b37e" };
   const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Board", "Quadro"), backlog: "Backlog", list: L("List", "Lista") };
 
-  let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, canEdit = false, isAdm = false;
+  let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
+  const pushT = {};
   let view = null, scale = "month", collapsed = {}, filter = { q: "", who: "" }, dragging = false, pending = false, openItem = null;
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -62,7 +63,20 @@
     if (!canEdit) return Promise.resolve();
     const u = {}; Object.keys(obj).forEach(function (k) { u["items/" + id + "/" + k] = obj[k] === undefined ? null : obj[k]; });
     u["items/" + id + "/updated"] = TS();
-    return db.ref("planning/" + ID + "/data").update(u).catch(fail);
+    return db.ref("planning/" + ID + "/data").update(u).then(function () { jiraPushLater(id, obj); }).catch(fail);
+  }
+  /* changes to items that came from Jira go back to Jira (summary, status, start, due) */
+  function jiraPushLater(id, obj) {
+    const it = data.items[id], J = data.settings && data.settings.jira;
+    if (!it || !it.ext || it.ext.source !== "jira" || !J || J.push === false) return;
+    if (!["title", "status", "start", "end"].some(function (k) { return k in obj; })) return;
+    clearTimeout(pushT[id]);
+    pushT[id] = setTimeout(function () {
+      notify("jira-push", { item: id }).then(function (j) {
+        if (j && j.ok) toast(L("Updated in Jira: ", "Atualizado no Jira: ") + it.ext.key);
+        else toast(L("Jira did not accept the change: ", "O Jira não aceitou a alteração: ") + ((j && j.error) || ""));
+      });
+    }, 1200);
   }
   function nextKey() {
     return db.ref("planning/" + ID + "/data/settings/seq").transaction(function (n) { return (n || 0) + 1; }).then(function (r) {
@@ -112,7 +126,7 @@
     if (views.indexOf(view) < 0) view = views[0];
     const who = {}; items().forEach(function (i) { if (i.assignee) who[i.assignee] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = 1; });
     app.innerHTML =
-      '<header class="pl-top"><a class="pl-back" href="../workspaces/" title="' + L("My boards", "Os meus quadros") + '">←</a><span class="pl-logo">CM</span>' +
+      '<header class="pl-top"><a class="pl-back" href="../workspaces/" title="' + L("My boards", "Meus quadros") + '">←</a><span class="pl-logo">CM</span>' +
       '<div class="pl-title"><span class="pl-ws">' + esc(wsInfo.name || info.ws) + " · " + m.icon + " " + esc(m.name) + '</span><h1>' + esc(info.title) + "</h1></div>" +
       '<nav class="pl-tabs">' + views.map(function (v) { return '<button data-view="' + v + '" class="' + (v === view ? "on" : "") + '">' + esc((m.label && m.label[v]) || VIEWN[v]) + "</button>"; }).join("") + "</nav>" +
       '<div class="pl-actions">' + (canEdit ? '<button class="pl-btn primary" id="newBtn">+ ' + L("Create", "Criar") + "</button>" : '<span class="pl-ro">' + L("View only", "Só leitura") + "</span>") +
@@ -121,6 +135,7 @@
       '<select id="who"><option value="">' + L("Everyone", "Todas as pessoas") + '</option><option value="_none"' + (filter.who === "_none" ? " selected" : "") + ">" + L("Unassigned", "Sem responsável") + "</option>" +
       Object.keys(who).sort().map(function (e) { return '<option value="' + esc(e) + '"' + (filter.who === e ? " selected" : "") + ">" + esc(memberName(e)) + "</option>"; }).join("") + "</select>" +
       (view === "timeline" ? '<div class="pl-seg" id="scale">' + [["week", L("Weeks", "Semanas")], ["month", L("Months", "Meses")], ["quarter", L("Quarters", "Trimestres")]].map(function (s) { return '<button data-s="' + s[0] + '" class="' + (scale === s[0] ? "on" : "") + '">' + s[1] + "</button>"; }).join("") + '</div><button class="pl-btn sm" id="todayBtn">' + L("Today", "Hoje") + "</button>" : "") +
+      (data.settings && data.settings.jira && canEdit ? '<button class="pl-btn sm" id="jiraSync" title="' + L("Pull the latest from Jira", "Trazer as últimas alterações do Jira") + '">↻ Jira</button>' : "") +
       '<span class="pl-sum" id="sum"></span></div>' +
       '<main id="view" class="pl-view"></main>';
     app.querySelectorAll("[data-view]").forEach(function (b) { b.onclick = function () { view = b.dataset.view; try { localStorage.setItem("cmcollab:plview:" + ID, view); } catch (e) { /* ignore */ } shell(); }; });
@@ -130,6 +145,7 @@
     const tb = document.getElementById("todayBtn"); if (tb) tb.onclick = function () { scrollToday(true); };
     const nb = document.getElementById("newBtn"); if (nb) nb.onclick = function () { quickCreate(); };
     document.getElementById("moreBtn").onclick = moreMenu;
+    const js = document.getElementById("jiraSync"); if (js) js.onclick = function () { js.disabled = true; jiraRun(data.settings.jira.jql, data.settings.jira.push !== false).then(function () { js.disabled = false; }); };
     renderView();
   }
   function renderView() {
@@ -411,7 +427,7 @@
     modal("<h2>" + (starting ? L("Start sprint", "Iniciar sprint") : L("Edit sprint", "Editar sprint")) + "</h2>" +
       '<form id="spF" class="pl-form"><label>' + L("Name", "Nome") + '<input name="name" required value="' + esc(S.name) + '"></label><div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start" required value="' + esc(S.start || today()) + '"></label><label>' + L("End", "Fim") + '<input type="date" name="end" required value="' + esc(S.end || "") + '"></label></div>' +
       '<label>' + L("Sprint goal", "Objetivo da sprint") + '<textarea name="goal" rows="2">' + esc(S.goal || "") + "</textarea></label>" +
-      '<div class="pl-row-end">' + (!starting ? '<button type="button" class="pl-btn ghost danger" id="spDel">' + L("Delete sprint", "Apagar sprint") + "</button><span class=\"sp\"></span>" : "") + '<button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + (starting ? L("Start", "Iniciar") : L("Save", "Guardar")) + "</button></div></form>", function (box, close) {
+      '<div class="pl-row-end">' + (!starting ? '<button type="button" class="pl-btn ghost danger" id="spDel">' + L("Delete sprint", "Excluir sprint") + "</button><span class=\"sp\"></span>" : "") + '<button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + (starting ? L("Start", "Iniciar") : L("Save", "Salvar")) + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#spF");
       f.onsubmit = function (e) { e.preventDefault(); const o = Object.assign({}, S, { name: f.name.value.trim(), start: f.start.value, end: f.end.value, goal: f.goal.value.trim() }); if (starting) o.state = "active"; save("sprints/" + id, o).then(close); };
       const del = box.querySelector("#spDel");
@@ -473,7 +489,7 @@
     const sps = Object.keys(data.sprints || {}).filter(function (k) { return data.sprints[k].state !== "closed"; });
     let d = document.getElementById("drawer");
     if (!d) { d = document.createElement("aside"); d.id = "drawer"; d.className = "pl-drawer"; document.body.appendChild(d); }
-    d.innerHTML = '<header><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="sp"></span>' + (canEdit ? '<button class="pl-btn sm ghost danger" id="dDel">' + L("Delete", "Apagar") + "</button>" : "") + '<button class="pl-btn icon" id="dX">✕</button></header>' +
+    d.innerHTML = '<header><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="sp"></span>' + (canEdit ? '<button class="pl-btn sm ghost danger" id="dDel">' + L("Delete", "Excluir") + "</button>" : "") + '<button class="pl-btn icon" id="dX">✕</button></header>' +
       '<form class="pl-form" id="dF"><textarea name="title" class="d-title" rows="2"' + dis + ">" + esc(it.title) + "</textarea>" +
       '<div class="g2"><label>' + L("Type", "Tipo") + '<select name="type"' + dis + ">" + Object.keys(TYPES).filter(function (t) { return method().types.indexOf(t) >= 0 || t === it.type; }).map(function (t) { return '<option value="' + t + '"' + (t === it.type ? " selected" : "") + ">" + TYPES[t].icon + " " + TYPES[t].name + "</option>"; }).join("") + "</select></label>" +
       "<label>" + L("Status", "Estado") + '<select name="status"' + dis + ">" + statuses().map(function (s) { return '<option value="' + s.id + '"' + (statusOf(it).id === s.id ? " selected" : "") + ">" + esc(s.name) + "</option>"; }).join("") + "</select></label></div>" +
@@ -484,7 +500,7 @@
       (sps.length && !isContainer(it) ? "<label>Sprint<select name=\"sprint\"" + dis + '><option value="">Backlog</option>' + sps.map(function (k) { return '<option value="' + k + '"' + (k === it.sprint ? " selected" : "") + ">" + esc(data.sprints[k].name) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Depends on (finish → start)", "Depende de (fim → início)") + '<select name="deps" multiple size="4"' + dis + ">" + others.map(function (o) { return '<option value="' + o.id + '"' + ((it.deps || {})[o.id] ? " selected" : "") + ">" + esc((o.key ? o.key + " · " : "") + o.title) + "</option>"; }).join("") + "</select></label>" +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +
-      '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + esc(it.ext.source) + " " + esc(it.ext.key || "") : "") + "</p></form>";
+      '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc(it.ext.source === "jira" ? "Jira " : it.ext.source + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Jira assignee: ", "Responsável no Jira: ") + esc(it.ext.assigneeName) : "") + "</p></form>";
     document.getElementById("dX").onclick = closeDrawer;
     document.querySelectorAll(".tl-row.sel").forEach(function (r) { r.classList.remove("sel"); });
     const row = document.querySelector('.tl-row[data-open="' + id + '"]'); if (row) row.classList.add("sel");
@@ -506,7 +522,7 @@
     if (focusTitle) { f.title.focus(); f.title.select(); }
     document.getElementById("dDel").onclick = function () {
       const kids = children(id);
-      modal("<h2>" + L("Delete ", "Apagar ") + esc(it.key || it.title) + "?</h2><p>" + (kids.length ? kids.length + " " + L("child items will be moved to the top level.", "itens filhos passam para o nível de topo.") : L("This cannot be undone.", "Não é possível desfazer.")) + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary danger" id="delGo">' + L("Delete", "Apagar") + "</button></div>", function (box, close) {
+      modal("<h2>" + L("Delete ", "Excluir ") + esc(it.key || it.title) + "?</h2><p>" + (kids.length ? kids.length + " " + L("child items will be moved to the top level.", "itens filhos passam para o nível de topo.") : L("This cannot be undone.", "Não é possível desfazer.")) + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary danger" id="delGo">' + L("Delete", "Excluir") + "</button></div>", function (box, close) {
         box.querySelector("#delGo").onclick = function () {
           const u = {}; u["items/" + id] = null;
           kids.forEach(function (k) { u["items/" + k.id + "/parent"] = null; });
@@ -550,14 +566,14 @@
   }
   function moreMenu() {
     const owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email));
-    modal("<h2>" + L("Planning options", "Opções do planeamento") + '</h2><div class="pl-menu">' +
+    modal("<h2>" + L("Planning options", "Opções do planejamento") + '</h2><div class="pl-menu">' +
       (canEdit ? '<button data-act="workflow">⚙️ ' + L("Workflow and columns", "Fluxo e colunas") + "</button>" : "") +
       (canEdit ? '<button data-act="remind">🔔 ' + L("Send deadline reminders by e-mail", "Enviar lembretes de prazo por e-mail") + "</button>" : "") +
       (canEdit ? '<button data-act="import">📥 ' + L("Import CSV (Jira, Azure DevOps, Kanbanize, Excel)", "Importar CSV (Jira, Azure DevOps, Kanbanize, Excel)") + "</button>" : "") +
       '<button data-act="export">📤 ' + L("Export CSV", "Exportar CSV") + "</button>" +
       '<button data-act="print">🖨️ ' + L("Print / PDF", "Imprimir / PDF") + "</button>" +
       '<button data-act="integrations">🔗 ' + L("Integrations (Jira, Azure DevOps, Kanbanize)", "Integrações (Jira, Azure DevOps, Kanbanize)") + "</button>" +
-      (owner ? '<button data-act="rename">✏️ ' + L("Rename", "Mudar o nome") + "</button>" : "") +
+      (owner ? '<button data-act="rename">✏️ ' + L("Rename", "Renomear") + "</button>" : "") +
       '</div><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Close", "Fechar") + "</button></div>", function (box, close) {
       box.querySelectorAll("[data-act]").forEach(function (b) {
         b.onclick = function () {
@@ -568,7 +584,7 @@
     });
   }
   function renameDialog() {
-    modal("<h2>" + L("Rename planning", "Mudar o nome do planeamento") + '</h2><form class="pl-form" id="rnF"><input name="t" required value="' + esc(info.title) + '"><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Guardar") + "</button></div></form>", function (box, close) {
+    modal("<h2>" + L("Rename planning", "Renomear do planejamento") + '</h2><form class="pl-form" id="rnF"><input name="t" required value="' + esc(info.title) + '"><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#rnF");
       f.onsubmit = function (e) { e.preventDefault(); const v = f.t.value.trim(); const u = {}; u["planning/" + ID + "/info/title"] = v; u["workspaces/" + info.ws + "/plannings/" + ID + "/title"] = v; db.ref().update(u).then(function () { info.title = v; close(); shell(); }, fail); };
     });
@@ -577,11 +593,11 @@
     let ss = JSON.parse(JSON.stringify(statuses()));
     function rowsH() {
       return ss.map(function (s, i) {
-        return '<div class="wf-row" data-i="' + i + '"><input data-k="name" value="' + esc(s.name) + '"><select data-k="cat">' + [["todo", L("To do", "Por fazer")], ["doing", L("In progress", "Em curso")], ["done", L("Done", "Concluído")]].map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === s.cat ? " selected" : "") + ">" + c[1] + "</option>"; }).join("") + "</select>" +
+        return '<div class="wf-row" data-i="' + i + '"><input data-k="name" value="' + esc(s.name) + '"><select data-k="cat">' + [["todo", L("To do", "Por fazer")], ["doing", L("In progress", "Em andamento")], ["done", L("Done", "Concluído")]].map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === s.cat ? " selected" : "") + ">" + c[1] + "</option>"; }).join("") + "</select>" +
           '<input data-k="wip" type="number" min="0" placeholder="WIP" value="' + esc(s.wip || "") + '"><button type="button" data-up="' + i + '">↑</button><button type="button" data-rm="' + i + '">✕</button></div>';
       }).join("");
     }
-    modal("<h2>" + L("Workflow and columns", "Fluxo e colunas") + '</h2><p class="muted small">' + L("Each status is a board column. The category tells reports what counts as done. WIP limits the number of cards in a column.", "Cada estado é uma coluna do quadro. A categoria diz aos relatórios o que conta como concluído. O WIP limita os cartões numa coluna.") + '</p><div id="wfRows"></div><button type="button" class="pl-btn sm" id="wfAdd">+ ' + L("Add status", "Adicionar estado") + '</button><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="wfSave">' + L("Save", "Guardar") + "</button></div>", function (box, close) {
+    modal("<h2>" + L("Workflow and columns", "Fluxo e colunas") + '</h2><p class="muted small">' + L("Each status is a board column. The category tells reports what counts as done. WIP limits the number of cards in a column.", "Cada estado é uma coluna do quadro. A categoria diz aos relatórios o que conta como concluído. O WIP limita os cartões numa coluna.") + '</p><div id="wfRows"></div><button type="button" class="pl-btn sm" id="wfAdd">+ ' + L("Add status", "Adicionar estado") + '</button><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="wfSave">' + L("Save", "Salvar") + "</button></div>", function (box, close) {
       const R = box.querySelector("#wfRows");
       function draw() {
         R.innerHTML = rowsH();
@@ -601,10 +617,106 @@
     });
   }
   function integrationsDialog() {
-    modal("<h2>" + L("Integrations", "Integrações") + '</h2><div class="int-grid">' +
-      [["Jira Cloud", L("Epics, stories and dates by JQL; two-way status sync.", "Épicos, histórias e datas por JQL; sincronização de estado nos dois sentidos.")], ["Azure DevOps Boards", L("Work items by WIQL with start and target dates.", "Work items por WIQL com datas de início e alvo.")], ["Kanbanize (Businessmap)", L("Cards, columns and deadlines from your boards.", "Cartões, colunas e prazos dos seus quadros.")]].map(function (x) {
+    const J = wsInteg.jira, owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email)), PJ = data.settings && data.settings.jira;
+    const jiraCard = '<div class="int-card on"><b>Jira Cloud</b>' + (J
+      ? '<p class="small">✅ ' + L("Connected to ", "Conectado a ") + "<b>" + esc(J.site.replace("https://", "")) + "</b>" + (J.account ? " · " + esc(J.account) : "") + "</p>" +
+        (PJ ? '<p class="muted small">' + L("This planning syncs with: ", "Este planning sincroniza com: ") + "<code>" + esc(PJ.jql) + "</code>" + (PJ.lastSync ? " · " + L("last sync ", "última sincronização ") + new Date(PJ.lastSync).toLocaleString(PT ? "pt-BR" : "en-GB") : "") + "</p>" : "") +
+        '<div class="pl-row-end" style="justify-content:flex-start">' + (canEdit ? '<button class="pl-btn primary sm" id="jImp">' + (PJ ? L("Change import / sync", "Alterar importação / sincronizar") : L("Import from Jira", "Importar do Jira")) + "</button>" : "") + (owner ? '<button class="pl-btn ghost danger sm" id="jOff">' + L("Disconnect", "Desconectar") + "</button>" : "") + "</div>"
+      : (owner ? '<form class="pl-form" id="jForm"><p class="muted small">' + L("Connect once per workspace. The API token stays on the platform server – it is never saved in the browser or in the database.", "Conecte uma vez por workspace. O token de API fica no servidor da plataforma – nunca é salvo no navegador nem no banco de dados.") + "</p>" +
+        '<label>' + L("Jira site", "Site do Jira") + '<input name="site" required placeholder="https://sua-empresa.atlassian.net" autocomplete="off"></label>' +
+        '<label>' + L("Atlassian account e-mail", "E-mail da conta Atlassian") + '<input name="email" type="email" required autocomplete="off"></label>' +
+        '<label>' + L("API token", "Token de API") + '<input name="token" type="password" required autocomplete="new-password"></label>' +
+        '<p class="muted small"><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">' + L("Create an API token in your Atlassian account ↗", "Criar um token de API na sua conta Atlassian ↗") + "</a></p>" +
+        '<div class="pl-row-end"><button class="pl-btn primary">' + L("Connect Jira", "Conectar o Jira") + "</button></div></form>"
+        : '<p class="muted small">' + L("Ask the workspace owner or an admin to connect Jira.", "Peça ao dono do workspace ou a um administrador para conectar o Jira.") + "</p>")) + "</div>";
+    modal("<h2>" + L("Integrations", "Integrações") + '</h2><div class="int-grid">' + jiraCard +
+      [["Azure DevOps Boards", L("Work items by WIQL with start and target dates.", "Work items por WIQL com datas de início e alvo.")], ["Kanbanize (Businessmap)", L("Cards, columns and deadlines from your boards.", "Cartões, colunas e prazos dos seus quadros.")]].map(function (x) {
         return '<div class="int-card"><b>' + x[0] + '</b><p class="muted small">' + x[1] + '</p><span class="tag">' + L("Coming soon", "Em breve") + "</span></div>";
-      }).join("") + '</div><p class="muted small">' + L("Available today: import a CSV export from any of these tools (More → Import CSV). Connections use a secure server-side token, never stored in the browser.", "Disponível hoje: importar o CSV exportado de qualquer uma destas ferramentas (Mais → Importar CSV). As ligações usam um token guardado no servidor, nunca no navegador.") + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Close", "Fechar") + "</button></div>");
+      }).join("") + '</div><p class="muted small">' + L("Any tool: More → Import CSV.", "Qualquer ferramenta: Mais → Importar CSV.") + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Close", "Fechar") + "</button></div>", function (box, close) {
+      const f = box.querySelector("#jForm");
+      if (f) f.onsubmit = function (e) {
+        e.preventDefault(); const b = f.querySelector("button"); b.disabled = true; b.textContent = L("Connecting…", "Conectando…");
+        notify("jira-connect", { site: f.site.value.trim(), email: f.email.value.trim(), token: f.token.value.trim() }).then(function (j) {
+          f.token.value = "";
+          if (!j || !j.ok) { b.disabled = false; b.textContent = L("Connect Jira", "Conectar o Jira"); return toast(L("Could not connect: ", "Não foi possível conectar: ") + ((j && j.error) || "")); }
+          wsInteg.jira = { site: j.site, account: j.account, by: me.email, at: Date.now() };
+          db.ref("workspaces/" + info.ws + "/integrations/jira").set(wsInteg.jira).catch(function () { /* marker only */ });
+          toast(L("Jira connected", "Jira conectado")); close(); jiraImportDialog();
+        });
+      };
+      const imp = box.querySelector("#jImp"); if (imp) imp.onclick = function () { close(); jiraImportDialog(); };
+      const off = box.querySelector("#jOff"); if (off) off.onclick = function () {
+        notify("jira-disconnect", {}).then(function (j) {
+          if (!j || !j.ok) return toast((j && j.error) || "");
+          wsInteg.jira = null; db.ref("workspaces/" + info.ws + "/integrations/jira").remove().catch(function () { /* ignore */ });
+          toast(L("Jira disconnected", "Jira desconectado")); close();
+        });
+      };
+    });
+  }
+  function jiraImportDialog() {
+    const PJ = (data.settings && data.settings.jira) || {};
+    modal("<h2>" + L("Import from Jira", "Importar do Jira") + '</h2><form class="pl-form" id="jiF"><label>' + L("Project", "Projeto") + '<select name="proj"><option value="">' + L("Loading projects…", "Carregando projetos…") + "</option></select></label>" +
+      '<label>JQL<textarea name="jql" rows="3" placeholder="project = ABC ORDER BY Rank ASC">' + esc(PJ.jql || "") + "</textarea></label>" +
+      '<label class="chk"><input type="checkbox" name="push"' + (PJ.push === false ? "" : " checked") + "> " + L("Send changes made here back to Jira (title, status, start and due dates)", "Enviar para o Jira as alterações feitas aqui (título, status, datas de início e prazo)") + "</label>" +
+      '<p class="muted small">' + L("Epics become epics/phases, sub-tasks keep their parent. Items already imported are updated, nothing is duplicated.", "Épicos viram épicos/fases e subtarefas mantêm o pai. Itens já importados são atualizados, nada é duplicado.") + "</p>" +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Import", "Importar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#jiF");
+      notify("jira-projects", {}).then(function (j) {
+        if (!j || !j.ok) { f.proj.innerHTML = '<option value="">' + esc((j && j.error) || "error") + "</option>"; return; }
+        f.proj.innerHTML = '<option value="">' + L("— choose a project or write JQL —", "— escolha um projeto ou escreva o JQL —") + "</option>" + j.projects.map(function (p) { return '<option value="' + esc(p.key) + '">' + esc(p.name) + " (" + esc(p.key) + ")</option>"; }).join("");
+      });
+      f.proj.onchange = function () { if (f.proj.value) f.jql.value = 'project = "' + f.proj.value + '" ORDER BY Rank ASC'; };
+      f.onsubmit = function (e) {
+        e.preventDefault(); const jql = f.jql.value.trim(); if (!jql) return toast(L("Choose a project or write the JQL", "Escolha um projeto ou escreva o JQL"));
+        const b = f.querySelector(".pl-btn.primary"); b.disabled = true; b.textContent = L("Importing…", "Importando…");
+        jiraRun(jql, f.push.checked).then(function (ok) { if (ok) close(); else { b.disabled = false; b.textContent = L("Import", "Importar"); } });
+      };
+    });
+  }
+  function jiraRun(jql, push) {
+    toast(L("Talking to Jira…", "Conversando com o Jira…"));
+    return notify("jira-import", { jql: jql }).then(function (j) {
+      if (!j || !j.ok) { toast(L("Jira: ", "Jira: ") + ((j && j.error) || "error")); return false; }
+      return mergeJira(j.issues).then(function (n) {
+        return save("settings/jira", { jql: jql, push: !!push, lastSync: Date.now(), site: j.site }).then(function () {
+          toast(n.created + L(" new, ", " novos, ") + n.updated + L(" updated from Jira", " atualizados do Jira")); return true;
+        });
+      });
+    });
+  }
+  function mergeJira(issues) {
+    const ss = statuses(), types = method().types, byKey = {}, u = {}, res = { created: 0, updated: 0 };
+    items().forEach(function (i) { if (i.ext && i.ext.source === "jira" && i.ext.key) byKey[i.ext.key] = i.id; });
+    const emails = {}; Object.keys(members).forEach(function (k) { emails[members[k].email.toLowerCase()] = members[k].email; });
+    function tp(x) {
+      const n = (x.type || "").toLowerCase();
+      if (x.level >= 1 || /epic|épico/.test(n)) return types.indexOf("epic") >= 0 ? "epic" : "phase";
+      if (/bug|defeito/.test(n)) return types.indexOf("bug") >= 0 ? "bug" : "task";
+      if (/story|história|historia/.test(n)) return types.indexOf("story") >= 0 ? "story" : "task";
+      if (/milestone|marco/.test(n)) return "milestone";
+      return "task";
+    }
+    function st(x) {
+      const exact = ss.find(function (s) { return s.name.toLowerCase() === (x.status || "").toLowerCase(); }); if (exact) return exact.id;
+      const c = { new: "todo", indeterminate: "doing", done: "done" }[x.cat] || "todo";
+      return (ss.find(function (s) { return s.cat === c; }) || ss[0]).id;
+    }
+    issues.forEach(function (x, i) { if (!byKey[x.key]) { byKey[x.key] = db.ref().push().key; x._new = true; } });
+    issues.forEach(function (x, i) {
+      const id = byKey[x.key], P = "items/" + id + "/", o = {
+        title: x.title, type: tp(x), status: st(x), key: x.key,
+        start: x.start || x.due || null, end: x.due || x.start || null,
+        assignee: x.assignee && emails[x.assignee.toLowerCase()] ? emails[x.assignee.toLowerCase()] : (x._new ? null : undefined),
+        points: x.points == null ? null : Number(x.points),
+        parent: x.parent && byKey[x.parent] ? byKey[x.parent] : null,
+        ext: { source: "jira", key: x.key, url: x.url, assigneeName: x.assigneeName || null }
+      };
+      if (st(x) && ss.find(function (s) { return s.id === o.status && s.cat === "done"; })) o.progress = 100;
+      if (x._new) { o.order = Date.now() + i; o.created = TS(); o.by = me.email; res.created++; } else res.updated++;
+      Object.keys(o).forEach(function (k) { if (o[k] !== undefined) u[P + k] = o[k]; });
+    });
+    return db.ref("planning/" + ID + "/data").update(u).then(function () { return res; });
   }
 
   /* ---------------- CSV import / export ---------------- */
@@ -647,7 +759,7 @@
       box.querySelector("#csvF").onchange = function (e) {
         const file = e.target.files[0]; if (!file) return;
         file.text().then(function (txt) {
-          const rowsA = parseCsv(txt.replace(/^﻿/, "")); if (rowsA.length < 2) return toast(L("Empty file", "Ficheiro vazio"));
+          const rowsA = parseCsv(txt.replace(/^﻿/, "")); if (rowsA.length < 2) return toast(L("Empty file", "Arquivo vazio"));
           const hdr = rowsA[0].map(function (h) { return h.trim().toLowerCase(); }), map = {};
           Object.keys(COLS).forEach(function (f) { const i = hdr.findIndex(function (h) { return COLS[f].indexOf(h) >= 0; }); if (i >= 0) map[f] = i; });
           if (map.title === undefined) return toast(L("No Summary/Title column found", "Não encontrei a coluna Summary/Título"));
@@ -726,19 +838,19 @@
 
   /* ---------------- boot ---------------- */
   function gate(title, text) {
-    app.innerHTML = '<div class="pl-gate"><span class="pl-logo">CM</span><h1>' + esc(title) + "</h1><p>" + esc(text) + '</p><a class="pl-btn primary" href="../workspaces/">' + L("Go to my boards", "Ir para os meus quadros") + "</a></div>";
+    app.innerHTML = '<div class="pl-gate"><span class="pl-logo">CM</span><h1>' + esc(title) + "</h1><p>" + esc(text) + '</p><a class="pl-btn primary" href="../workspaces/">' + L("Go to my boards", "Ir para meus quadros") + "</a></div>";
   }
   function start() {
-    if (!ID) return gate(L("Planning not found", "Planeamento não encontrado"), L("The link is incomplete.", "O link está incompleto."));
-    if (!A || !A.enabled) return gate(L("Sign-in required", "É preciso iniciar sessão"), L("Planning needs the online workspace.", "O planeamento precisa do workspace online."));
+    if (!ID) return gate(L("Planning not found", "Planejamento não encontrado"), L("The link is incomplete.", "O link está incompleto."));
+    if (!A || !A.enabled) return gate(L("Sign-in required", "É preciso fazer login"), L("Planning needs the online workspace.", "O planejamento precisa do workspace online."));
     A.ready().then(function (user) {
-      if (!user) return gate(L("Sign in to continue", "Inicie sessão para continuar"), L("Open “My boards”, sign in with the invited e-mail and come back to this link.", "Abra “Os meus quadros”, entre com o e-mail convidado e volte a este link."));
+      if (!user) return gate(L("Sign in to continue", "Faça login para continuar"), L("Open “My boards”, sign in with the invited e-mail and come back to this link.", "Abra “Meus quadros”, entre com o e-mail convidado e volte a este link."));
       me = user; db = A.db();
       return Promise.all([A.isAdmin(), db.ref("planning/" + ID + "/info").once("value")]).then(function (r) {
         isAdm = r[0]; info = r[1].val();
-        if (!info) return gate(L("Planning not found", "Planeamento não encontrado"), L("It may have been deleted, or you don't have access.", "Pode ter sido apagado, ou não tem acesso."));
+        if (!info) return gate(L("Planning not found", "Planejamento não encontrado"), L("It may have been deleted, or you don't have access.", "Pode ter sido excluído, ou não tem acesso."));
         return db.ref("workspaces/" + info.ws).once("value").then(function (s) {
-          const w = s.val() || {}; wsInfo = w.info || {}; members = w.members || {};
+          const w = s.val() || {}; wsInfo = w.info || {}; members = w.members || {}; wsInteg = w.integrations || {};
           const mk = A.key(user.email), m = members[mk];
           if (!members[mk] && (isAdm || wsInfo.owner === mk)) members[mk] = { email: user.email, name: user.displayName || user.email.split("@")[0], role: "editor" };
           canEdit = isAdm || wsInfo.owner === mk || !!(m && m.role === "editor" && (!m.expires || m.expires > Date.now()));
@@ -746,7 +858,8 @@
           db.ref("planning/" + ID + "/data").on("value", function (snap) {
             data = snap.val() || { settings: {}, items: {}, sprints: {} };
             if (!data.items) data.items = {}; if (!data.settings) data.settings = {};
-            if (!document.getElementById("view")) shell(); else renderView();
+            const hasJ = !!(data.settings.jira);
+            if (!document.getElementById("view") || hasJ !== !!document.getElementById("jiraSync") && canEdit) shell(); else renderView();
           }, function (e) { gate(L("No access", "Sem acesso"), e.message); });
         }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "O seu acesso a este workspace pode ter terminado.")); });
       }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "O seu acesso a este workspace pode ter terminado.")); });
