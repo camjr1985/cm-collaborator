@@ -46,6 +46,39 @@
       '<span class="bc-t"><b class="no-i18n">' + esc(b.title || id) + '</b><span class="muted small no-i18n">' + esc(wsName || tplName(b.template)) + "</span></span></a>";
   }
   let ME = null, PLAN = null, OWNED = {};
+  function planRow(pl) {
+    const ids = Object.keys(pl || {}).sort(function (a, b) { return (pl[b].created || 0) - (pl[a].created || 0); });
+    if (!ids.length) return "";
+    const M = window.PLAN_METHODS || {};
+    return '<div class="plan-row"><span class="pr-h">🗺️ Planning</span>' + ids.map(function (id) {
+      const p = pl[id], m = M[p.method] || {};
+      return '<a class="plan-card board-card" data-title="' + esc((p.title || "").toLowerCase()) + '" href="../planning/?id=' + encodeURIComponent(id) + '"><span class="pc-ic">' + (m.icon || "🗺️") + '</span><span class="bc-t"><b class="no-i18n">' + esc(p.title || id) + '</b><span class="muted small">' + esc(m.name || "") + "</span></span></a>";
+    }).join("") + "</div>";
+  }
+  function planDialog(wss, presetWs) {
+    const canIn = function (id) { return PLAN === "admin" || isOwner(id, wss[id]); };
+    const wsIds = Object.keys(wss || {}).filter(canIn);
+    const M = window.PLAN_METHODS, order = window.PLAN_ORDER;
+    document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="planDlg"><div class="card plan-new"><h2>' + esc(LL("New planning", "Novo planeamento")) + '</h2><p class="muted small">' + esc(LL("Choose how you want to plan. You can change columns and workflow later.", "Escolha como quer planear. Pode mudar colunas e fluxo depois.")) + '</p><form id="planForm">' +
+      '<div class="pm-grid">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="method" value="' + k + '"' + (i === 0 ? " checked" : "") + '><span class="pm-ic">' + m.icon + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div>" +
+      '<label class="lbl-f">' + esc(LL("Name", "Nome")) + '<input name="title" required autocomplete="off" placeholder="' + esc(LL("e.g. Product roadmap 2027", "ex.: Roadmap do produto 2027")) + '"></label>' +
+      '<label class="lbl-f">Workspace<select name="ws">' + wsIds.map(function (id) { return '<option value="' + id + '"' + (id === presetWs ? " selected" : "") + ">" + esc(wss[id].info.name) + "</option>"; }).join("") + "</select></label>" +
+      '<div class="row-end"><button type="button" class="btn" id="planX">' + esc(LL("Cancel", "Cancelar")) + '</button><button class="btn primary">' + esc(LL("Create planning", "Criar planeamento")) + "</button></div></form></div></div>");
+    const d = document.getElementById("planDlg"), f = document.getElementById("planForm");
+    function close() { d.remove(); }
+    document.getElementById("planX").onclick = close; d.onclick = function (e) { if (e.target === d) close(); };
+    setTimeout(function () { f.title.focus(); }, 30);
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      const title = f.title.value.trim(), ws = f.ws.value, method = f.method.value; if (!title || !ws) return;
+      const id = (slug(title) || "planning") + "-" + rnd(), TS = window.firebase.database.ServerValue.TIMESTAMP, me = A.user(), u = {};
+      u["planning/" + id + "/info"] = { title: title, ws: ws, method: method, created: TS, createdBy: me.email };
+      u["planning/" + id + "/data"] = window.PLAN_INITIAL(method, title);
+      u["workspaces/" + ws + "/plannings/" + id] = { title: title, method: method, created: TS };
+      f.querySelector(".btn.primary").disabled = true;
+      A.db().ref().update(u).then(function () { location.href = "../planning/?id=" + encodeURIComponent(id); }, function (err) { f.querySelector(".btn.primary").disabled = false; toast(err.message); });
+    };
+  }
   function isOwner(id, w) { return !!(w && w.info && ME && w.info.owner === ME); }
   function wsSection(id, w, adminAll) {
     const admin = adminAll || isOwner(id, w);
@@ -53,10 +86,10 @@
     const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
     const name = (w.info || {}).name || id;
     return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + "</span>" +
-      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><a class="btn sm ghost" href="../admin/#ws-' + id + '">👥 <span>Manage people</span></a>' : "") +
+      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">🗺️ ' + esc(LL("New planning", "Novo planeamento")) + '</button><a class="btn sm ghost" href="../admin/#ws-' + id + '">👥 <span>Manage people</span></a>' : "") +
       (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + "</div>" +
       (ids.length ? '<div class="board-grid">' + ids.map(function (b) { return boardCard(b, boards[b], tplName(boards[b].template)); }).join("") + "</div>"
-        : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
+        : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + planRow(w.plannings) + "</section>";
   }
   function searchBar() {
     return '<div class="hub-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="hubSearch" type="search" placeholder="' + esc(t("Search boards")) + '"></div>';
@@ -262,6 +295,7 @@
         if (!admin && firstBeta && !welcomed) setTimeout(function () { welcomeDialog(user); }, 400);
         document.getElementById("soBtn").onclick = A.signOut;
         el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, wss); }; });
+        el.querySelectorAll("[data-newplan]").forEach(function (b) { b.onclick = function () { planDialog(wss, b.dataset.newplan); }; });
         el.querySelectorAll("[data-newin]").forEach(function (b) {
           b.onclick = function () {
             const strip = el.querySelector(".tpl-strip");

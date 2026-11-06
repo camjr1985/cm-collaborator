@@ -415,3 +415,16 @@ a.stat { text-decoration: none !important; color: inherit !important; }
 .modal-lite .wel-card { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
 .wel-card h2 { font-size: clamp(20px, 4.6vw, 26px); margin: 6px 0 8px; }
 .wel-card .row-end { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+/* v9 – planning in hub */
+.plan-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+.plan-row .pr-h { font-weight: 700; font-size: 13px; color: var(--ink-2); margin-right: 4px; }
+.plan-card { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; padding: 10px 14px; min-width: 220px; }
+.plan-card .pc-ic { font-size: 22px; }
+.plan-new { width: min(720px, 100%) !important; max-height: calc(100dvh - 32px); overflow: auto; }
+.pm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.pm-opt { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; position: relative; }
+.pm-opt input { position: absolute; opacity: 0; }
+.pm-opt:has(input:checked) { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(232,196,104,.35); }
+.pm-opt .pm-ic { font-size: 24px; }
+.plan-new .lbl-f { margin-top: 10px; }

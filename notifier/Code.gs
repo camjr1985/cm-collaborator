@@ -32,6 +32,7 @@ function doPost(e) {
     var req = JSON.parse(e.postData.contents || "{}");
     var brand = String(req.brand || "").replace(/[^\w À-ÿ&.·-]/g, "").trim().slice(0, 40) || CFG.brand;
     var who = verify(req.idToken);
+    if (req.kind === "assign" || req.kind === "due") return json(planNotify(req, who, brand));
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
     var info = get("workspaces/" + wsId + "/info", req.idToken) || {};
@@ -139,4 +140,59 @@ function testToMe() {
   var me = Session.getActiveUser().getEmail();
   var mail = welcome({ email: me, name: "Teste", expires: Date.now() + 7 * 864e5 }, { name: "Design & UX – Beta test" }, "pt");
   MailApp.sendEmail(me, mail.subject, mail.text, { name: CFG.brand, htmlBody: mail.html });
+}
+
+/* ---------------- Planning notifications (assignment, deadlines) ---------------- */
+function planNotify(req, who, brand) {
+  var tok = req.idToken, plan = String(req.plan || "");
+  if (!/^[A-Za-z0-9_-]{1,90}$/.test(plan)) throw new Error("bad planning");
+  var pinfo = get("planning/" + plan + "/info", tok);
+  if (!pinfo || !pinfo.ws) throw new Error("planning not found");
+  var wsId = pinfo.ws, winfo = get("workspaces/" + wsId + "/info", tok) || {}, members = get("workspaces/" + wsId + "/members", tok) || {};
+  var me = key(who.email), isAdmin = get("admins/" + me, tok) === true, mm = members[me];
+  var canEdit = isAdmin || winfo.owner === me || (mm && mm.role === "editor" && (!mm.expires || mm.expires > Date.now()));
+  if (!canEdit) throw new Error("not allowed");
+  var data = get("planning/" + plan + "/data", tok) || {}, items = data.items || {}, sts = (data.settings || {}).statuses || [];
+  var stName = function (id) { for (var i = 0; i < sts.length; i++) if (sts[i].id === id) return sts[i].name; return id || ""; };
+  var stCat = function (id) { for (var i = 0; i < sts.length; i++) if (sts[i].id === id) return sts[i].cat; return "todo"; };
+  var isMember = function (email) { var m = members[key(email)]; return (m && (!m.expires || m.expires > Date.now())) || key(email) === winfo.owner || (winfo.ownerEmail && winfo.ownerEmail.toLowerCase() === String(email).toLowerCase()); };
+  var nameOf = function (email) { var m = members[key(email)]; return (m && m.name) || String(email).split("@")[0]; };
+  var pt = req.lang !== "en", link = CFG.site + "planning/?id=" + encodeURIComponent(plan);
+  var byName = (members[me] && members[me].name) || who.displayName || String(who.email).split("@")[0];
+  var fd = function (s) { return s ? s.split("-").reverse().join("/") : "–"; };
+  var sent = [];
+  function send(to, subject, introHtml, rows) {
+    var table = '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:12px 0">' +
+      '<tr style="background:#f3f5f9;text-align:left"><th style="padding:8px">' + (pt ? "Item" : "Item") + '</th><th style="padding:8px">' + (pt ? "Estado" : "Status") + '</th><th style="padding:8px">' + (pt ? "Início" : "Start") + '</th><th style="padding:8px">' + (pt ? "Prazo" : "Due") + "</th></tr>" +
+      rows.map(function (r) { return '<tr style="border-top:1px solid #e3e7ef"><td style="padding:8px"><b>' + esc(r.key || "") + "</b> " + esc(r.title) + '</td><td style="padding:8px">' + esc(stName(r.status)) + '</td><td style="padding:8px">' + fd(r.start) + '</td><td style="padding:8px;' + (r.late ? "color:#e5484d;font-weight:bold" : "") + '">' + fd(r.end) + "</td></tr>"; }).join("") + "</table>";
+    var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:620px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
+      '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + ' · Planning</div><div style="padding:22px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
+      "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + introHtml + "</p>" + table +
+      '<p style="text-align:center;margin:20px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planeamento" : "Open the planning") + " →</a></p></div>" +
+      '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Notificação automática do " : "Automatic notification from ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
+    var text = html.replace(/<\/tr>|<\/p>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
+    var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+    MailApp.sendEmail(to, subject, text, opt); sent.push(to);
+  }
+  if (req.kind === "assign") {
+    var it = items[String(req.item || "")];
+    if (!it || !it.assignee || !isMember(it.assignee)) return { ok: true, sent: [], skipped: ["not a member"] };
+    if (String(it.assignee).toLowerCase() === String(who.email).toLowerCase()) return { ok: true, sent: [] };
+    send(it.assignee, (pt ? "Atribuído a si: " : "Assigned to you: ") + (it.key ? it.key + " · " : "") + it.title,
+      esc(byName) + (pt ? " atribuiu-lhe um item no planeamento <b>“" : " assigned you an item in the planning <b>“") + esc(pinfo.title) + "”</b>.", [it]);
+  } else {
+    var today = Utilities.formatDate(new Date(), "Europe/Lisbon", "yyyy-MM-dd"), lim = Utilities.formatDate(new Date(Date.now() + 3 * 864e5), "Europe/Lisbon", "yyyy-MM-dd");
+    var per = {};
+    Object.keys(items).forEach(function (k) {
+      var x = items[k]; if (!x.assignee || !x.end || stCat(x.status) === "done" || x.end > lim) return;
+      if (!isMember(x.assignee)) return;
+      x.late = x.end < today; (per[x.assignee] = per[x.assignee] || []).push(x);
+    });
+    Object.keys(per).slice(0, CFG.maxPerCall).forEach(function (to) {
+      var list = per[to].sort(function (a, b) { return a.end < b.end ? -1 : 1; }), late = list.filter(function (x) { return x.late; }).length;
+      send(to, (pt ? "Prazos no planeamento “" : "Deadlines in the planning “") + pinfo.title + "”" + (late ? (pt ? " – " + late + " em atraso" : " – " + late + " overdue") : ""),
+        (pt ? "Estes itens atribuídos a si estão em atraso ou vencem nos próximos 3 dias no planeamento <b>“" : "These items assigned to you are overdue or due in the next 3 days in the planning <b>“") + esc(pinfo.title) + "”</b>.", list);
+    });
+  }
+  return { ok: true, sent: sent, quota: MailApp.getRemainingDailyQuota() };
 }
