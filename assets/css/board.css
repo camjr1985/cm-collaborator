@@ -477,3 +477,34 @@ body.canvas-dark .frameobj .ftitle .txt { color: #fff; background: rgba(14,26,51
 @keyframes newpulse { 0% { box-shadow: 0 0 0 0 rgba(255,95,109,.55); } 70% { box-shadow: 0 0 0 7px rgba(255,95,109,0); } 100% { box-shadow: 0 0 0 0 rgba(255,95,109,0); } }
 @media (prefers-reduced-motion: reduce) { .new-badge, .new-dot { animation: none; } }
 #tbAI { position: relative; overflow: visible; }
+
+/* ===== v4 visual identity: 3D post-its, Visio-like shapes and connectors ===== */
+:root { --ink-flow: #3B4A6B; }
+/* post-it with depth: soft top light, adhesive band, bottom lift and curled shadow */
+.sticky { border-radius: 3px 3px 4px 4px;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,.075) 0, rgba(0,0,0,0) 13%),
+    linear-gradient(175deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.08) 38%, rgba(0,0,0,0) 62%, rgba(0,0,0,.07) 100%);
+  box-shadow: 0 1px 1px rgba(16,24,40,.10), 0 2px 4px -1px rgba(16,24,40,.10), 6px 12px 14px -10px rgba(16,24,40,.35), -2px 10px 14px -12px rgba(16,24,40,.25);
+}
+.sticky::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(315deg, rgba(0,0,0,.10) 0, rgba(0,0,0,.04) 9px, rgba(255,255,255,0) 10px); }
+.sticky:hover { box-shadow: 0 2px 2px rgba(16,24,40,.10), 0 6px 12px -2px rgba(16,24,40,.16), 0 18px 26px -12px rgba(16,24,40,.34); transform: translateY(-1px); }
+.sticky.lifting { box-shadow: 0 18px 36px rgba(16,24,40,.28); transform: rotate(-1.2deg) translateY(-3px); }
+.sticky .txt { font-family: var(--font); font-weight: 500; color: #1b2235; letter-spacing: -.005em; text-shadow: 0 1px 0 rgba(255,255,255,.25); }
+.sticky .rz { z-index: 2; }
+/* Visio-like shapes: crisp slate outline derived from the fill, soft gradient and drop shadow */
+.shapeobj { border: 1.6px solid color-mix(in srgb, var(--fc, #fff) 45%, var(--ink-flow));
+  background-image: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 55%, rgba(0,0,0,.035));
+  box-shadow: 0 1px 1px rgba(16,24,40,.08), 0 4px 10px -3px rgba(16,24,40,.18); }
+.shapeobj[data-shape="round"] { border-radius: 10px; }
+.shapeobj .shp { stroke: color-mix(in srgb, var(--fc, #fff) 45%, var(--ink-flow)); stroke-width: 1.6; filter: drop-shadow(0 3px 4px rgba(16,24,40,.16)); }
+.shapeobj[data-shape="diamond"], .shapeobj[data-shape="triangle"], .shapeobj[data-shape="hexagon"] { background-image: none; box-shadow: none; }
+.shapeobj .txt { font-weight: 600; color: inherit; letter-spacing: -.005em; }
+.shapeobj:hover { box-shadow: 0 1px 1px rgba(16,24,40,.08), 0 8px 18px -6px rgba(16,24,40,.24); }
+/* connectors */
+.arrowobj .ln { stroke-linejoin: round; }
+.arrowobj .hd { stroke: none; }
+/* frames: cleaner card */
+.frameobj { border-radius: 8px; box-shadow: 0 1px 2px rgba(20,24,50,.06), 0 0 0 1px rgba(20,24,50,.08), 0 10px 30px -18px rgba(20,24,50,.25); }
+@media (prefers-reduced-motion: reduce) { .sticky:hover { transform: none; } }

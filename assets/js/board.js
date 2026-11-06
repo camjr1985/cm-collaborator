@@ -19,10 +19,10 @@
   let T = null, W = 1600, H = 1000;
   const VOTES = window.CMCOLLAB_VOTES_PER_USER || 5;
   const ROOT = CFG.root || "./";
-  const PALETTE = ["#FFF59D", "#FFCF8A", "#F7A8B0", "#F6C1E4", "#CDBDF6", "#A9D1F7", "#9FE3D3", "#C8EBA1", "#E6E6E6"];
+  const PALETTE = ["#FFE680", "#FFC46B", "#FF9E8F", "#F6A8D2", "#C3B1FF", "#8EC5FF", "#7FDCC0", "#B9E48A", "#E4E8EF"];
   const TEXT_COLORS = ["#1c2033", "#e5484d", "#f76b15", "#12a594", "#4262ff", "#8e4ec6", "#ffffff"];
   const FRAME_COLORS = ["#ffffff", "#f4f5f8", "#fff8d6", "#eaf7dc", "#e3f0fd", "#fde7e9", "#f4eefe", "#1c2033"];
-  const FILL_COLORS = ["#ffffff", "#FFF59D", "#FFCF8A", "#F7A8B0", "#CDBDF6", "#A9D1F7", "#9FE3D3", "#C8EBA1", "#1c2033"];
+  const FILL_COLORS = ["#ffffff", "#DCEBFF", "#E3F7EF", "#FFF4D1", "#FFE3DD", "#EEE8FF", "#8EC5FF", "#7FDCC0", "#FFC46B", "#1E2A4A"];
   const SHAPES = ["rect", "round", "pill", "ellipse", "diamond", "triangle", "hexagon"];
   const PEOPLE_COLORS = ["#4262FF", "#E5484D", "#12A594", "#F76B15", "#8E4EC6", "#D6409F", "#0090FF", "#3E9B4F"];
   const t = function (s) { return window.MBt ? window.MBt(s) : s; };
@@ -376,7 +376,30 @@
     const cb = rb ? { x: rb.x + rb.w / 2, y: rb.y + rb.h / 2 } : { x: o.x2 || 0, y: o.y2 || 0 };
     return { a: ra ? clipToRect(ra, ca, cb) : ca, b: rb ? clipToRect(rb, cb, ca) : cb };
   }
+  function elbowPts(o) {
+    const ra = boundRect(o.from), rb = boundRect(o.to);
+    const ca = ra ? { x: ra.x + ra.w / 2, y: ra.y + ra.h / 2 } : { x: o.x1 || 0, y: o.y1 || 0 };
+    const cb = rb ? { x: rb.x + rb.w / 2, y: rb.y + rb.h / 2 } : { x: o.x2 || 0, y: o.y2 || 0 };
+    const dx = cb.x - ca.x, dy = cb.y - ca.y;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const a = ra ? { x: dx >= 0 ? ra.x + ra.w : ra.x, y: ca.y } : ca, b = rb ? { x: dx >= 0 ? rb.x : rb.x + rb.w, y: cb.y } : cb, mx = (a.x + b.x) / 2;
+      return Math.abs(a.y - b.y) < 1 ? [a, b] : [a, { x: mx, y: a.y }, { x: mx, y: b.y }, b];
+    }
+    const a = ra ? { x: ca.x, y: dy >= 0 ? ra.y + ra.h : ra.y } : ca, b = rb ? { x: cb.x, y: dy >= 0 ? rb.y : rb.y + rb.h } : cb, my = (a.y + b.y) / 2;
+    return Math.abs(a.x - b.x) < 1 ? [a, b] : [a, { x: a.x, y: my }, { x: b.x, y: my }, b];
+  }
+  function roundedPath(P, r) {
+    let d = "M" + P[0].x + " " + P[0].y;
+    for (let i = 1; i < P.length - 1; i++) {
+      const p0 = P[i - 1], p1 = P[i], p2 = P[i + 1];
+      const l1 = Math.hypot(p1.x - p0.x, p1.y - p0.y), l2 = Math.hypot(p2.x - p1.x, p2.y - p1.y), rr = Math.min(r, l1 / 2, l2 / 2);
+      const s = { x: p1.x - (p1.x - p0.x) / (l1 || 1) * rr, y: p1.y - (p1.y - p0.y) / (l1 || 1) * rr }, e = { x: p1.x + (p2.x - p1.x) / (l2 || 1) * rr, y: p1.y + (p2.y - p1.y) / (l2 || 1) * rr };
+      d += " L" + s.x + " " + s.y + " Q" + p1.x + " " + p1.y + " " + e.x + " " + e.y;
+    }
+    const L = P[P.length - 1]; return d + " L" + L.x + " " + L.y;
+  }
   function renderArrow(o, el) {
+    if (o.route === "elbow") return renderElbow(o, el);
     const p = arrowPts(o), pad = 30;
     const x0 = Math.min(p.a.x, p.b.x) - pad, y0 = Math.min(p.a.y, p.b.y) - pad;
     const w = Math.abs(p.a.x - p.b.x) + pad * 2, h = Math.abs(p.a.y - p.b.y) + pad * 2;
@@ -404,6 +427,36 @@
     const hs = el.querySelectorAll(".ah");
     hs[0].style.left = ax + "px"; hs[0].style.top = ay + "px";
     hs[1].style.left = bx + "px"; hs[1].style.top = by + "px";
+  }
+  function renderElbow(o, el) {
+    const P0 = elbowPts(o), pad = 30;
+    const xs = P0.map(function (q) { return q.x; }), ys = P0.map(function (q) { return q.y; });
+    const x0 = Math.min.apply(null, xs) - pad, y0 = Math.min.apply(null, ys) - pad;
+    const w = Math.max.apply(null, xs) - x0 + pad, h = Math.max.apply(null, ys) - y0 + pad;
+    el.style.left = x0 + "px"; el.style.top = y0 + "px"; el.style.width = w + "px"; el.style.height = h + "px";
+    const P = P0.map(function (q) { return { x: q.x - x0, y: q.y - y0 }; });
+    const svg = el.querySelector("svg");
+    svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    const B = P[P.length - 1], A = P[P.length - 2], ang = Math.atan2(B.y - A.y, B.x - A.x), hl = 13, hw = 6.5;
+    const head = o.head !== false && Math.hypot(B.x - A.x, B.y - A.y) > hl;
+    const Q = P.slice(); if (head) Q[Q.length - 1] = { x: B.x - Math.cos(ang) * hl * 0.8, y: B.y - Math.sin(ang) * hl * 0.8 };
+    svg.querySelector(".hit").setAttribute("d", roundedPath(P, 10));
+    const ln = svg.querySelector(".ln");
+    ln.setAttribute("d", roundedPath(Q, 10));
+    ln.setAttribute("stroke", o.color || "#3B4A6B");
+    ln.setAttribute("stroke-width", o.sw || 2);
+    ln.setAttribute("stroke-linejoin", "round");
+    if (o.dash) ln.setAttribute("stroke-dasharray", "8 6"); else ln.removeAttribute("stroke-dasharray");
+    const hd = svg.querySelector(".hd");
+    if (head) {
+      const lx = B.x - Math.cos(ang) * hl + Math.sin(ang) * hw, ly = B.y - Math.sin(ang) * hl - Math.cos(ang) * hw;
+      const rx = B.x - Math.cos(ang) * hl - Math.sin(ang) * hw, ry = B.y - Math.sin(ang) * hl + Math.cos(ang) * hw;
+      hd.setAttribute("points", B.x + "," + B.y + " " + lx + "," + ly + " " + rx + "," + ry);
+      hd.setAttribute("fill", o.color || "#3B4A6B"); hd.style.display = "";
+    } else hd.style.display = "none";
+    const hs = el.querySelectorAll(".ah");
+    hs[0].style.left = P[0].x + "px"; hs[0].style.top = P[0].y + "px";
+    hs[1].style.left = B.x + "px"; hs[1].style.top = B.y + "px";
   }
   function refreshArrows(ids) {
     const set = {}; ids.forEach(function (k) { set[k] = 1; });
@@ -449,7 +502,7 @@
       el.style.color = o.color || "#1c2033";
       el.style.fontSize = (o.fs || 24) + "px";
     } else el.style.height = (o.h || 120) + "px";
-    if (type === "sticky") el.style.background = o.color || PALETTE[0];
+    if (type === "sticky") { el.style.background = ""; el.style.backgroundColor = o.color || PALETTE[0]; el.style.setProperty("--sc", o.color || PALETTE[0]); }
     else if (type === "frame") {
       el.style.background = o.color || "#ffffff";
       el.classList.toggle("darkframe", (o.color || "").toLowerCase() === "#1c2033");
@@ -462,7 +515,8 @@
       svg.innerHTML = shapeSvg(k);
       svg.style.display = poly ? "" : "none";
       svg.style.fill = o.color || "#ffffff";
-      el.style.background = poly ? "transparent" : (o.color || "#ffffff");
+      el.style.background = ""; el.style.backgroundColor = poly ? "transparent" : (o.color || "#ffffff");
+      el.style.setProperty("--fc", o.color || "#ffffff");
       el.style.color = o.tcolor || ((o.color || "").toLowerCase() === "#1c2033" ? "#ffffff" : "#1c2033");
       el.style.fontSize = (o.fs || 16) + "px";
     } else if (type === "icon") {
@@ -525,7 +579,7 @@
     if (type === "frame") Object.assign(base, { w: 800, h: 560, color: "#ffffff", title: t("Frame"), z: minZ() - 1 });
     if (type === "shape") Object.assign(base, { w: 180, h: 100, shape: placeShape, color: "#ffffff", text: "" });
     if (type === "icon") Object.assign(base, { w: 80, h: 80 });
-    if (type === "arrow") Object.assign(base, { head: true, color: "#1c2033" });
+    if (type === "arrow") Object.assign(base, { head: true, color: "#3B4A6B", route: "elbow" });
     return Object.assign(base, extra || {});
   }
   function createObj(o, extraChanges) {
@@ -608,7 +662,7 @@
       h += '<button class="cb txt" data-act="fs-" title="Smaller text">A−</button><button class="cb txt" data-act="fs+" title="Bigger text">A+</button><span class="sep v"></span>';
     }
     if (only("text")) h += swatches("color", TEXT_COLORS, one && (one.color || "#1c2033")) + '<button class="cb txt" data-act="fs-" title="Smaller text">A−</button><button class="cb txt" data-act="fs+" title="Bigger text">A+</button><span class="sep v"></span>';
-    if (only("arrow")) h += swatches("color", TEXT_COLORS, one && one.color) + '<button class="cb' + (one && one.head !== false ? " on" : "") + '" data-act="head" title="Arrow head">' + ico("head") + '</button><button class="cb txt' + (one && one.dash ? " on" : "") + '" data-act="dash" title="Dashed line">- -</button><span class="sep v"></span>';
+    if (only("arrow")) h += swatches("color", TEXT_COLORS, one && one.color) + '<button class="cb' + (one && one.head !== false ? " on" : "") + '" data-act="head" title="Arrow head">' + ico("head") + '</button><button class="cb txt' + (one && one.dash ? " on" : "") + '" data-act="dash" title="Dashed line">- -</button><button class="cb' + (one && one.route === "elbow" ? " on" : "") + '" data-act="route" title="Elbow connector (Visio style)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h7a2 2 0 0 1 2 2v8a2 2 0 0 0 2 2h5"/></svg></button><span class="sep v"></span>';
     if (only("icon") && !list.some(function (o) { return o.emoji; })) h += swatches("color", TEXT_COLORS.concat(["#e8c468"]), one && one.color);
     if (one && ["sticky", "image", "shape"].indexOf(typeOf(one)) >= 0) {
       const mine = one.votes && one.votes[me.id] ? one.votes[me.id] : 0;
@@ -666,6 +720,7 @@
     if (act === "shape") return commit(list.map(function (o) { return { path: "stickies/" + o.id + "/shape", value: c }; }));
     if (act === "head") return commit(list.map(function (o) { return { path: "stickies/" + o.id + "/head", value: o.head === false }; }));
     if (act === "dash") return commit(list.map(function (o) { return { path: "stickies/" + o.id + "/dash", value: !o.dash }; }));
+    if (act === "route") return commit(list.map(function (o) { return { path: "stickies/" + o.id + "/route", value: o.route === "elbow" ? null : "elbow" }; }));
     if (act === "fs+" || act === "fs-") {
       return commit(list.map(function (o) {
         const steps = [10, 12, 14, 16, 18, 24, 32, 44, 60, 80, 110];

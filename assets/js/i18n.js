@@ -300,6 +300,7 @@
     "Frame": "Frame",
     "Arrow head": "Ponta da seta",
     "Dashed line": "Linha tracejada",
+    "Elbow connector (Visio style)": "Conector em ângulo (estilo Visio)",
     "Insert a ready-made template into this board. Everything stays editable – move, recolour, add post-its.": "Insira um template pronto neste quadro. Tudo continua editável – mova, mude cores, adicione post-its.",
     "Template added – everything is editable": "Template adicionado – tudo é editável",
     "Icons": "Ícones",

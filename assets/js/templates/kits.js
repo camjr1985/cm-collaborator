@@ -26,7 +26,7 @@
       S: function (x, y, text, color, w, h) { const o = { id: "t" + (++n), type: "sticky", x: x, y: y, w: w || 130, h: h || 110, text: text || "", color: color || C.yellow }; out.push(o); return o.id; },
       T: function (x, y, text, fs, w, color) { const o = { id: "t" + (++n), type: "text", x: x, y: y, w: w || 600, fs: fs || 24, text: text, color: color || "#1c2033" }; out.push(o); return o.id; },
       Sh: function (x, y, w, h, shape, text, color, tcolor) { const o = { id: "t" + (++n), type: "shape", shape: shape || "rect", x: x, y: y, w: w, h: h, text: text || "", color: color || "#ffffff", tcolor: tcolor || "#1c2033" }; out.push(o); return o.id; },
-      A: function (from, to, head) { const o = { id: "t" + (++n), type: "arrow", from: from, to: to, x1: 0, y1: 0, x2: 0, y2: 0, color: "#1c2033", head: head !== false }; out.push(o); return o.id; },
+      A: function (from, to, head) { const o = { id: "t" + (++n), type: "arrow", from: from, to: to, x1: 0, y1: 0, x2: 0, y2: 0, color: "#3B4A6B", route: "elbow", head: head !== false }; out.push(o); return o.id; },
       I: function (x, y, size, name, color) { const o = { id: "t" + (++n), type: "icon", x: x, y: y, w: size, h: size, name: name, color: color || "#1c2033" }; out.push(o); return o.id; },
       SL: function (x, y, w, h, text, color, fs) { const o = { id: "t" + (++n), type: "shape", shape: "rect", align: "left", x: x, y: y, w: w, h: h, text: text || "", color: color || "#ffffff", tcolor: "#1c2033" }; if (fs) o.fs = fs; out.push(o); return o.id; },
       E: function (x, y, size, emoji) { const o = { id: "t" + (++n), type: "icon", x: x, y: y, w: size, h: size, emoji: emoji }; out.push(o); return o.id; }
