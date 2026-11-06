@@ -51,3 +51,31 @@ window.CMCOLLAB_AI = {
   recaptchaKey: "6Ld0ghAuAAAAAJWR24GvK5vExkmQPAg184s0obUr",
   dailyLimit: { free: 10, pro: 100, team: 300, enterprise: 1000, admin: 1000 }
 };
+
+/* "NEW" badges for recently launched features.
+ * To announce a new module, add one line: id: "YYYY-MM-DD" (launch date).
+ * The badge shows for NEW_DAYS after launch and disappears for each person as soon as they use the feature. */
+window.CMCOLLAB_NEW_DAYS = 30;
+window.CMCOLLAB_NEW = {
+  planning: "2026-11-06",      // Planning module (roadmap, Waterfall, Scrum, Kanban)
+  integrations: "2026-11-06",  // Jira, Azure DevOps and Kanbanize integrations
+  ai: "2026-11-05"             // ✨ AI assistant on boards
+};
+(function () {
+  function seenKey(id) { return "cmcollab:seen:" + id; }
+  window.CMIsNew = function (id) {
+    const d = (window.CMCOLLAB_NEW || {})[id]; if (!d) return false;
+    const age = (Date.now() - Date.parse(d + "T00:00:00Z")) / 86400000;
+    if (age < 0 || age > (window.CMCOLLAB_NEW_DAYS || 30)) return false;
+    try { return !localStorage.getItem(seenKey(id)); } catch (e) { return true; }
+  };
+  window.CMNewBadge = function (id, extra) {
+    if (!window.CMIsNew(id)) return "";
+    const pt = (function () { try { return (localStorage.getItem("cmcollab:lang") || navigator.language || "").toLowerCase().indexOf("pt") === 0; } catch (e) { return false; } })();
+    return '<span class="new-badge' + (extra ? " " + extra : "") + '" data-new-id="' + id + '">' + (pt ? "NOVO" : "NEW") + "</span>";
+  };
+  window.CMMarkSeen = function (id) {
+    try { localStorage.setItem(seenKey(id), String(Date.now())); } catch (e) { /* ignore */ }
+    document.querySelectorAll('.new-badge[data-new-id="' + id + '"]').forEach(function (b) { b.remove(); });
+  };
+})();

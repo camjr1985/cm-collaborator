@@ -164,7 +164,7 @@
       '<button class="tb" data-tool="arrow" title="Connector / arrow (L) – drag from one item to another">' + ico("arrow") + "</button>" +
       '<button class="tb" data-tool="frame" title="Frame (F) – drag to draw a white area">' + ico("frame") + "</button>" +
       '<button class="tb" id="tbIcons" title="Icons & emoji">' + ico("smile") + "</button>" +
-      '<button class="tb ai-tb" id="tbAI" title="AI assistant – build, suggest dynamics, analyse">' + ico("ai") + "</button>" +
+      '<button class="tb ai-tb" id="tbAI" title="AI assistant – build, suggest dynamics, analyse">' + ico("ai") + (window.CMNewBadge ? window.CMNewBadge("ai", "corner") : "") + "</button>" +
       '<button class="tb" id="tbTidy" title="Auto-align – tidy up post-its (select items or a frame; nothing selected = every frame)">' + ico("tidy") + "</button>" +
       '<div class="tool-fly"><button class="tb" id="tbImage" title="Image or GIF (I)">' + ico("image") + '</button><div class="fly menu" id="imgFly">' +
       '<button data-img="upload">' + ico("upload") + '<span>Upload image / GIF</span></button><button data-img="link">' + ico("link") + "<span>Image / GIF from a link</span></button></div></div>" +
@@ -1878,7 +1878,7 @@
     $("#shapeFly").onclick = function (e) { const b = e.target.closest("button"); if (b) { placeShape = b.dataset.shape; setTool("shape"); toast("Click on the board to place the shape"); } };
     $("#tbTemplates").onclick = templatesModal;
     $("#tbTidy").onclick = tidyButton;
-    $("#tbAI").onclick = function () { if (window.CMAI) window.CMAI.open(); else toast("AI assistant is not available"); };
+    $("#tbAI").onclick = function () { if (window.CMMarkSeen) window.CMMarkSeen("ai"); if (window.CMAI) window.CMAI.open(); else toast("AI assistant is not available"); };
     $("#tbIcons").onclick = iconModal;
     $("#tbImage").onclick = function () { if (!canEdit()) return viewerBlock(); $("#fileImage").click(); };
     $("#imgFly").onclick = function (e) {

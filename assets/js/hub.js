@@ -86,7 +86,7 @@
     const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
     const name = (w.info || {}).name || id;
     return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + "</span>" +
-      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">🗺️ ' + esc(LL("New planning", "Novo planejamento")) + '</button><a class="btn sm ghost" href="../admin/#ws-' + id + '">👥 <span>Manage people</span></a>' : "") +
+      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">🗺️ ' + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" href="../admin/#ws-' + id + '">👥 <span>Manage people</span></a>' : "") +
       (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + "</div>" +
       (ids.length ? '<div class="board-grid">' + ids.map(function (b) { return boardCard(b, boards[b], tplName(boards[b].template)); }).join("") + "</div>"
         : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + planRow(w.plannings) + "</section>";

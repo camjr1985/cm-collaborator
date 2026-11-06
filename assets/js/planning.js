@@ -131,7 +131,7 @@
       '<div class="pl-title"><span class="pl-ws">' + esc(wsInfo.name || info.ws) + " · " + m.icon + " " + esc(m.name) + '</span><h1>' + esc(info.title) + "</h1></div>" +
       '<nav class="pl-tabs">' + views.map(function (v) { return '<button data-view="' + v + '" class="' + (v === view ? "on" : "") + '">' + esc((m.label && m.label[v]) || VIEWN[v]) + "</button>"; }).join("") + "</nav>" +
       '<div class="pl-actions">' + (canEdit ? '<button class="pl-btn primary" id="newBtn">+ ' + L("Create", "Criar") + "</button>" : '<span class="pl-ro">' + L("View only", "Só leitura") + "</span>") +
-      '<button class="pl-btn icon" id="moreBtn" title="' + L("More", "Mais") + '">⋯</button></div></header>' +
+      '<button class="pl-btn icon" id="moreBtn" title="' + L("More", "Mais") + '">⋯' + (window.CMIsNew && window.CMIsNew("integrations") ? '<span class="new-dot" data-new-id="integrations"></span>' : "") + '</button></div></header>' +
       '<div class="pl-bar"><input id="q" type="search" placeholder="' + L("Search items", "Pesquisar itens") + '" value="' + esc(filter.q) + '">' +
       '<select id="who"><option value="">' + L("Everyone", "Todas as pessoas") + '</option><option value="_none"' + (filter.who === "_none" ? " selected" : "") + ">" + L("Unassigned", "Sem responsável") + "</option>" +
       Object.keys(who).sort().map(function (e) { return '<option value="' + esc(e) + '"' + (filter.who === e ? " selected" : "") + ">" + esc(memberName(e)) + "</option>"; }).join("") + "</select>" +
@@ -573,7 +573,7 @@
       (canEdit ? '<button data-act="import">📥 ' + L("Import CSV (Jira, Azure DevOps, Kanbanize, Excel)", "Importar CSV (Jira, Azure DevOps, Kanbanize, Excel)") + "</button>" : "") +
       '<button data-act="export">📤 ' + L("Export CSV", "Exportar CSV") + "</button>" +
       '<button data-act="print">🖨️ ' + L("Print / PDF", "Imprimir / PDF") + "</button>" +
-      '<button data-act="integrations">🔗 ' + L("Integrations (Jira, Azure DevOps, Kanbanize)", "Integrações (Jira, Azure DevOps, Kanbanize)") + "</button>" +
+      '<button data-act="integrations">🔗 ' + L("Integrations (Jira, Azure DevOps, Kanbanize)", "Integrações (Jira, Azure DevOps, Kanbanize)") + (window.CMNewBadge ? window.CMNewBadge("integrations") : "") + "</button>" +
       (owner ? '<button data-act="rename">✏️ ' + L("Rename", "Renomear") + "</button>" : "") +
       '</div><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Close", "Fechar") + "</button></div>", function (box, close) {
       box.querySelectorAll("[data-act]").forEach(function (b) {
@@ -637,6 +637,7 @@
       pick: L("Board", "Quadro"), query: null }
   };
   function integrationsDialog() {
+    if (window.CMMarkSeen) { window.CMMarkSeen("integrations"); document.querySelectorAll('.new-dot[data-new-id="integrations"]').forEach(function (d) { d.remove(); }); }
     const owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email));
     const card = function (k) {
       const P = PROV[k], C = wsInteg[k], S = data.settings && data.settings[k];
@@ -890,6 +891,7 @@
           if (!members[mk] && (isAdm || wsInfo.owner === mk)) members[mk] = { email: user.email, name: user.displayName || user.email.split("@")[0], role: "editor" };
           canEdit = isAdm || wsInfo.owner === mk || !!(m && m.role === "editor" && (!m.expires || m.expires > Date.now()));
           document.title = info.title + " · " + (window.CMCOLLAB_BRAND || "CM Collaborator");
+          if (window.CMMarkSeen) window.CMMarkSeen("planning");
           db.ref("planning/" + ID + "/data").on("value", function (snap) {
             data = snap.val() || { settings: {}, items: {}, sprints: {} };
             if (!data.items) data.items = {}; if (!data.settings) data.settings = {};
