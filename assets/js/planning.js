@@ -146,7 +146,7 @@
       '<div class="pl-bar"><input id="q" type="search" placeholder="' + L("Search items", "Pesquisar itens") + '" value="' + esc(filter.q) + '">' +
       '<select id="who"><option value="">' + L("Everyone", "Todas as pessoas") + '</option><option value="_none"' + (filter.who === "_none" ? " selected" : "") + ">" + L("Unassigned", "Sem responsável") + "</option>" +
       Object.keys(who).sort().map(function (e) { return '<option value="' + esc(e) + '"' + (filter.who === e ? " selected" : "") + ">" + esc(memberName(e)) + "</option>"; }).join("") + "</select>" +
-      (view === "timeline" ? '<div class="pl-seg" id="scale">' + [["week", L("Weeks", "Semanas")], ["month", L("Months", "Meses")], ["quarter", L("Quarters", "Trimestres")]].map(function (s) { return '<button data-s="' + s[0] + '" class="' + (scale === s[0] ? "on" : "") + '">' + s[1] + "</button>"; }).join("") + '</div><button class="pl-btn sm" id="todayBtn">' + L("Today", "Hoje") + "</button>" : "") +
+      (view === "timeline" ? tlToolbar() : "") +
       (canEdit ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button class="pl-btn sm" data-sync="' + k + '" title="' + L("Pull the latest from ", "Trazer as últimas alterações do ") + PROV[k].name + '">' + IC("sync", 14) + " " + PROV[k].short + "</button>"; }).join("") : "") +
       '<span class="pl-sum" id="sum"></span></div>' +
       hintBar() +
@@ -154,8 +154,7 @@
     app.querySelectorAll("[data-view]").forEach(function (b) { b.onclick = function () { view = b.dataset.view; try { localStorage.setItem("cmcollab:plview:" + ID, view); } catch (e) { /* ignore */ } shell(); }; });
     const q = document.getElementById("q"); q.oninput = function () { filter.q = q.value; renderView(); };
     document.getElementById("who").onchange = function (e) { filter.who = e.target.value; renderView(); };
-    const sc = document.getElementById("scale"); if (sc) sc.onclick = function (e) { const b = e.target.closest("button"); if (b) { scale = b.dataset.s; shell(); } };
-    const tb = document.getElementById("todayBtn"); if (tb) tb.onclick = function () { scrollToday(true); };
+    bindToolbar();
     const nb = document.getElementById("newBtn"); if (nb) nb.onclick = function (e) { e.stopPropagation(); createMenu(nb); };
     const hc = document.getElementById("hintGo"); if (hc) hc.onclick = function () { integrationsDialog(); };
     const hx = document.getElementById("hintX"); if (hx) hx.onclick = function () { try { localStorage.setItem("cmcollab:inthint:" + ID, "1"); } catch (x) { /* ignore */ } const h = document.getElementById("intHint"); if (h) h.remove(); };
@@ -176,13 +175,63 @@
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
-  /* ---------------- timeline / roadmap / Gantt ---------------- */
-  const PX = { week: 30, month: 9, quarter: 3.2 };
+  /* ---------------- timeline / roadmap / Gantt (v3 – zoom levels, density, markers, rollups) ----------------
+   * Inspired by Jira Cloud timeline (weeks/months/quarters, progress, dependencies, releases row),
+   * Jira Plans (3M / 1Y / Fit) and Businessmap initiatives timeline (sticky titles, delay indicator). */
+  const ZBASE = { day: 44, week: 20, month: 8, quarter: 3, year: 1.15 };
+  const ZORDER = ["day", "week", "month", "quarter", "year"];
+  const ZN = { day: L("Days", "Dias"), week: L("Weeks", "Semanas"), month: L("Months", "Meses"), quarter: L("Quarters", "Trimestres"), year: L("Year", "Ano") };
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+  let zoom = (function () { try { return JSON.parse(lsGet("cmcollab:plzoom")) || null; } catch (e) { return null; } })() || { unit: window.innerWidth < 760 ? "week" : "month", k: 1 };
+  let density = lsGet("cmcollab:pldensity") || "comfort";
+  let levelShow = lsGet("cmcollab:pllevel") || "all";
+  let leftW = Number(lsGet("cmcollab:plleft")) || 360;
+  let tlAnchor = null;
+  function pxDay() { return Math.max(0.5, Math.min(120, ZBASE[zoom.unit] * (zoom.k || 1))); }
+  function gran(px) { return px >= 30 ? "day" : px >= 12 ? "week" : px >= 4.5 ? "month" : px >= 1.8 ? "quarter" : "year"; }
+  function setZoom(z, anchorDate) { const r = document.getElementById("tlRight"); tlAnchor = anchorDate || (r ? centerDate(r) : null); zoom = z; lsSet("cmcollab:plzoom", JSON.stringify(zoom)); shell(); }
+  function centerDate(r) { const R = timeline._R; return R ? R.lo + (r.scrollLeft + r.clientWidth / 2) / R.px * DAY : null; }
+  function tlToolbar() {
+    return '<div class="pl-seg" id="zoomSeg">' + ZORDER.map(function (u) { return '<button data-z="' + u + '" class="' + (zoom.unit === u && Math.abs((zoom.k || 1) - 1) < 0.01 ? "on" : "") + '">' + ZN[u] + "</button>"; }).join("") + "</div>" +
+      '<div class="pl-seg zk"><button id="zOut" title="' + L("Zoom out", "Diminuir zoom") + '">−</button><button id="zIn" title="' + L("Zoom in (Ctrl + mouse wheel)", "Aumentar zoom (Ctrl + roda do mouse)") + '">+</button></div>' +
+      '<button class="pl-btn sm" id="zFit" title="' + L("Fit everything on screen", "Ajustar tudo na tela") + '">' + L("Fit", "Ajustar") + "</button>" +
+      '<button class="pl-btn sm" id="todayBtn">' + L("Today", "Hoje") + "</button>" +
+      '<select id="lvlSel" title="' + L("Levels shown", "Níveis exibidos") + '"><option value="all"' + (levelShow === "all" ? " selected" : "") + ">" + L("All levels", "Todos os níveis") + '</option><option value="epic"' + (levelShow === "epic" ? " selected" : "") + ">" + L("Initiatives and epics", "Iniciativas e épicos") + '</option><option value="initiative"' + (levelShow === "initiative" ? " selected" : "") + ">" + L("Initiatives only", "Só iniciativas") + "</option></select>" +
+      '<div class="pl-seg"><button id="expAll" title="' + L("Expand all", "Expandir tudo") + '">⊞</button><button id="colAll" title="' + L("Collapse all", "Recolher tudo") + '">⊟</button></div>' +
+      '<div class="pl-seg" id="densSeg"><button data-d="comfort" class="' + (density === "comfort" ? "on" : "") + '" title="' + L("Comfortable rows", "Linhas confortáveis") + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><button data-d="compact" class="' + (density === "compact" ? "on" : "") + '" title="' + L("Compact rows", "Linhas compactas") + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 9.5h16M4 14h16M4 18.5h16"/></svg></button></div>';
+  }
+  function bindToolbar() {
+    const zs = document.getElementById("zoomSeg"); if (!zs) return;
+    zs.onclick = function (e) { const b = e.target.closest("[data-z]"); if (b) setZoom({ unit: b.dataset.z, k: 1 }); };
+    document.getElementById("zIn").onclick = function () { stepZoom(1); };
+    document.getElementById("zOut").onclick = function () { stepZoom(-1); };
+    document.getElementById("zFit").onclick = fitZoom;
+    document.getElementById("todayBtn").onclick = function () { scrollToday(true); };
+    document.getElementById("lvlSel").onchange = function (e) { levelShow = e.target.value; lsSet("cmcollab:pllevel", levelShow); renderView(); };
+    document.getElementById("expAll").onclick = function () { collapsed = {}; renderView(); };
+    document.getElementById("colAll").onclick = function () { items().forEach(function (i) { if (isContainer(i)) collapsed[i.id] = true; }); renderView(); };
+    document.getElementById("densSeg").onclick = function (e) { const b = e.target.closest("[data-d]"); if (b) { density = b.dataset.d; lsSet("cmcollab:pldensity", density); shell(); } };
+  }
+  function stepZoom(dir) {
+    const px = pxDay() * (dir > 0 ? 1.35 : 1 / 1.35), u = gran(px);
+    setZoom({ unit: u, k: px / ZBASE[u] });
+  }
+  function fitZoom() {
+    let lo = Infinity, hi = -Infinity;
+    rows().forEach(function (r) { const sp = span(r.it); if (sp) { lo = Math.min(lo, sp.s); hi = Math.max(hi, sp.e + DAY); } });
+    if (!isFinite(lo)) return toast(L("Nothing scheduled yet.", "Ainda não há nada agendado."));
+    const r = document.getElementById("tlRight"), w = (r ? r.clientWidth : 900) - 40, px = w / Math.max(7, (hi - lo) / DAY + 4), u = gran(px);
+    setZoom({ unit: u, k: px / ZBASE[u] }, lo + (hi - lo) / 2);
+  }
+  function minLevel() { return levelShow === "initiative" ? 2 : levelShow === "epic" ? 1 : -1; }
   function rows() {
-    const out = [];
+    const out = [], ml = minLevel();
     const all = items().filter(function (i) { return !i.parent || !data.items[i.parent]; }).sort(function (a, b) { return byOrder(a, b); });
+    function visibleType(it) { return it.type === "milestone" || lvl(it.type) >= ml; }
     function walk(it, depth) {
-      const kids = children(it.id);
+      if (!visibleType(it)) return;
+      const kids = children(it.id).filter(visibleType);
       const show = matches(it) || kids.some(matches);
       if (!show) return;
       out.push({ it: it, depth: depth, kids: kids.length });
@@ -191,94 +240,175 @@
     all.forEach(function (i) { walk(i, 0); });
     return out;
   }
+  function descendants(id) { const out = []; children(id).forEach(function (k) { out.push(k); out.push.apply(out, descendants(k.id)); }); return out; }
+  function rollup(it) { // share of done / doing / todo among leaf descendants (Jira-style progress on parents)
+    const leaves = descendants(it.id).filter(function (k) { return !isContainer(k) && k.type !== "milestone"; });
+    if (!leaves.length) return null;
+    const n = leaves.length, d = leaves.filter(function (k) { return cat(k) === "done"; }).length, g = leaves.filter(function (k) { return cat(k) === "doing"; }).length;
+    return { done: d / n * 100, doing: g / n * 100, n: n, d: d };
+  }
   function span(it) {
     let s = d2n(it.start), e = d2n(it.end || it.start);
     if (isNaN(s) && isContainer(it)) {
-      const ks = children(it.id).filter(function (k) { return k.start; });
-      if (ks.length) { s = Math.min.apply(null, ks.map(function (k) { return d2n(k.start); })); e = Math.max.apply(null, ks.map(function (k) { return d2n(k.end || k.start); })); return { s: s, e: e, rolled: true }; }
+      const ks = descendants(it.id).filter(function (k) { return k.start || k.end; });
+      if (ks.length) { s = Math.min.apply(null, ks.map(function (k) { return d2n(k.start || k.end); })); e = Math.max.apply(null, ks.map(function (k) { return d2n(k.end || k.start); })); return { s: s, e: e, rolled: true }; }
     }
+    if (isNaN(s) && !isNaN(e)) s = e;
     if (isNaN(s)) return null;
     if (isNaN(e) || e < s) e = s;
     return { s: s, e: e };
   }
-  function range() {
-    let lo = d2n(today()) - 14 * DAY, hi = d2n(today()) + 120 * DAY;
-    items().forEach(function (i) { const sp = span(i); if (sp) { lo = Math.min(lo, sp.s - 14 * DAY); hi = Math.max(hi, sp.e + 30 * DAY); } });
-    const a = new Date(lo); lo = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), 1);
-    if (scale === "week") { const wd = (new Date(lo).getUTCDay() + 6) % 7; lo -= wd * DAY; }
-    const vw = ((document.getElementById("view") || {}).clientWidth || 1200) - 340;
-    hi = Math.max(hi, lo + Math.ceil(vw / PX[scale]) * DAY);
-    return { lo: lo, hi: hi, px: PX[scale] };
+  function range(px, g, viewW) {
+    let lo = d2n(today()) - 30 * DAY, hi = d2n(today()) + 120 * DAY;
+    items().forEach(function (i) { const sp = span(i); if (sp) { lo = Math.min(lo, sp.s - 21 * DAY); hi = Math.max(hi, sp.e + 45 * DAY); } });
+    Object.keys(data.sprints || {}).forEach(function (k) { const S = data.sprints[k]; if (S.start) lo = Math.min(lo, d2n(S.start) - 7 * DAY); if (S.end) hi = Math.max(hi, d2n(S.end) + 14 * DAY); });
+    const a = new Date(lo);
+    if (g === "year" || g === "quarter") lo = Date.UTC(a.getUTCFullYear(), g === "year" ? 0 : Math.floor(a.getUTCMonth() / 3) * 3, 1);
+    else lo = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), 1);
+    if (g === "day" || g === "week") { const wd = (new Date(lo).getUTCDay() + 6) % 7; lo -= wd * DAY; }
+    hi = Math.max(hi, lo + Math.ceil((viewW + 200) / px) * DAY);
+    return { lo: lo, hi: hi, px: px, g: g };
+  }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function mLabel(d, long) { return cap(d.toLocaleDateString(PT ? "pt-BR" : "en-GB", { month: long ? "long" : "short", timeZone: "UTC" }).replace(".", "")); }
+  function isoWeek(n) { const d = new Date(n); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day + 3); const y = d.getUTCFullYear(), f = new Date(Date.UTC(y, 0, 4)); return 1 + Math.round(((d - f) / DAY - 3 + ((f.getUTCDay() + 6) % 7)) / 7); }
+  function headers(R, x) {
+    let h1 = "", h2 = "", grid = "";
+    const cell = function (cls, a, b, txt) { const w = x(Math.min(b, R.hi)) - x(a); return w > 1 ? '<div class="' + cls + '" style="left:' + x(a) + "px;width:" + w + 'px"><span>' + txt + "</span></div>" : ""; };
+    const months = function (fn) { for (let d = new Date(R.lo); d.getTime() < R.hi; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) fn(d, d.getTime(), Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)); };
+    if (R.g === "year") {
+      for (let y = new Date(R.lo).getUTCFullYear(); Date.UTC(y, 0, 1) < R.hi; y++) {
+        h1 += cell("th1", Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1), String(y));
+        for (let q = 0; q < 4; q++) { const a = Date.UTC(y, q * 3, 1); h2 += cell("th2", a, Date.UTC(y, q * 3 + 3, 1), (PT ? "T" : "Q") + (q + 1)); grid += '<div class="gl' + (q === 0 ? " m" : "") + '" style="left:' + x(a) + 'px"></div>'; }
+      }
+    } else if (R.g === "quarter") {
+      months(function (d, a, b) {
+        if (d.getUTCMonth() % 3 === 0) h1 += cell("th1", a, Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 3, 1), (PT ? "T" : "Q") + (Math.floor(d.getUTCMonth() / 3) + 1) + " " + d.getUTCFullYear());
+        h2 += cell("th2", a, b, mLabel(d, false)); grid += '<div class="gl' + (d.getUTCMonth() % 3 === 0 ? " m" : "") + '" style="left:' + x(a) + 'px"></div>';
+      });
+    } else {
+      months(function (d, a, b) { h1 += cell("th1", a, b, mLabel(d, true) + " " + d.getUTCFullYear()); grid += '<div class="gl m" style="left:' + x(a) + 'px"></div>'; });
+      const wd0 = (new Date(R.lo).getUTCDay() + 6) % 7;
+      if (R.g === "month" || R.g === "week") {
+        for (let n = R.lo + ((7 - wd0) % 7) * DAY; n < R.hi; n += 7 * DAY) {
+          const dd = new Date(n), lab = R.g === "week" ? (PT ? "S" : "W") + isoWeek(n) + " · " + dd.getUTCDate() + " " + mLabel(dd, false).toLowerCase() : String(dd.getUTCDate());
+          h2 += cell("th2", n, n + 7 * DAY, lab); grid += '<div class="gl w" style="left:' + x(n) + 'px"></div>';
+        }
+      }
+      if (R.g === "week" || R.g === "day") {
+        const wk = PT ? ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        for (let n = R.lo; n < R.hi; n += DAY) {
+          const dw = (new Date(n).getUTCDay() + 6) % 7;
+          if (dw >= 5) grid += '<div class="we" style="left:' + x(n) + "px;width:" + R.px + 'px"></div>';
+          if (R.g === "day") { h2 += cell("th2 day" + (n2d(n) === today() ? " now" : ""), n, n + DAY, wk[dw] + " " + new Date(n).getUTCDate()); grid += '<div class="gl' + (dw === 0 ? " w" : " d") + '" style="left:' + x(n) + 'px"></div>'; }
+        }
+      }
+    }
+    return { h1: h1, h2: h2, grid: grid };
+  }
+  function markersRow(R, x) {
+    let h = "";
+    Object.keys(data.sprints || {}).forEach(function (k) {
+      const S = data.sprints[k]; if (!S.start || !S.end) return;
+      const a = x(d2n(S.start)), w = Math.max(8, x(d2n(S.end) + DAY) - a);
+      h += '<div class="mk-sprint ' + (S.state || "") + '" style="left:' + a + "px;width:" + w + 'px" title="' + esc(S.name + " · " + fmt(S.start) + " → " + fmt(S.end)) + '"><span>' + esc(S.name) + "</span></div>";
+    });
+    items().filter(function (i) { return i.type === "milestone" && (i.end || i.start); }).forEach(function (i) {
+      const n = d2n(i.end || i.start), c = cat(i) === "done" ? "done" : overdue(i) ? "late" : "";
+      h += '<div class="mk-ms ' + c + '" style="left:' + (x(n) + R.px / 2) + 'px" data-open="' + i.id + '" title="' + esc(i.title + " · " + fmt(i.end || i.start)) + '"><i></i><span>' + esc(i.title) + "</span></div>";
+    });
+    return h;
   }
   function timeline(v) {
-    const R = range(), rs = rows(), W = Math.ceil((R.hi - R.lo) / DAY) * R.px, RH = 38;
-    const x = function (n) { return (n - R.lo) / DAY * R.px; };
-    let head1 = "", head2 = "", grid = "";
-    for (let d = new Date(R.lo); d.getTime() < R.hi; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
-      const st = d.getTime(), en = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
-      let label = d.toLocaleDateString(PT ? "pt-PT" : "en-GB", { month: scale === "quarter" ? "short" : "long", year: "numeric", timeZone: "UTC" }).replace(" de ", " ").replace(".", "");
-      label = label.charAt(0).toUpperCase() + label.slice(1);
-      if (scale !== "quarter" || d.getUTCMonth() % 3 === 0) {
-        const qEnd = scale === "quarter" ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 3, 1) : en;
-        head1 += '<div class="th1" style="left:' + x(st) + "px;width:" + (x(Math.min(qEnd, R.hi)) - x(st)) + 'px">' + (scale === "quarter" ? "Q" + (Math.floor(d.getUTCMonth() / 3) + 1) + " " + d.getUTCFullYear() : esc(label)) + "</div>";
-      }
-      if (scale === "quarter") head2 += '<div class="th2" style="left:' + x(st) + "px;width:" + (x(en) - x(st)) + 'px">' + esc(d.toLocaleDateString(PT ? "pt-PT" : "en-GB", { month: "short", timeZone: "UTC" }).replace(".", "")) + "</div>";
-      grid += '<div class="gl m" style="left:' + x(st) + 'px"></div>';
-    }
-    if (scale === "week") for (let n = R.lo; n < R.hi; n += 7 * DAY) { head2 += '<div class="th2" style="left:' + x(n) + 'px;width:' + 7 * R.px + 'px">' + new Date(n).getUTCDate() + "</div>"; grid += '<div class="gl" style="left:' + x(n) + 'px"></div>'; }
-    if (scale === "month") { const wd0 = (new Date(R.lo).getUTCDay() + 6) % 7; for (let n = R.lo + ((7 - wd0) % 7) * DAY; n < R.hi; n += 7 * DAY) { grid += '<div class="gl w" style="left:' + x(n) + 'px"></div>'; head2 += '<div class="th2" style="left:' + x(n) + "px;width:" + 7 * R.px + 'px">' + new Date(n).getUTCDate() + "</div>"; } }
+    const prev = document.getElementById("tlRight"), keep = prev ? { l: prev.scrollLeft, t: prev.scrollTop, c: centerDate(prev) } : null;
+    const comfy = density === "comfort", RH = comfy ? 44 : 32, BH = comfy ? 28 : 20, MOB = window.innerWidth < 760;
+    const lw = MOB ? Math.round(window.innerWidth * 0.44) : Math.max(220, Math.min(620, leftW));
+    const viewW = Math.max(300, (v.clientWidth || 1200) - lw);
+    const px = pxDay(), R = range(px, gran(px), viewW), rs = rows();
+    timeline._R = R;
+    const W = Math.ceil((R.hi - R.lo) / DAY) * R.px, x = function (n) { return (n - R.lo) / DAY * R.px; };
+    const H$ = headers(R, x), mk = markersRow(R, x), hasMk = !!mk;
     const tx = x(d2n(today()));
     let left = "", bars = "";
     rs.forEach(function (r, i) {
-      const it = r.it, T = TYPES[it.type] || TYPES.task, s = statusOf(it), sp = span(it), top = i * RH;
-      left += '<div class="tl-row' + (openItem === it.id ? " sel" : "") + '" style="height:' + RH + 'px" data-open="' + it.id + '"><span class="ind" style="width:' + r.depth * 18 + 'px"></span>' +
+      const it = r.it, T = TYPES[it.type] || TYPES.task, s = statusOf(it), sp = span(it), top = i * RH, ru = isContainer(it) ? rollup(it) : null;
+      left += '<div class="tl-row' + (openItem === it.id ? " sel" : "") + (isContainer(it) ? " cont lv" + lvl(it.type) : "") + '" style="height:' + RH + 'px" data-open="' + it.id + '"><span class="ind" style="width:' + r.depth * (MOB ? 10 : 18) + 'px"></span>' +
         (r.kids ? '<button class="tw" data-tw="' + it.id + '">' + (collapsed[it.id] ? "▸" : "▾") + "</button>" : '<span class="tw"></span>') +
         '<span class="ti" style="color:' + T.color + '" title="' + esc(T.name) + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="tt">' + (it.prio ? '<span class="star" title="' + L("Key activity", "Atividade principal") + '">★</span>' : "") + esc(it.title) + "</span>" +
+        (ru ? '<span class="rp" title="' + ru.d + "/" + ru.n + L(" done", " concluídos") + '"><i style="width:' + ru.done + '%"></i></span>' : '<span class="sd" style="background:' + CATC[s.cat] + '" title="' + esc(s.name) + '"></span>') +
         (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") +
         (canEdit && isContainer(it) ? '<button class="addc" data-addc="' + it.id + '" title="' + L("Add child item", "Adicionar item filho") + '">' + IC("plus", 14) + "</button>" : "") + "</div>";
       if (sp) {
-        const bx = x(sp.s), bw = Math.max(R.px, x(sp.e + DAY) - bx), col = isContainer(it) ? T.color : CATC[s.cat];
-        const prog = s.cat === "done" ? 100 : Number(it.progress) || (s.cat === "doing" ? 0 : 0);
-        if (it.type === "milestone") bars += '<div class="ms' + (cat(it) === "done" ? " done" : "") + (overdue(it) ? " late" : "") + '" data-bar="' + it.id + '" style="left:' + (x(sp.s) + R.px / 2 - 9) + "px;top:" + (top + 10) + 'px" title="' + esc(it.title + " · " + fmt(it.end || it.start)) + '"></div><div class="ms-l" style="left:' + (x(sp.s) + R.px / 2 + 14) + "px;top:" + (top + 10) + 'px">' + esc(it.title) + "</div>";
-        else bars += '<div class="bar' + (sp.rolled ? " rolled" : "") + (isContainer(it) ? " cont" : "") + (overdue(it) ? " late" : "") + '" data-bar="' + it.id + '" style="left:' + bx + "px;width:" + bw + "px;top:" + (top + 8) + "px;--c:" + col + '" title="' + esc(it.title + " · " + fmt(it.start) + " → " + fmt(it.end)) + '">' +
-          '<span class="pf" style="width:' + prog + '%"></span>' + (bw >= 110 ? '<span class="bl">' + esc(it.title) + "</span>" : "") + (canEdit && !sp.rolled ? '<span class="h l" data-h="l"></span><span class="h r" data-h="r"></span>' : "") + "</div>" +
-          (bw < 110 ? '<div class="ms-l" style="left:' + (bx + bw + 6) + "px;top:" + (top + 10) + 'px">' + esc(it.title) + "</div>" : "");
-      } else if (canEdit) bars += '<div class="nodate" style="top:' + (top + 9) + 'px" data-nodate="' + it.id + '">' + L("Click on the timeline to schedule", "Clique na linha do tempo para agendar") + "</div>";
+        const bx = x(sp.s), bw = Math.max(Math.max(R.px, 6), x(sp.e + DAY) - bx), col = isContainer(it) ? T.color : CATC[s.cat], late = overdue(it);
+        const lateDays = late ? Math.round((d2n(today()) - d2n(it.end)) / DAY) : 0;
+        const tipTxt = it.title + "\n" + T.name + " · " + s.name + "\n" + fmt(n2d(sp.s)) + " → " + fmt(n2d(sp.e)) + " (" + (Math.round((sp.e - sp.s) / DAY) + 1) + L(" days)", " dias)") + (ru ? "\n" + Math.round(ru.done) + "% " + L("done", "concluído") + " (" + ru.d + "/" + ru.n + ")" : "") + (it.assignee ? "\n" + memberName(it.assignee) : "") + (late ? "\n⚠ " + lateDays + L(" day(s) late", " dia(s) de atraso") : "");
+        if (it.type === "milestone") {
+          bars += '<div class="ms' + (cat(it) === "done" ? " done" : "") + (late ? " late" : "") + '" data-bar="' + it.id + '" data-tip="' + esc(tipTxt) + '" style="left:' + (x(sp.s) + R.px / 2 - BH * 0.36) + "px;top:" + (top + (RH - BH * 0.72) / 2) + "px;width:" + BH * 0.72 + "px;height:" + BH * 0.72 + 'px"></div><div class="ms-l" style="left:' + (x(sp.s) + R.px / 2 + BH * 0.6) + "px;top:" + top + "px;line-height:" + RH + 'px">' + esc(it.title) + (late ? ' <b class="late-b">+' + lateDays + "d</b>" : "") + "</div>";
+        } else {
+          const inside = bw >= 96;
+          const prog = ru ? null : (s.cat === "done" ? 100 : Number(it.progress) || 0);
+          bars += '<div class="bar' + (sp.rolled ? " rolled" : "") + (isContainer(it) ? " cont" : "") + (late ? " late" : "") + '" data-bar="' + it.id + '" data-tip="' + esc(tipTxt) + '" style="left:' + bx + "px;width:" + bw + "px;top:" + (top + (RH - BH) / 2) + "px;height:" + BH + "px;--c:" + col + '">' +
+            '<span class="bfill">' + (ru ? '<i class="rd" style="width:' + ru.done + '%"></i><i class="rg" style="left:' + ru.done + "%;width:" + ru.doing + '%"></i>' : '<i class="pf" style="width:' + prog + '%"></i>') + "</span>" +
+            (inside ? '<span class="bl">' + esc(it.title) + (ru ? ' <em>' + Math.round(ru.done) + "%</em>" : "") + "</span>" : "") +
+            (canEdit && !sp.rolled ? '<span class="h l" data-h="l"></span><span class="h r" data-h="r"></span>' : "") + "</div>" +
+            (!inside ? '<div class="ms-l" style="left:' + (bx + bw + 6) + "px;top:" + top + "px;line-height:" + RH + 'px">' + esc(it.title) + "</div>" : "") +
+            (late ? '<div class="late-b abs" style="left:' + (bx + bw + (inside ? 6 : 6)) + "px;top:" + (top + RH / 2 - 9) + 'px;' + (inside ? "" : "margin-top:-14px;") + '">+' + lateDays + "d</div>" : "");
+        }
+      } else if (canEdit) bars += '<div class="nodate" style="top:' + top + "px;line-height:" + RH + 'px">' + L("Click on this line to schedule", "Clique nesta linha para agendar") + "</div>";
     });
-    /* dependencies (finish → start) */
     let deps = "";
     const idx = {}; rs.forEach(function (r, i) { idx[r.it.id] = i; });
     rs.forEach(function (r, i) {
       Object.keys(r.it.deps || {}).forEach(function (pid) {
         if (idx[pid] === undefined) return;
         const p = data.items[pid], sa = span(Object.assign({ id: pid }, p)), sb = span(r.it); if (!sa || !sb) return;
-        const x1 = x(sa.e + DAY), y1 = idx[pid] * RH + RH / 2, x2 = x(sb.s), y2 = i * RH + RH / 2, mid = Math.max(x1 + 10, Math.min(x2 - 10, x1 + 10));
+        const x1 = x(sa.e + DAY), y1 = idx[pid] * RH + RH / 2, x2 = x(sb.s), y2 = i * RH + RH / 2, mid = x1 + 10;
         const bad = r.it.type === "milestone" ? sb.s < sa.e : sb.s < sa.e + DAY;
         deps += '<path class="dep' + (bad ? " bad" : "") + '" d="M' + x1 + " " + y1 + " H" + mid + " V" + y2 + " H" + (x2 - 2) + '" marker-end="url(#arr' + (bad ? "b" : "") + ')"/>';
       });
     });
-    const H = Math.max(rs.length * RH, 200);
-    v.innerHTML = '<div class="tl"><div class="tl-left"><div class="tl-lh">' + L("Items", "Itens") + (canEdit ? '<span class="tl-add">' + (method().types.indexOf("initiative") >= 0 ? '<button class="pl-btn sm" data-addtop="initiative" title="' + esc(TYPES.initiative.desc) + '">' + TYPES.initiative.icon + " " + esc(TYPES.initiative.name) + "</button>" : "") + '<button class="pl-btn sm" data-addtop="' + (method().types.indexOf("epic") >= 0 ? "epic" : "phase") + '">' + (method().types.indexOf("epic") >= 0 ? TYPES.epic.icon + " " + esc(TYPES.epic.name) : TYPES.phase.icon + " " + esc(TYPES.phase.name)) + "</button></span>" : "") + '</div><div class="tl-lb" id="tlLeft">' + left +
-      (rs.length ? "" : '<div class="pl-empty">' + L("Nothing here yet.", "Ainda não há nada aqui.") + "</div>") + "</div></div>" +
-      '<div class="tl-right" id="tlRight"><div class="tl-head" style="width:' + W + 'px"><div class="h1">' + head1 + '</div><div class="h2">' + head2 + "</div></div>" +
-      '<div class="tl-body" id="tlBody" style="width:' + W + "px;height:" + H + 'px">' + grid +
-      rs.map(function (r, i) { return '<div class="tl-band' + (i % 2 ? " odd" : "") + '" data-band="' + r.it.id + '" style="top:' + i * RH + "px;height:" + RH + 'px"></div>'; }).join("") +
+    const H = Math.max(rs.length * RH + 120, 260), HH = hasMk ? 84 : 58;
+    const addBtns = canEdit ? '<span class="tl-add">' + (method().types.indexOf("initiative") >= 0 ? '<button class="pl-btn sm" data-addtop="initiative" title="' + esc(TYPES.initiative.desc) + '">' + TYPES.initiative.icon + " <span>" + esc(TYPES.initiative.name) + "</span></button>" : "") + '<button class="pl-btn sm" data-addtop="' + (method().types.indexOf("epic") >= 0 ? "epic" : "phase") + '">' + (method().types.indexOf("epic") >= 0 ? TYPES.epic.icon + " <span>" + esc(TYPES.epic.name) + "</span>" : TYPES.phase.icon + " <span>" + esc(TYPES.phase.name) + "</span>") + "</button></span>" : "";
+    v.innerHTML = '<div class="tl ' + density + '"><div class="tl-left" style="width:' + lw + 'px"><div class="tl-lh" style="height:' + HH + 'px"><b>' + L("Items", "Itens") + " <small>" + rs.length + "</small></b>" + addBtns + '</div><div class="tl-lb" id="tlLeft">' + left +
+      (rs.length ? "" : '<div class="pl-empty">' + L("Nothing here yet.", "Ainda não há nada aqui.") + "</div>") + '<div style="height:120px"></div></div><div class="tl-split" id="tlSplit" title="' + L("Drag to resize", "Arraste para ajustar") + '"></div></div>' +
+      '<div class="tl-right" id="tlRight"><div class="tl-head" style="width:' + W + "px;height:" + HH + 'px"><div class="h1">' + H$.h1 + '</div><div class="h2">' + H$.h2 + "</div>" + (hasMk ? '<div class="h3">' + mk + "</div>" : "") + "</div>" +
+      '<div class="tl-body" id="tlBody" style="width:' + W + "px;height:" + H + 'px">' + H$.grid +
+      rs.map(function (r, i) { return '<div class="tl-band' + (i % 2 ? " odd" : "") + (isContainer(r.it) ? " cont" : "") + '" data-band="' + r.it.id + '" style="top:' + i * RH + "px;height:" + RH + 'px"></div>'; }).join("") +
       '<svg class="deps" width="' + W + '" height="' + H + '"><defs><marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8z" fill="#8a94a6"/></marker><marker id="arrb" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8z" fill="#e5484d"/></marker></defs>' + deps + "</svg>" +
-      bars + '<div class="today" style="left:' + tx + 'px"><span>' + L("Today", "Hoje") + "</span></div></div></div></div>";
+      bars + '<div class="today" style="left:' + tx + 'px"></div></div><div class="today-tag" style="left:' + tx + 'px;top:' + (HH - 18) + 'px">' + L("Today", "Hoje") + "</div></div></div>";
     const left$ = document.getElementById("tlLeft"), right$ = document.getElementById("tlRight");
     right$.onscroll = function () { left$.scrollTop = right$.scrollTop; };
     left$.onwheel = function (e) { right$.scrollTop += e.deltaY; e.preventDefault(); };
+    right$.addEventListener("wheel", function (e) {
+      if (!e.ctrlKey && !e.metaKey) return; e.preventDefault();
+      const rect = right$.getBoundingClientRect(), at = R.lo + (right$.scrollLeft + e.clientX - rect.left) / R.px * DAY;
+      const npx = Math.max(0.5, Math.min(120, pxDay() * (e.deltaY < 0 ? 1.15 : 1 / 1.15))), u = gran(npx);
+      tlAnchor = at; tlAnchorX = e.clientX - rect.left; zoom = { unit: u, k: npx / ZBASE[u] }; lsSet("cmcollab:plzoom", JSON.stringify(zoom)); clearTimeout(timeline._zt); timeline._zt = setTimeout(shell, 60);
+    }, { passive: false });
     v.querySelectorAll("[data-tw]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); collapsed[b.dataset.tw] = !collapsed[b.dataset.tw]; renderView(); }; });
     v.querySelectorAll("[data-addc]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); const p = data.items[b.dataset.addc]; collapsed[b.dataset.addc] = false; const ct = childType(p); createItem({ type: ct, parent: b.dataset.addc, title: TYPES[ct].name }).then(function (id) { if (id) openDrawer(id, true); }); }; });
     v.querySelectorAll(".tl-row").forEach(function (r) { r.onclick = function () { openDrawer(r.dataset.open); }; });
+    v.querySelectorAll(".mk-ms").forEach(function (m) { m.onclick = function () { openDrawer(m.dataset.open); }; });
     v.querySelectorAll("[data-addtop]").forEach(function (b) { b.onclick = function () { quickCreate(b.dataset.addtop); }; });
+    const sp$ = document.getElementById("tlSplit");
+    if (sp$ && !MOB) sp$.onpointerdown = function (e) {
+      const x0 = e.clientX, w0 = lw, lp = v.querySelector(".tl-left"); sp$.setPointerCapture(e.pointerId);
+      sp$.onpointermove = function (ev) { leftW = Math.max(220, Math.min(620, w0 + ev.clientX - x0)); lp.style.width = leftW + "px"; };
+      sp$.onpointerup = function () { sp$.onpointermove = null; lsSet("cmcollab:plleft", leftW); };
+    };
+    const body = document.getElementById("tlBody");
+    body.addEventListener("mousemove", function (e) { const t = e.target.closest("[data-tip]"); if (t && !dragging) tip(e, t.dataset.tip, true); else if (!dragging) tip(null); });
+    body.addEventListener("mouseleave", function () { if (!dragging) tip(null); });
     if (canEdit) bindBars(v, R, RH);
     v.querySelectorAll("[data-bar]").forEach(function (b) { b.addEventListener("dblclick", function () { openDrawer(b.dataset.bar); }); });
-    if (!timeline._scrolled) { timeline._scrolled = 1; scrollToday(false); }
+    if (tlAnchor) { right$.scrollLeft = Math.max(0, x(tlAnchor) - (tlAnchorX != null ? tlAnchorX : right$.clientWidth / 2)); if (keep) right$.scrollTop = keep.t; tlAnchor = null; tlAnchorX = null; }
+    else if (keep) { right$.scrollLeft = keep.l; right$.scrollTop = keep.t; }
+    else scrollToday(false);
   }
+  let tlAnchorX = null;
   function scrollToday(smooth) {
-    const r = document.getElementById("tlRight"), t = document.querySelector(".today"); if (!r || !t) return;
-    r.scrollTo({ left: Math.max(0, t.offsetLeft - r.clientWidth * 0.3), behavior: smooth ? "smooth" : "auto" });
+    const r = document.getElementById("tlRight"), R = timeline._R; if (!r || !R) return;
+    r.scrollTo({ left: Math.max(0, (d2n(today()) - R.lo) / DAY * R.px - r.clientWidth * 0.25), behavior: smooth ? "smooth" : "auto" });
   }
   function bindBars(v, R, RH) {
     const body = document.getElementById("tlBody");
@@ -318,11 +448,13 @@
       e.preventDefault();
     });
   }
-  function tip(ev, txt) {
+  function tip(ev, txt, below) {
     let t = document.getElementById("pltip");
     if (!ev) { if (t) t.remove(); return; }
     if (!t) { t = document.createElement("div"); t.id = "pltip"; t.className = "pl-tip"; document.body.appendChild(t); }
-    t.textContent = txt; t.style.left = ev.clientX + 12 + "px"; t.style.top = ev.clientY - 30 + "px";
+    t.textContent = txt;
+    const w = t.offsetWidth || 200;
+    t.style.left = Math.min(window.innerWidth - w - 8, ev.clientX + 14) + "px"; t.style.top = (below ? ev.clientY + 18 : ev.clientY - 30) + "px";
   }
 
   /* ---------------- board (Kanban / sprint board) ---------------- */
