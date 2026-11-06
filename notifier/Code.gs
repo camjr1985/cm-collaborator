@@ -74,7 +74,7 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function 
 
 function welcome(m, info, lang, brand) {
   brand = brand || CFG.brand;
-  var mark = brand.split(/\s+/).map(function (w) { return w[0]; }).join("").slice(0, 2).toUpperCase();
+  var w0 = brand.split(/\s+/)[0], mark = (w0.length <= 3 ? w0 : brand.split(/\s+/).map(function (w) { return w[0]; }).join("").slice(0, 2)).toUpperCase();
   var pt = lang === "pt", first = String(m.name || "").split(" ")[0] || "";
   var hub = CFG.site + "workspaces/", fb = CFG.site + "feedback/", guide = CFG.site + "beta/CM-Collaborator-Boas-vindas.pdf";
   var until = m.expires ? Utilities.formatDate(new Date(m.expires), "Europe/Lisbon", "dd/MM/yyyy") : "";
@@ -91,10 +91,10 @@ function welcome(m, info, lang, brand) {
     aiT: "Novidade ✨ – Assistente IA nos quadros",
     ai: ["<b>Construir um quadro</b> a partir do seu objetivo (frames, instruções e agenda);", "<b>Sugerir dinâmicas</b> para o grupo, com passos e tempos;", "<b>Analisar os resultados</b> depois da sessão: temas, prioridades e plano de ações."],
     aiH: "Clique no botão ✨ da barra de ferramentas do quadro.",
-    guide: "Guia de boas-vindas (PDF, 1 página)",
+    guide: "One-page de boas-vindas – passo a passo, atalhos e dicas (PDF)",
     fb: "Antes de o acesso terminar, pedimos só <b>3 minutos de feedback</b>: <a href=\"" + fb + "\">dar feedback</a>.",
     cta: "Abrir os meus quadros",
-    bye: "Bons quadros!<br>Equipa " + brand,
+    bye: "Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company,
     auto: "Mensagem automática do " + brand + " · " + CFG.company + ". Recebeu este e-mail porque foi convidado(a) para um workspace."
   } : {
     subject: "Welcome to " + brand + " – your access is active ✨",
@@ -108,10 +108,10 @@ function welcome(m, info, lang, brand) {
     aiT: "New ✨ – AI assistant on the boards",
     ai: ["<b>Build a board</b> from your goal (frames, instructions and agenda);", "<b>Suggest dynamics</b> for your group, with steps and timings;", "<b>Analyse the results</b> after the session: themes, priorities and action plan."],
     aiH: "Click the ✨ button on the board toolbar.",
-    guide: "Welcome guide (PDF, 1 page)",
+    guide: "Welcome one-page – step by step, shortcuts and tips (PDF)",
     fb: "Before your access ends, please give us <b>3 minutes of feedback</b>: <a href=\"" + fb + "\">give feedback</a>.",
     cta: "Open my boards",
-    bye: "Happy boarding!<br>The " + brand + " team",
+    bye: "Kind regards,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company,
     auto: "Automatic message from " + brand + " · " + CFG.company + ". You received it because you were invited to a workspace."
   };
   var html =
@@ -124,7 +124,7 @@ function welcome(m, info, lang, brand) {
     '<h3 style="margin:18px 0 6px;font-size:16px">' + L.how + "</h3><ol style=\"padding-left:20px;margin:0\"><li>" + L.s1 + "</li><li>" + L.s2 + "</li><li>" + L.s3 + "</li></ol>" +
     '<p style="text-align:center;margin:22px 0"><a href="' + hub + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">' + L.cta + " →</a></p>" +
     '<div style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px"><b>' + L.aiT + '</b><ul style="padding-left:18px;margin:8px 0">' + L.ai.map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</ul>" + L.aiH + "</div>" +
-    '<p>📄 <a href="' + guide + '">' + L.guide + "</a></p><p>" + L.fb + "</p><p>" + L.bye + "</p></div>" +
+    '<p style="background:#eef6ff;border:1px solid #cfe0f5;border-radius:12px;padding:12px 16px">📄 <a href="' + guide + '" style="font-weight:bold">' + L.guide + "</a></p><p>" + L.fb + "</p><p>" + L.bye + "</p></div>" +
     '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + L.auto + "</div></div></div>";
   var text = html.replace(/<li>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1)").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
   return { subject: L.subject, html: html, text: text };
