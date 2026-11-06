@@ -65,16 +65,17 @@
     u["items/" + id + "/updated"] = TS();
     return db.ref("planning/" + ID + "/data").update(u).then(function () { jiraPushLater(id, obj); }).catch(fail);
   }
-  /* changes to items that came from Jira go back to Jira (summary, status, start, due) */
+  /* changes to items that came from Jira / Azure DevOps / Kanbanize go back to the source tool */
   function jiraPushLater(id, obj) {
-    const it = data.items[id], J = data.settings && data.settings.jira;
-    if (!it || !it.ext || it.ext.source !== "jira" || !J || J.push === false) return;
+    const it = data.items[id]; if (!it || !it.ext || !PROV[it.ext.source]) return;
+    const src = it.ext.source, S = data.settings && data.settings[src];
+    if (!S || S.push === false) return;
     if (!["title", "status", "start", "end"].some(function (k) { return k in obj; })) return;
     clearTimeout(pushT[id]);
     pushT[id] = setTimeout(function () {
-      notify("jira-push", { item: id }).then(function (j) {
-        if (j && j.ok) toast(L("Updated in Jira: ", "Atualizado no Jira: ") + it.ext.key);
-        else toast(L("Jira did not accept the change: ", "O Jira não aceitou a alteração: ") + ((j && j.error) || ""));
+      notify(src + "-push", { item: id }).then(function (j) {
+        if (j && j.ok) toast(L("Updated in ", "Atualizado no ") + PROV[src].name + ": " + it.ext.key);
+        else toast(PROV[src].name + L(" did not accept the change: ", " não aceitou a alteração: ") + ((j && j.error) || ""));
       });
     }, 1200);
   }
@@ -135,7 +136,7 @@
       '<select id="who"><option value="">' + L("Everyone", "Todas as pessoas") + '</option><option value="_none"' + (filter.who === "_none" ? " selected" : "") + ">" + L("Unassigned", "Sem responsável") + "</option>" +
       Object.keys(who).sort().map(function (e) { return '<option value="' + esc(e) + '"' + (filter.who === e ? " selected" : "") + ">" + esc(memberName(e)) + "</option>"; }).join("") + "</select>" +
       (view === "timeline" ? '<div class="pl-seg" id="scale">' + [["week", L("Weeks", "Semanas")], ["month", L("Months", "Meses")], ["quarter", L("Quarters", "Trimestres")]].map(function (s) { return '<button data-s="' + s[0] + '" class="' + (scale === s[0] ? "on" : "") + '">' + s[1] + "</button>"; }).join("") + '</div><button class="pl-btn sm" id="todayBtn">' + L("Today", "Hoje") + "</button>" : "") +
-      (data.settings && data.settings.jira && canEdit ? '<button class="pl-btn sm" id="jiraSync" title="' + L("Pull the latest from Jira", "Trazer as últimas alterações do Jira") + '">↻ Jira</button>' : "") +
+      (canEdit ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button class="pl-btn sm" data-sync="' + k + '" title="' + L("Pull the latest from ", "Trazer as últimas alterações do ") + PROV[k].name + '">↻ ' + PROV[k].short + "</button>"; }).join("") : "") +
       '<span class="pl-sum" id="sum"></span></div>' +
       '<main id="view" class="pl-view"></main>';
     app.querySelectorAll("[data-view]").forEach(function (b) { b.onclick = function () { view = b.dataset.view; try { localStorage.setItem("cmcollab:plview:" + ID, view); } catch (e) { /* ignore */ } shell(); }; });
@@ -145,7 +146,7 @@
     const tb = document.getElementById("todayBtn"); if (tb) tb.onclick = function () { scrollToday(true); };
     const nb = document.getElementById("newBtn"); if (nb) nb.onclick = function () { quickCreate(); };
     document.getElementById("moreBtn").onclick = moreMenu;
-    const js = document.getElementById("jiraSync"); if (js) js.onclick = function () { js.disabled = true; jiraRun(data.settings.jira.jql, data.settings.jira.push !== false).then(function () { js.disabled = false; }); };
+    app.querySelectorAll("[data-sync]").forEach(function (b) { b.onclick = function () { const k = b.dataset.sync, S = data.settings[k]; b.disabled = true; extRun(k, { project: S.project, query: S.query || S.jql }, S.push !== false).then(function () { b.disabled = false; }); }; });
     renderView();
   }
   function renderView() {
@@ -500,7 +501,7 @@
       (sps.length && !isContainer(it) ? "<label>Sprint<select name=\"sprint\"" + dis + '><option value="">Backlog</option>' + sps.map(function (k) { return '<option value="' + k + '"' + (k === it.sprint ? " selected" : "") + ">" + esc(data.sprints[k].name) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Depends on (finish → start)", "Depende de (fim → início)") + '<select name="deps" multiple size="4"' + dis + ">" + others.map(function (o) { return '<option value="' + o.id + '"' + ((it.deps || {})[o.id] ? " selected" : "") + ">" + esc((o.key ? o.key + " · " : "") + o.title) + "</option>"; }).join("") + "</select></label>" +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +
-      '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc(it.ext.source === "jira" ? "Jira " : it.ext.source + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Jira assignee: ", "Responsável no Jira: ") + esc(it.ext.assigneeName) : "") + "</p></form>";
+      '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc((PROV[it.ext.source] ? PROV[it.ext.source].short : it.ext.source) + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Assignee in ", "Responsável no ") + (PROV[it.ext.source] ? PROV[it.ext.source].short : "") + ": " + esc(it.ext.assigneeName) : "") + "</p></form>";
     document.getElementById("dX").onclick = closeDrawer;
     document.querySelectorAll(".tl-row.sel").forEach(function (r) { r.classList.remove("sel"); });
     const row = document.querySelector('.tl-row[data-open="' + id + '"]'); if (row) row.classList.add("sel");
@@ -616,84 +617,118 @@
       };
     });
   }
+  /* ---------------- integrations: Jira Cloud, Azure DevOps Boards, Kanbanize ----------------
+   * Credentials go only to the platform server (Apps Script), never to the browser storage or the database. */
+  const PROV = {
+    jira: { name: "Jira Cloud", short: "Jira", item: L("issue", "issue"),
+      desc: L("Epics, stories, tasks and bugs by project or JQL.", "Épicos, histórias, tarefas e bugs por projeto ou JQL."),
+      fields: [["site", L("Jira site", "Site do Jira"), "https://sua-empresa.atlassian.net", "url"], ["email", L("Atlassian account e-mail", "E-mail da conta Atlassian"), "", "email"], ["token", L("API token", "Token de API"), "", "password"]],
+      help: ["https://id.atlassian.com/manage-profile/security/api-tokens", L("Create an API token in your Atlassian account ↗", "Criar um token de API na sua conta Atlassian ↗")],
+      pick: L("Project", "Projeto"), query: "JQL", queryPh: 'project = ABC ORDER BY Rank ASC', queryNote: L("Optional when a project is chosen.", "Opcional quando um projeto é escolhido.") },
+    azure: { name: "Azure DevOps Boards", short: "Azure", item: "work item",
+      desc: L("Epics, features, user stories / PBIs, tasks and bugs with start and target dates.", "Epics, features, user stories / PBIs, tasks e bugs com datas de início e alvo."),
+      fields: [["org", L("Organisation URL", "URL da organização"), "https://dev.azure.com/sua-organizacao", "url"], ["pat", L("Personal Access Token (Work Items: read & write)", "Personal Access Token (Work Items: leitura e escrita)"), "", "password"]],
+      help: ["https://learn.microsoft.com/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate", L("How to create a Personal Access Token ↗", "Como criar um Personal Access Token ↗")],
+      pick: L("Project", "Projeto"), query: "WIQL", queryPh: "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] <> 'Removed'", queryNote: L("Optional – by default every work item of the project (except Removed).", "Opcional – por padrão, todos os work items do projeto (exceto Removed).") },
+    kanbanize: { name: "Kanbanize (Businessmap)", short: "Kanbanize", item: L("card", "cartão"),
+      desc: L("Cards, columns, owners, deadlines and size from a board.", "Cartões, colunas, responsáveis, prazos e tamanho de um quadro."),
+      fields: [["url", L("Account URL", "URL da conta"), "https://sua-conta.kanbanize.com", "url"], ["key", L("API key (your profile → API)", "Chave de API (seu perfil → API)"), "", "password"]],
+      help: ["https://businessmap.io/", L("Where to find the API key: Businessmap → your profile → API ↗", "Onde fica a chave de API: Businessmap → seu perfil → API ↗")],
+      pick: L("Board", "Quadro"), query: null }
+  };
   function integrationsDialog() {
-    const J = wsInteg.jira, owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email)), PJ = data.settings && data.settings.jira;
-    const jiraCard = '<div class="int-card on"><b>Jira Cloud</b>' + (J
-      ? '<p class="small">✅ ' + L("Connected to ", "Conectado a ") + "<b>" + esc(J.site.replace("https://", "")) + "</b>" + (J.account ? " · " + esc(J.account) : "") + "</p>" +
-        (PJ ? '<p class="muted small">' + L("This planning syncs with: ", "Este planning sincroniza com: ") + "<code>" + esc(PJ.jql) + "</code>" + (PJ.lastSync ? " · " + L("last sync ", "última sincronização ") + new Date(PJ.lastSync).toLocaleString(PT ? "pt-BR" : "en-GB") : "") + "</p>" : "") +
-        '<div class="pl-row-end" style="justify-content:flex-start">' + (canEdit ? '<button class="pl-btn primary sm" id="jImp">' + (PJ ? L("Change import / sync", "Alterar importação / sincronizar") : L("Import from Jira", "Importar do Jira")) + "</button>" : "") + (owner ? '<button class="pl-btn ghost danger sm" id="jOff">' + L("Disconnect", "Desconectar") + "</button>" : "") + "</div>"
-      : (owner ? '<form class="pl-form" id="jForm"><p class="muted small">' + L("Connect once per workspace. The API token stays on the platform server – it is never saved in the browser or in the database.", "Conecte uma vez por workspace. O token de API fica no servidor da plataforma – nunca é salvo no navegador nem no banco de dados.") + "</p>" +
-        '<label>' + L("Jira site", "Site do Jira") + '<input name="site" required placeholder="https://sua-empresa.atlassian.net" autocomplete="off"></label>' +
-        '<label>' + L("Atlassian account e-mail", "E-mail da conta Atlassian") + '<input name="email" type="email" required autocomplete="off"></label>' +
-        '<label>' + L("API token", "Token de API") + '<input name="token" type="password" required autocomplete="new-password"></label>' +
-        '<p class="muted small"><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">' + L("Create an API token in your Atlassian account ↗", "Criar um token de API na sua conta Atlassian ↗") + "</a></p>" +
-        '<div class="pl-row-end"><button class="pl-btn primary">' + L("Connect Jira", "Conectar o Jira") + "</button></div></form>"
-        : '<p class="muted small">' + L("Ask the workspace owner or an admin to connect Jira.", "Peça ao dono do workspace ou a um administrador para conectar o Jira.") + "</p>")) + "</div>";
-    modal("<h2>" + L("Integrations", "Integrações") + '</h2><div class="int-grid">' + jiraCard +
-      [["Azure DevOps Boards", L("Work items by WIQL with start and target dates.", "Work items por WIQL com datas de início e alvo.")], ["Kanbanize (Businessmap)", L("Cards, columns and deadlines from your boards.", "Cartões, colunas e prazos dos seus quadros.")]].map(function (x) {
-        return '<div class="int-card"><b>' + x[0] + '</b><p class="muted small">' + x[1] + '</p><span class="tag">' + L("Coming soon", "Em breve") + "</span></div>";
-      }).join("") + '</div><p class="muted small">' + L("Any tool: More → Import CSV.", "Qualquer ferramenta: Mais → Importar CSV.") + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Close", "Fechar") + "</button></div>", function (box, close) {
-      const f = box.querySelector("#jForm");
-      if (f) f.onsubmit = function (e) {
-        e.preventDefault(); const b = f.querySelector("button"); b.disabled = true; b.textContent = L("Connecting…", "Conectando…");
-        notify("jira-connect", { site: f.site.value.trim(), email: f.email.value.trim(), token: f.token.value.trim() }).then(function (j) {
-          f.token.value = "";
-          if (!j || !j.ok) { b.disabled = false; b.textContent = L("Connect Jira", "Conectar o Jira"); return toast(L("Could not connect: ", "Não foi possível conectar: ") + ((j && j.error) || "")); }
-          wsInteg.jira = { site: j.site, account: j.account, by: me.email, at: Date.now() };
-          db.ref("workspaces/" + info.ws + "/integrations/jira").set(wsInteg.jira).catch(function () { /* marker only */ });
-          toast(L("Jira connected", "Jira conectado")); close(); jiraImportDialog();
-        });
-      };
-      const imp = box.querySelector("#jImp"); if (imp) imp.onclick = function () { close(); jiraImportDialog(); };
-      const off = box.querySelector("#jOff"); if (off) off.onclick = function () {
-        notify("jira-disconnect", {}).then(function (j) {
-          if (!j || !j.ok) return toast((j && j.error) || "");
-          wsInteg.jira = null; db.ref("workspaces/" + info.ws + "/integrations/jira").remove().catch(function () { /* ignore */ });
-          toast(L("Jira disconnected", "Jira desconectado")); close();
-        });
-      };
+    const owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email));
+    const card = function (k) {
+      const P = PROV[k], C = wsInteg[k], S = data.settings && data.settings[k];
+      if (C) return '<div class="int-card on"><b>' + P.name + '</b><p class="small">✅ ' + L("Connected to ", "Conectado a ") + "<b>" + esc(String(C.site).replace("https://", "")) + "</b>" + (C.account ? " · " + esc(C.account) : "") + "</p>" +
+        (S ? '<p class="muted small">' + L("This planning syncs with ", "Este planning sincroniza com ") + "<b>" + esc(S.projectName || S.project || "") + "</b>" + (S.query ? " · <code>" + esc(S.query) + "</code>" : "") + (S.lastSync ? " · " + L("last sync ", "última sincronização ") + new Date(S.lastSync).toLocaleString(PT ? "pt-BR" : "en-GB") : "") + "</p>" : "") +
+        '<div class="pl-row-end" style="justify-content:flex-start">' + (canEdit ? '<button class="pl-btn primary sm" data-imp="' + k + '">' + (S ? L("Change import / sync", "Alterar importação / sincronizar") : L("Import from ", "Importar do ") + P.short) + "</button>" : "") + (owner ? '<button class="pl-btn ghost danger sm" data-off="' + k + '">' + L("Disconnect", "Desconectar") + "</button>" : "") + "</div></div>";
+      if (!owner) return '<div class="int-card"><b>' + P.name + '</b><p class="muted small">' + P.desc + '</p><p class="muted small">' + L("Ask the workspace owner or an admin to connect it.", "Peça ao dono do workspace ou a um administrador para conectar.") + "</p></div>";
+      return '<div class="int-card"><b>' + P.name + '</b><p class="muted small">' + P.desc + '</p><button class="pl-btn sm" data-con="' + k + '">' + L("Connect", "Conectar") + "</button></div>";
+    };
+    modal("<h2>" + L("Integrations", "Integrações") + '</h2><div class="int-grid">' + Object.keys(PROV).map(card).join("") + '</div><p class="muted small">' + L("Credentials stay on the platform server – never in the browser or the database. Any other tool: More → Import CSV.", "As credenciais ficam no servidor da plataforma – nunca no navegador nem no banco de dados. Outras ferramentas: Mais → Importar CSV.") + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Close", "Fechar") + "</button></div>", function (box, close) {
+      box.querySelectorAll("[data-con]").forEach(function (b) { b.onclick = function () { close(); connectDialog(b.dataset.con); }; });
+      box.querySelectorAll("[data-imp]").forEach(function (b) { b.onclick = function () { close(); importExtDialog(b.dataset.imp); }; });
+      box.querySelectorAll("[data-off]").forEach(function (b) {
+        b.onclick = function () {
+          const k = b.dataset.off;
+          notify(k + "-disconnect", {}).then(function (j) {
+            if (!j || !j.ok) return toast((j && j.error) || "");
+            wsInteg[k] = null; db.ref("workspaces/" + info.ws + "/integrations/" + k).remove().catch(function () { /* ignore */ });
+            toast(PROV[k].name + L(" disconnected", " desconectado")); close();
+          });
+        };
+      });
     });
   }
-  function jiraImportDialog() {
-    const PJ = (data.settings && data.settings.jira) || {};
-    modal("<h2>" + L("Import from Jira", "Importar do Jira") + '</h2><form class="pl-form" id="jiF"><label>' + L("Project", "Projeto") + '<select name="proj"><option value="">' + L("Loading projects…", "Carregando projetos…") + "</option></select></label>" +
-      '<label>JQL<textarea name="jql" rows="3" placeholder="project = ABC ORDER BY Rank ASC">' + esc(PJ.jql || "") + "</textarea></label>" +
-      '<label class="chk"><input type="checkbox" name="push"' + (PJ.push === false ? "" : " checked") + "> " + L("Send changes made here back to Jira (title, status, start and due dates)", "Enviar para o Jira as alterações feitas aqui (título, status, datas de início e prazo)") + "</label>" +
-      '<p class="muted small">' + L("Epics become epics/phases, sub-tasks keep their parent. Items already imported are updated, nothing is duplicated.", "Épicos viram épicos/fases e subtarefas mantêm o pai. Itens já importados são atualizados, nada é duplicado.") + "</p>" +
-      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Import", "Importar") + "</button></div></form>", function (box, close) {
-      const f = box.querySelector("#jiF");
-      notify("jira-projects", {}).then(function (j) {
-        if (!j || !j.ok) { f.proj.innerHTML = '<option value="">' + esc((j && j.error) || "error") + "</option>"; return; }
-        f.proj.innerHTML = '<option value="">' + L("— choose a project or write JQL —", "— escolha um projeto ou escreva o JQL —") + "</option>" + j.projects.map(function (p) { return '<option value="' + esc(p.key) + '">' + esc(p.name) + " (" + esc(p.key) + ")</option>"; }).join("");
-      });
-      f.proj.onchange = function () { if (f.proj.value) f.jql.value = 'project = "' + f.proj.value + '" ORDER BY Rank ASC'; };
+  function connectDialog(k) {
+    const P = PROV[k];
+    modal("<h2>" + L("Connect ", "Conectar ") + P.name + '</h2><form class="pl-form" id="cnF"><p class="muted small">' + L("Connect once per workspace. The credential stays on the platform server – it is never saved in the browser or in the database.", "Conecte uma vez por workspace. A credencial fica no servidor da plataforma – nunca é salva no navegador nem no banco de dados.") + "</p>" +
+      P.fields.map(function (f) { return "<label>" + f[1] + '<input name="' + f[0] + '" type="' + (f[3] === "password" ? "password" : f[3] === "email" ? "email" : "text") + '" required placeholder="' + esc(f[2]) + '" autocomplete="' + (f[3] === "password" ? "new-password" : "off") + '"></label>'; }).join("") +
+      '<p class="muted small"><a href="' + P.help[0] + '" target="_blank" rel="noopener">' + P.help[1] + "</a></p>" +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Connect", "Conectar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#cnF");
       f.onsubmit = function (e) {
-        e.preventDefault(); const jql = f.jql.value.trim(); if (!jql) return toast(L("Choose a project or write the JQL", "Escolha um projeto ou escreva o JQL"));
-        const b = f.querySelector(".pl-btn.primary"); b.disabled = true; b.textContent = L("Importing…", "Importando…");
-        jiraRun(jql, f.push.checked).then(function (ok) { if (ok) close(); else { b.disabled = false; b.textContent = L("Import", "Importar"); } });
+        e.preventDefault(); const b = f.querySelector(".pl-btn.primary"); b.disabled = true; b.textContent = L("Connecting…", "Conectando…");
+        const body = {}; P.fields.forEach(function (x) { body[x[0]] = f[x[0]].value.trim(); });
+        notify(k + "-connect", body).then(function (j) {
+          P.fields.forEach(function (x) { if (x[3] === "password") f[x[0]].value = ""; });
+          if (!j || !j.ok) { b.disabled = false; b.textContent = L("Connect", "Conectar"); return toast(L("Could not connect: ", "Não foi possível conectar: ") + ((j && j.error) || "")); }
+          wsInteg[k] = { site: j.site, account: j.account || "", by: me.email, at: Date.now() };
+          db.ref("workspaces/" + info.ws + "/integrations/" + k).set(wsInteg[k]).catch(function () { /* marker only */ });
+          toast(P.name + L(" connected", " conectado")); close(); importExtDialog(k);
+        });
       };
     });
   }
-  function jiraRun(jql, push) {
-    toast(L("Talking to Jira…", "Conversando com o Jira…"));
-    return notify("jira-import", { jql: jql }).then(function (j) {
-      if (!j || !j.ok) { toast(L("Jira: ", "Jira: ") + ((j && j.error) || "error")); return false; }
-      return mergeJira(j.issues).then(function (n) {
-        return save("settings/jira", { jql: jql, push: !!push, lastSync: Date.now(), site: j.site }).then(function () {
-          toast(n.created + L(" new, ", " novos, ") + n.updated + L(" updated from Jira", " atualizados do Jira")); return true;
+  function importExtDialog(k) {
+    const P = PROV[k], S = (data.settings && data.settings[k]) || {};
+    modal("<h2>" + L("Import from ", "Importar do ") + P.name + '</h2><form class="pl-form" id="exF"><label>' + P.pick + '<select name="proj"><option value="">' + L("Loading…", "Carregando…") + "</option></select></label>" +
+      (P.query ? "<label>" + P.query + '<textarea name="query" rows="3" placeholder="' + esc(P.queryPh) + '">' + esc(S.query || "") + '</textarea><span class="muted small" style="font-weight:400">' + P.queryNote + "</span></label>" : "") +
+      '<label class="chk"><input type="checkbox" name="push"' + (S.push === false ? "" : " checked") + "> " + L("Send changes made here back to ", "Enviar para o ") + P.short + L(" (title, status, dates)", " as alterações feitas aqui (título, status, datas)") + "</label>" +
+      '<p class="muted small">' + L("Epics become epics/phases and children keep their parent. Items already imported are updated – nothing is duplicated.", "Épicos viram épicos/fases e os filhos mantêm o pai. Itens já importados são atualizados – nada é duplicado.") + "</p>" +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Import", "Importar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#exF");
+      notify(k + "-projects", {}).then(function (j) {
+        if (!j || !j.ok) { f.proj.innerHTML = '<option value="">' + esc((j && j.error) || "error") + "</option>"; return; }
+        f.proj.innerHTML = '<option value="">' + L("— choose —", "— escolha —") + "</option>" + j.projects.map(function (p) { return '<option value="' + esc(p.key) + '"' + (String(S.project) === String(p.key) ? " selected" : "") + ">" + esc(p.name) + (p.name !== p.key && !/^\d+$/.test(p.key) ? " (" + esc(p.key) + ")" : "") + "</option>"; }).join("");
+      });
+      if (k === "jira") f.proj.onchange = function () { if (f.proj.value && !f.query.value.trim()) f.query.value = 'project = "' + f.proj.value + '" ORDER BY Rank ASC'; };
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const q = f.query ? f.query.value.trim() : "", pr = f.proj.value;
+        if (!pr && !q) return toast(L("Choose a ", "Escolha um ") + P.pick.toLowerCase());
+        if (k !== "jira" && !pr) return toast(L("Choose a ", "Escolha um ") + P.pick.toLowerCase());
+        const params = { project: pr, projectName: pr ? f.proj.selectedOptions[0].textContent : "", query: k === "jira" ? (q || 'project = "' + pr + '" ORDER BY Rank ASC') : q };
+        const b = f.querySelector(".pl-btn.primary"); b.disabled = true; b.textContent = L("Importing…", "Importando…");
+        extRun(k, params, f.push.checked).then(function (ok) { if (ok) close(); else { b.disabled = false; b.textContent = L("Import", "Importar"); } });
+      };
+    });
+  }
+  function extRun(k, params, push) {
+    const P = PROV[k];
+    toast(L("Talking to ", "Conversando com o ") + P.short + "…");
+    return notify(k + "-import", { project: params.project, query: params.query, jql: params.query }).then(function (j) {
+      if (!j || !j.ok) { toast(P.short + ": " + ((j && j.error) || "error")); return false; }
+      return mergeExt(k, j.issues).then(function (n) {
+        const S = { project: params.project || "", query: params.query || "", push: !!push, lastSync: Date.now(), site: j.site || "" };
+        if (params.projectName || (data.settings[k] || {}).projectName) S.projectName = params.projectName || data.settings[k].projectName;
+        if (k === "jira") S.jql = S.query;
+        return save("settings/" + k, S).then(function () {
+          toast(n.created + L(" new, ", " novos, ") + n.updated + L(" updated from ", " atualizados do ") + P.short); return true;
         });
       });
     });
   }
-  function mergeJira(issues) {
+  function mergeExt(src, issues) {
     const ss = statuses(), types = method().types, byKey = {}, u = {}, res = { created: 0, updated: 0 };
-    items().forEach(function (i) { if (i.ext && i.ext.source === "jira" && i.ext.key) byKey[i.ext.key] = i.id; });
+    items().forEach(function (i) { if (i.ext && i.ext.source === src && i.ext.key) byKey[i.ext.key] = i.id; });
     const emails = {}; Object.keys(members).forEach(function (k) { emails[members[k].email.toLowerCase()] = members[k].email; });
     function tp(x) {
       const n = (x.type || "").toLowerCase();
-      if (x.level >= 1 || /epic|épico/.test(n)) return types.indexOf("epic") >= 0 ? "epic" : "phase";
-      if (/bug|defeito/.test(n)) return types.indexOf("bug") >= 0 ? "bug" : "task";
-      if (/story|história|historia/.test(n)) return types.indexOf("story") >= 0 ? "story" : "task";
+      if (x.level >= 1 || /epic|épico|feature|initiative|iniciativa/.test(n)) return types.indexOf("epic") >= 0 ? "epic" : "phase";
+      if (/bug|defeito|defect/.test(n)) return types.indexOf("bug") >= 0 ? "bug" : "task";
+      if (/story|história|historia|backlog item|requirement|requisito/.test(n)) return types.indexOf("story") >= 0 ? "story" : "task";
       if (/milestone|marco/.test(n)) return "milestone";
       return "task";
     }
@@ -702,19 +737,19 @@
       const c = { new: "todo", indeterminate: "doing", done: "done" }[x.cat] || "todo";
       return (ss.find(function (s) { return s.cat === c; }) || ss[0]).id;
     }
-    issues.forEach(function (x, i) { if (!byKey[x.key]) { byKey[x.key] = db.ref().push().key; x._new = true; } });
+    issues.forEach(function (x) { if (!byKey[x.key]) { byKey[x.key] = db.ref().push().key; x._new = true; } });
     issues.forEach(function (x, i) {
-      const id = byKey[x.key], P = "items/" + id + "/", o = {
-        title: x.title, type: tp(x), status: st(x), key: x.key,
+      const id = byKey[x.key], Pp = "items/" + id + "/", sid = st(x), o = {
+        title: x.title, type: tp(x), status: sid, key: x.key,
         start: x.start || x.due || null, end: x.due || x.start || null,
         assignee: x.assignee && emails[x.assignee.toLowerCase()] ? emails[x.assignee.toLowerCase()] : (x._new ? null : undefined),
-        points: x.points == null ? null : Number(x.points),
+        points: x.points == null || x.points === "" ? null : Number(x.points),
         parent: x.parent && byKey[x.parent] ? byKey[x.parent] : null,
-        ext: { source: "jira", key: x.key, url: x.url, assigneeName: x.assigneeName || null }
+        ext: { source: src, key: x.key, url: x.url || null, assigneeName: x.assigneeName || null, ref: x.ref || null, project: x.project || null, wtype: x.wtype || null, board: x.board || null, workflow: x.workflow || null }
       };
-      if (st(x) && ss.find(function (s) { return s.id === o.status && s.cat === "done"; })) o.progress = 100;
+      if (ss.find(function (s) { return s.id === sid && s.cat === "done"; })) o.progress = 100;
       if (x._new) { o.order = Date.now() + i; o.created = TS(); o.by = me.email; res.created++; } else res.updated++;
-      Object.keys(o).forEach(function (k) { if (o[k] !== undefined) u[P + k] = o[k]; });
+      Object.keys(o).forEach(function (kk) { if (o[kk] !== undefined) u[Pp + kk] = o[kk]; });
     });
     return db.ref("planning/" + ID + "/data").update(u).then(function () { return res; });
   }
@@ -858,8 +893,8 @@
           db.ref("planning/" + ID + "/data").on("value", function (snap) {
             data = snap.val() || { settings: {}, items: {}, sprints: {} };
             if (!data.items) data.items = {}; if (!data.settings) data.settings = {};
-            const hasJ = !!(data.settings.jira);
-            if (!document.getElementById("view") || hasJ !== !!document.getElementById("jiraSync") && canEdit) shell(); else renderView();
+            const linked = Object.keys(PROV).filter(function (k) { return data.settings[k]; }).join(",");
+            if (!document.getElementById("view") || (canEdit && linked !== shell._linked)) { shell._linked = linked; shell(); } else renderView();
           }, function (e) { gate(L("No access", "Sem acesso"), e.message); });
         }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "O seu acesso a este workspace pode ter terminado.")); });
       }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "O seu acesso a este workspace pode ter terminado.")); });

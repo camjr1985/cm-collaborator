@@ -34,6 +34,8 @@ function doPost(e) {
     var who = verify(req.idToken);
     if (req.kind === "assign" || req.kind === "due") return json(planNotify(req, who, brand));
     if (/^jira-/.test(String(req.kind || ""))) return json(jiraHandle(req, who));
+    if (/^azure-/.test(String(req.kind || ""))) return json(azureHandle(req, who));
+    if (/^kanbanize-/.test(String(req.kind || ""))) return json(kbHandle(req, who));
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
     var info = get("workspaces/" + wsId + "/info", req.idToken) || {};
@@ -298,4 +300,177 @@ function jiraFields(conn) {
   });
   cache.put(ck, JSON.stringify(F), 21600);
   return F;
+}
+
+/* ---------------- shared access check for integrations ---------------- */
+function integAccess(req, who) {
+  var tok = req.idToken, me = key(who.email), isAdmin = get("admins/" + me, tok) === true, wsId;
+  if (req.plan) {
+    if (!/^[A-Za-z0-9_-]{1,90}$/.test(String(req.plan))) throw new Error("bad planning");
+    var pinfo = get("planning/" + req.plan + "/info", tok); if (!pinfo) throw new Error("planning not found"); wsId = pinfo.ws;
+  } else wsId = String(req.ws || "");
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
+  var winfo = get("workspaces/" + wsId + "/info", tok) || {}, mm = get("workspaces/" + wsId + "/members/" + me, tok);
+  var isOwner = isAdmin || winfo.owner === me;
+  return { tok: tok, wsId: wsId, isOwner: isOwner, isEditor: isOwner || !!(mm && mm.role === "editor" && (!mm.expires || mm.expires > Date.now())) };
+}
+function integItem(req, acc, source) {
+  var item = get("planning/" + req.plan + "/data/items/" + String(req.item || ""), acc.tok);
+  if (!item || !item.ext || item.ext.source !== source) throw new Error("not an item from " + source);
+  var sts = get("planning/" + req.plan + "/data/settings/statuses", acc.tok) || [], cat = "todo", stName = "";
+  sts.forEach(function (x) { if (x.id === item.status) { cat = x.cat; stName = x.name; } });
+  return { item: item, cat: cat, stName: stName };
+}
+function httpJson(url, method, headers, body, ctype) {
+  var o = { method: method.toLowerCase(), muteHttpExceptions: true, headers: headers };
+  if (body !== undefined) { o.contentType = ctype || "application/json"; o.payload = JSON.stringify(body); }
+  var r = UrlFetchApp.fetch(url, o), c = r.getResponseCode(), t = r.getContentText();
+  if (c >= 300) {
+    var m = t; try { var j = JSON.parse(t); m = j.message || (j.error && (j.error.message || j.error)) || j.errorMessage || t; } catch (e) { /* not JSON */ }
+    if (c === 401 || c === 203) m = "invalid credentials";
+    throw new Error(c + ": " + String(m).replace(/<[^>]+>/g, " ").slice(0, 300));
+  }
+  if (c === 203) throw new Error("invalid credentials");
+  try { return t ? JSON.parse(t) : {}; } catch (e) { throw new Error("unexpected response (check the URL and credentials)"); }
+}
+
+/* ---------------- Azure DevOps Boards ----------------
+ * Connection: organisation URL (https://dev.azure.com/<org>) + Personal Access Token (Work Items read & write). */
+function azureHandle(req, who) {
+  var acc = integAccess(req, who), P = PropertiesService.getScriptProperties(), pk = "azure:" + acc.wsId, conn;
+  function az(method, path, body, ctype) {
+    return httpJson(conn.org + path, method, { Authorization: "Basic " + Utilities.base64Encode(":" + conn.pat), Accept: "application/json" }, body, ctype);
+  }
+  if (req.kind === "azure-connect") {
+    if (!acc.isOwner) throw new Error("only the workspace owner or an admin can connect Azure DevOps");
+    var org = String(req.org || "").trim().replace(/\/+$/, "");
+    var m = org.match(/^https:\/\/dev\.azure\.com\/([A-Za-z0-9._-]+)$/i) || org.match(/^https:\/\/([A-Za-z0-9-]+)\.visualstudio\.com$/i);
+    if (!m) throw new Error("the organisation URL must look like https://dev.azure.com/your-org");
+    conn = { org: org, pat: String(req.pat || "").trim() };
+    if (!conn.pat) throw new Error("the Personal Access Token is required");
+    var pr = az("GET", "/_apis/projects?api-version=7.1&$top=1");
+    conn.by = who.email; conn.at = Date.now(); P.setProperty(pk, JSON.stringify(conn));
+    return { ok: true, site: org, account: m[1], projects: pr.count };
+  }
+  if (req.kind === "azure-disconnect") { if (!acc.isOwner) throw new Error("not allowed"); P.deleteProperty(pk); return { ok: true }; }
+  var raw = P.getProperty(pk); if (!raw) throw new Error("Azure DevOps is not connected for this workspace");
+  conn = JSON.parse(raw);
+  if (!acc.isEditor) throw new Error("not allowed");
+  var stCache = {};
+  function states(project, type) {
+    var k = project + "|" + type; if (stCache[k]) return stCache[k];
+    stCache[k] = (az("GET", "/" + encodeURIComponent(project) + "/_apis/wit/workitemtypes/" + encodeURIComponent(type) + "/states?api-version=7.1").value || []);
+    return stCache[k];
+  }
+  var CAT = { Proposed: "new", InProgress: "indeterminate", Resolved: "indeterminate", Completed: "done", Removed: "removed" };
+  if (req.kind === "azure-projects") {
+    var ps = az("GET", "/_apis/projects?api-version=7.1&$top=200").value || [];
+    return { ok: true, site: conn.org, projects: ps.map(function (x) { return { key: x.name, name: x.name }; }).sort(function (a, b) { return a.name.localeCompare(b.name); }) };
+  }
+  if (req.kind === "azure-import") {
+    var project = String(req.project || "").trim(); if (!project) throw new Error("choose a project");
+    var wiql = String(req.query || "").trim() || "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] <> 'Removed' ORDER BY [System.Id]";
+    var q = az("POST", "/" + encodeURIComponent(project) + "/_apis/wit/wiql?api-version=7.1&$top=1000", { query: wiql });
+    var ids = (q.workItems || []).map(function (w) { return w.id; }).slice(0, 1000), out = [];
+    for (var i = 0; i < ids.length; i += 200) {
+      var b = az("POST", "/" + encodeURIComponent(project) + "/_apis/wit/workitemsbatch?api-version=7.1", { ids: ids.slice(i, i + 200), $expand: "None", errorPolicy: "Omit" });
+      (b.value || []).forEach(function (w) {
+        if (!w || !w.fields) return;
+        var f = w.fields, type = f["System.WorkItemType"] || "", st = f["System.State"] || "", cat = "new";
+        states(f["System.TeamProject"] || project, type).forEach(function (s) { if (s.name === st) cat = CAT[s.category] || "new"; });
+        if (cat === "removed") return;
+        var a = f["System.AssignedTo"], d = function (v) { return v ? String(v).slice(0, 10) : null; };
+        out.push({ key: "#" + w.id, ref: w.id, title: f["System.Title"] || ("#" + w.id), type: type, level: /^(epic|feature)$/i.test(type) ? 1 : 0,
+          status: st, cat: cat, assignee: a ? (a.uniqueName || "") : "", assigneeName: a ? (a.displayName || "") : "",
+          start: d(f["Microsoft.VSTS.Scheduling.StartDate"]), due: d(f["Microsoft.VSTS.Scheduling.TargetDate"] || f["Microsoft.VSTS.Scheduling.DueDate"] || f["Microsoft.VSTS.Scheduling.FinishDate"]),
+          points: f["Microsoft.VSTS.Scheduling.StoryPoints"] != null ? f["Microsoft.VSTS.Scheduling.StoryPoints"] : (f["Microsoft.VSTS.Scheduling.Effort"] != null ? f["Microsoft.VSTS.Scheduling.Effort"] : null),
+          parent: f["System.Parent"] ? "#" + f["System.Parent"] : null, project: f["System.TeamProject"] || project, wtype: type,
+          url: conn.org + "/" + encodeURIComponent(f["System.TeamProject"] || project) + "/_workitems/edit/" + w.id });
+      });
+    }
+    return { ok: true, site: conn.org, issues: out };
+  }
+  if (req.kind === "azure-push") {
+    var x = integItem(req, acc, "azure"), it = x.item, id = Number(it.ext.ref || String(it.ext.key).replace("#", ""));
+    var ops = [{ op: "add", path: "/fields/System.Title", value: it.title }];
+    if (it.start) ops.push({ op: "add", path: "/fields/Microsoft.VSTS.Scheduling.StartDate", value: it.start + "T00:00:00Z" });
+    if (it.end) ops.push({ op: "add", path: "/fields/Microsoft.VSTS.Scheduling.TargetDate", value: it.end + "T00:00:00Z" });
+    var want = { todo: "Proposed", doing: "InProgress", done: "Completed" }[x.cat], pick = null;
+    var sts = it.ext.project && it.ext.wtype ? states(it.ext.project, it.ext.wtype) : [];
+    sts.forEach(function (s) { if (!pick && x.stName && s.name.toLowerCase() === x.stName.toLowerCase()) pick = s.name; });
+    sts.forEach(function (s) { if (!pick && s.category === want) pick = s.name; });
+    if (pick) ops.push({ op: "add", path: "/fields/System.State", value: pick });
+    try { az("PATCH", "/_apis/wit/workitems/" + id + "?api-version=7.1", ops, "application/json-patch+json"); }
+    catch (e) { // some processes have no StartDate/TargetDate on this type: retry with title + state only
+      az("PATCH", "/_apis/wit/workitems/" + id + "?api-version=7.1", ops.filter(function (o) { return !/Scheduling/.test(o.path); }), "application/json-patch+json");
+    }
+    return { ok: true, moved: !!pick };
+  }
+  throw new Error("unknown action");
+}
+
+/* ---------------- Kanbanize / Businessmap ----------------
+ * Connection: account URL (https://<account>.kanbanize.com or .businessmap.io) + API key (profile → API). */
+function kbHandle(req, who) {
+  var acc = integAccess(req, who), P = PropertiesService.getScriptProperties(), pk = "kanbanize:" + acc.wsId, conn;
+  function kb(method, path, body) { return httpJson(conn.url + "/api/v2" + path, method, { apikey: conn.key, Accept: "application/json" }, body); }
+  function arr(r) { var d = r && r.data; if (Array.isArray(d)) return d; if (d && Array.isArray(d.data)) return d.data; return []; }
+  if (req.kind === "kanbanize-connect") {
+    if (!acc.isOwner) throw new Error("only the workspace owner or an admin can connect Kanbanize");
+    var u = String(req.url || "").trim().replace(/\/+$/, "").replace(/\/api\/v2$/, "").toLowerCase();
+    if (/^[a-z0-9-]+$/.test(u)) u = "https://" + u + ".kanbanize.com";
+    if (!/^https:\/\/[a-z0-9-]+\.(kanbanize\.com|businessmap\.io)$/.test(u)) throw new Error("the account URL must look like https://your-account.kanbanize.com");
+    conn = { url: u, key: String(req.key || "").trim() };
+    if (!conn.key) throw new Error("the API key is required");
+    var md = {};
+    try { md = (kb("GET", "/me") || {}).data || {}; } catch (e) { if (/credentials|401|403/.test(e.message)) throw e; kb("GET", "/boards?fields=board_id"); }
+    conn.by = who.email; conn.at = Date.now(); P.setProperty(pk, JSON.stringify(conn));
+    return { ok: true, site: u, account: md.realname || md.username || md.email || u.replace("https://", "") };
+  }
+  if (req.kind === "kanbanize-disconnect") { if (!acc.isOwner) throw new Error("not allowed"); P.deleteProperty(pk); return { ok: true }; }
+  var raw = P.getProperty(pk); if (!raw) throw new Error("Kanbanize is not connected for this workspace");
+  conn = JSON.parse(raw);
+  if (!acc.isEditor) throw new Error("not allowed");
+  var SEC = { 1: "new", 2: "new", 3: "indeterminate", 4: "done", 5: "done" };
+  if (req.kind === "kanbanize-projects") {
+    var bs = arr(kb("GET", "/boards?is_archived=0&fields=board_id,name"));
+    return { ok: true, site: conn.url, projects: bs.map(function (b) { return { key: String(b.board_id), name: b.name }; }) };
+  }
+  if (req.kind === "kanbanize-import") {
+    var board = String(req.project || "").replace(/\D/g, ""); if (!board) throw new Error("choose a board");
+    var cols = {}, users = {}, types = {};
+    arr(kb("GET", "/boards/" + board + "/columns")).forEach(function (c) { cols[c.column_id] = c; });
+    try { arr(kb("GET", "/users?fields=user_id,email,realname,username")).forEach(function (x) { users[x.user_id] = x; }); } catch (e) { /* user list may need admin rights */ }
+    try { arr(kb("GET", "/cardTypes")).forEach(function (x) { types[x.type_id] = x.name; }); } catch (e) { /* optional */ }
+    var out = [], page = 1, pages = 1;
+    do {
+      var r = kb("GET", "/cards?board_ids=" + board + "&per_page=200&page=" + page);
+      arr(r).forEach(function (c) {
+        var col = cols[c.column_id] || {}, sec = c.section || col.section, cat = SEC[sec] || "new";
+        if (sec === 5) return; // archive
+        var o = users[c.owner_user_id] || {}, tn = types[c.type_id] || "";
+        out.push({ key: (c.custom_id ? String(c.custom_id) : "KB-" + c.card_id), ref: c.card_id, title: c.title || ("#" + c.card_id), type: tn, level: /initiative|epic/i.test(tn) ? 1 : 0,
+          status: col.name || "", cat: cat, assignee: o.email || "", assigneeName: o.realname || o.username || "",
+          start: c.planned_start_date ? String(c.planned_start_date).slice(0, 10) : null, due: c.deadline ? String(c.deadline).slice(0, 10) : (c.planned_end_date ? String(c.planned_end_date).slice(0, 10) : null),
+          points: c.size != null ? c.size : null, parent: null, board: Number(board), workflow: c.workflow_id || col.workflow_id || null,
+          url: conn.url + "/ctrl_board/" + board + "/cards/" + c.card_id + "/details/" });
+      });
+      var pg = r && r.data && r.data.pagination; pages = pg ? (pg.all_pages || 1) : 1; page++;
+    } while (page <= pages && page <= 10);
+    return { ok: true, site: conn.url, issues: out };
+  }
+  if (req.kind === "kanbanize-push") {
+    var x = integItem(req, acc, "kanbanize"), it = x.item, body = { title: it.title };
+    if (it.end) body.deadline = it.end;
+    var want = { todo: [2, 1], doing: [3], done: [4] }[x.cat] || [2, 1], pick = null;
+    if (it.ext.board) {
+      var cs = arr(kb("GET", "/boards/" + it.ext.board + "/columns")).filter(function (c) { return !it.ext.workflow || c.workflow_id === it.ext.workflow; });
+      cs.forEach(function (c) { if (!pick && x.stName && String(c.name).toLowerCase() === x.stName.toLowerCase()) pick = c; });
+      want.forEach(function (s) { cs.forEach(function (c) { if (!pick && c.section === s && !c.parent_column_id) pick = c; }); });
+      if (pick) body.column_id = pick.column_id;
+    }
+    kb("PATCH", "/cards/" + Number(it.ext.ref), body);
+    return { ok: true, moved: !!pick };
+  }
+  throw new Error("unknown action");
 }
