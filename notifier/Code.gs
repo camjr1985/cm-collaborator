@@ -35,6 +35,7 @@ function doPost(e) {
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
     var info = get("workspaces/" + wsId + "/info", req.idToken) || {};
+    info.boards = get("workspaces/" + wsId + "/boards", req.idToken) || {};
     var isAdmin = get("admins/" + key(who.email), req.idToken) === true;
     if (!isAdmin && info.owner !== key(who.email)) throw new Error("not allowed");
     var list = [].concat(req.to || []).slice(0, CFG.maxPerCall);
@@ -79,6 +80,9 @@ function welcome(m, info, lang, brand) {
   var hub = CFG.site + "workspaces/", fb = CFG.site + "feedback/", guide = CFG.site + "beta/CM-Collaborator-Boas-vindas.pdf";
   var until = m.expires ? Utilities.formatDate(new Date(m.expires), "Europe/Lisbon", "dd/MM/yyyy") : "";
   var wsName = info.name || "";
+  var bl = Object.keys(info.boards || {}).sort().map(function (k) { return { k: k, t: (info.boards[k] && info.boards[k].title) || k }; });
+  var sb = bl.filter(function (b) { return /comece|start here|^1[-\s·]/i.test(b.k + " " + b.t); })[0] || bl[0];
+  var tour = sb && /comece|start here/i.test(sb.k + " " + sb.t);
   var L = pt ? {
     subject: "Bem-vindo(a) ao " + brand + " – o seu acesso está ativo ✨",
     hi: "Olá" + (first ? " " + first : "") + ",",
@@ -87,7 +91,7 @@ function welcome(m, info, lang, brand) {
     how: "Como entrar",
     s1: "Abra <a href=\"" + hub + "\">" + hub.replace("https://", "") + "</a>",
     s2: "Entre com <b>este mesmo e-mail</b> (" + esc(m.email) + ") – botão Google ou link de acesso por e-mail.",
-    s3: "Abra o workspace e comece pelo quadro <b>“1 · Comece aqui”</b>: missões curtas que mostram tudo.",
+    s3: sb ? "Abra o workspace e comece pelo quadro <b>“" + esc(sb.t) + "”</b>" + (tour ? ": missões curtas que mostram tudo." : ".") : "Abra o workspace <b>“" + esc(wsName) + "”</b> para ver os quadros partilhados consigo.",
     aiT: "Novidade ✨ – Assistente IA nos quadros",
     ai: ["<b>Construir um quadro</b> a partir do seu objetivo (frames, instruções e agenda);", "<b>Sugerir dinâmicas</b> para o grupo, com passos e tempos;", "<b>Analisar os resultados</b> depois da sessão: temas, prioridades e plano de ações."],
     aiH: "Clique no botão ✨ da barra de ferramentas do quadro.",
@@ -104,7 +108,7 @@ function welcome(m, info, lang, brand) {
     how: "How to sign in",
     s1: "Open <a href=\"" + hub + "\">" + hub.replace("https://", "") + "</a>",
     s2: "Sign in with <b>this same e-mail</b> (" + esc(m.email) + ") – Google button or e-mail sign-in link.",
-    s3: "Open the workspace and start with the board <b>“1 · Start here”</b>: short missions that show everything.",
+    s3: sb ? "Open the workspace and start with the board <b>“" + esc(sb.t) + "”</b>" + (tour ? ": short missions that show everything." : ".") : "Open the workspace <b>“" + esc(wsName) + "”</b> to see the boards shared with you.",
     aiT: "New ✨ – AI assistant on the boards",
     ai: ["<b>Build a board</b> from your goal (frames, instructions and agenda);", "<b>Suggest dynamics</b> for your group, with steps and timings;", "<b>Analyse the results</b> after the session: themes, priorities and action plan."],
     aiH: "Click the ✨ button on the board toolbar.",
