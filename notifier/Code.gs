@@ -625,3 +625,5 @@ function installDaily() {
   ScriptApp.newTrigger("dailyDigest").timeBased().everyDays(1).atHour(8).inTimezone("Europe/Lisbon").create();
   return dailyDigest();
 }
+
+function testRead() { var p = adminGet("planning") || {}; Logger.log("planning ok: " + Object.keys(p).length); return Object.keys(p).length; }
