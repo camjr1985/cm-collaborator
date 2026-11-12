@@ -19,10 +19,11 @@
   let T = null, W = 1600, H = 1000;
   const VOTES = window.CMCOLLAB_VOTES_PER_USER || 5;
   const ROOT = CFG.root || "./";
-  const PALETTE = ["#FFE680", "#FFC46B", "#FF9E8F", "#F6A8D2", "#C3B1FF", "#8EC5FF", "#7FDCC0", "#B9E48A", "#E4E8EF"];
+  const LL = function (en, pt) { return window.MB_LANG === "pt" ? pt : en; };
+  const PALETTE = ["#FFDD4A", "#FFAE45", "#FF8577", "#FF8CC6", "#AE8FFF", "#5FAEFF", "#3FD3B0", "#9BDD5C", "#DDE3EC"];
   const TEXT_COLORS = ["#1c2033", "#e5484d", "#f76b15", "#12a594", "#4262ff", "#8e4ec6", "#ffffff"];
-  const FRAME_COLORS = ["#ffffff", "#f4f5f8", "#fff8d6", "#eaf7dc", "#e3f0fd", "#fde7e9", "#f4eefe", "#1c2033"];
-  const FILL_COLORS = ["#ffffff", "#DCEBFF", "#E3F7EF", "#FFF4D1", "#FFE3DD", "#EEE8FF", "#8EC5FF", "#7FDCC0", "#FFC46B", "#1E2A4A"];
+  const FRAME_COLORS = ["#ffffff", "#F2F4F8", "#FFF5C8", "#E6F8D6", "#DCEEFF", "#FFE4E0", "#EEE6FF", "#1c2033"];
+  const FILL_COLORS = ["#ffffff", "#DCEEFF", "#D7F7EE", "#FFF5C8", "#FFE4E0", "#EEE6FF", "#5FAEFF", "#3FD3B0", "#FFAE45", "#1E2A4A"];
   const SHAPES = ["rect", "round", "pill", "ellipse", "diamond", "triangle", "hexagon"];
   const PEOPLE_COLORS = ["#4262FF", "#E5484D", "#12A594", "#F76B15", "#8E4EC6", "#D6409F", "#0090FF", "#3E9B4F"];
   const t = function (s) { return window.MBt ? window.MBt(s) : s; };
@@ -156,7 +157,8 @@
       '<aside id="toolbar" aria-label="Tools">' +
       '<button class="tb" data-tool="select" title="Select (V)">' + ico("select") + "</button>" +
       '<button class="tb" data-tool="hand" title="Hand – move the board (H or hold Space)">' + ico("hand") + "</button>" +
-      '<button class="tb accent" id="tbTemplates" title="Templates">' + ico("template") + "</button>" +
+      '<button class="tb accent" id="tbTemplates" title="' + LL("Templates & dynamics", "Templates e dinâmicas") + '">' + ico("template") + "</button>" +
+      '<button class="tb plan-tb" id="tbPlanning" title="' + LL("Planning – roadmap, schedule, Scrum or Kanban", "Planejamento – roadmap, cronograma, Scrum ou Kanban") + '">' + (window.CMIcon ? window.CMIcon("planning", 20) : ico("template")) + (window.CMNewBadge ? window.CMNewBadge("planning", "corner") : "") + "</button>" +
       '<span class="sep"></span>' +
       '<div class="tool-fly"><button class="tb" data-tool="sticky" id="tbSticky" title="Post-it (N) – click on the board to place">' + ico("sticky") + '</button><div class="fly swatches" id="addSwatches"></div></div>' +
       '<button class="tb" data-tool="text" title="Text (T)">' + ico("text") + "</button>" +
@@ -479,13 +481,14 @@
       el = document.createElement("div");
       el.dataset.id = o.id;
       el.dataset.type = type;
-      el.className = "obj " + ({ sticky: "sticky", text: "textobj", image: "imgobj", frame: "frameobj", shape: "shapeobj", arrow: "arrowobj", icon: "iconobj" }[type] || "sticky");
+      el.className = "obj " + ({ sticky: "sticky", text: "textobj", image: "imgobj", frame: "frameobj", shape: "shapeobj", arrow: "arrowobj", icon: "iconobj", plan: "planobj" }[type] || "sticky");
       const rz = '<span class="rz" title="Resize"></span>';
       if (type === "image") el.innerHTML = '<img alt="" draggable="false"><div class="badges"></div>' + rz;
       else if (type === "frame") el.innerHTML = '<div class="ftitle"><div class="txt" spellcheck="false" data-ph="' + esc(t("Frame")) + '"></div></div>' + rz;
       else if (type === "shape") el.innerHTML = '<svg class="shp" viewBox="0 0 100 100" preserveAspectRatio="none"></svg><div class="txt" spellcheck="true" data-ph=""></div><div class="badges"></div>' + rz;
       else if (type === "arrow") el.innerHTML = '<svg class="arw"><path class="hit"/><path class="ln" fill="none" stroke-linecap="round"/><polygon class="hd"/></svg><span class="ah" data-end="1"></span><span class="ah" data-end="2"></span>';
       else if (type === "icon") el.innerHTML = '<div class="ic-in"></div>' + rz;
+      else if (type === "plan") el.innerHTML = '<div class="pc-in"></div>' + rz;
       else el.innerHTML = '<div class="txt" spellcheck="true" data-ph="' + esc(t(type === "text" ? "Type something" : "Click to write")) + '"></div>' + (type === "sticky" ? '<div class="badges"></div>' : "") + rz;
       els.layer.appendChild(el);
       els.objs[o.id] = el;
@@ -529,6 +532,8 @@
       }
       el.style.color = o.color || "#1c2033";
       const emo = inner.querySelector(".emo"); if (emo) emo.style.fontSize = Math.round((o.h || 80) * 0.8) + "px";
+    } else if (type === "plan") {
+      renderPlanCard(o, el);
     } else if (type === "image") {
       const img = el.querySelector("img");
       const src = S.images[o.id] || "";
@@ -601,7 +606,7 @@
   function zoneColorAt(cx, cy) {
     const hit = document.elementsFromPoint(cx, cy).map(function (n) { return n.closest && n.closest(".zone,.quad"); }).find(Boolean);
     if (!hit) return null;
-    return hit.dataset.color || (hit.classList.contains("quad") ? "#E6E6E6" : null);
+    return hit.dataset.color || (hit.classList.contains("quad") ? "#DDE3EC" : null);
   }
   function objAtPoint(cx, cy, exclude) {
     const hits = document.elementsFromPoint(cx, cy);
@@ -1188,23 +1193,132 @@
     canEdit: canEdit, modal: modal, closeModal: closeModal, toast: toast, insert: insertObjects, snapshot: boardSnapshot,
     hasSelection: function () { return sel.size > 0; }, isAdmin: function () { return !!CFG.isAdmin; }, boardId: function () { return CFG.id; }
   };
-  function templatesModal() {
+  function templatesModal(tab) {
     if (!canEdit()) return toast("View only – you can read this board but not edit it");
-    const list = window.MBTemplateList ? window.MBTemplateList().filter(function (x) { return x.kind === "kit"; }) : [];
-    const cats = window.MB_KIT_CATS || {};
-    let h = '<div class="tpl-head"><h2>Templates</h2><button class="icon-btn" id="tplClose" title="Close">' + ico("close") + '</button></div><p class="muted">Insert a ready-made template into this board. Everything stays editable – move, recolour, add post-its.</p>';
-    ["executive", "feedback", "agile", "tech", "data", "diagram", "strategy"].forEach(function (c) {
-      const items = list.filter(function (x) { return x.cat === c; });
-      if (!items.length) return;
-      h += '<h3 class="tpl-cat no-i18n">' + esc(cats[c] || c) + '</h3><div class="tpl-grid">' + items.map(function (x) {
-        return '<button class="tpl-card" data-kit="' + x.id + '"><span class="tpl-pv">' + window.MBTemplatePreview(x.id) + '</span><b class="no-i18n">' + esc(x.name) + '</b><small class="no-i18n">' + esc(x.desc) + "</small></button>";
-      }).join("") + "</div>";
-    });
+    tab = tab === "plan" ? "plan" : "dyn";
+    const IC = function (n, sz) { return window.CMIcon ? window.CMIcon(n, sz || 16) : ""; };
+    let h = '<div class="tpl-head"><h2 class="no-i18n">' + (tab === "plan" ? LL("Planning", "Planejamento") : LL("Templates & dynamics", "Templates e dinâmicas")) + '</h2><button class="icon-btn" id="tplClose" title="Close">' + ico("close") + "</button></div>" +
+      '<div class="tpl-tabs no-i18n" role="tablist"><button data-ttab="dyn" class="' + (tab === "dyn" ? "on" : "") + '">' + ico("template") + "<span>" + LL("Dynamics & templates", "Dinâmicas e templates") + '</span></button><button data-ttab="plan" class="' + (tab === "plan" ? "on" : "") + '">' + IC("planning", 18) + "<span>" + LL("Planning", "Planejamento") + "</span>" + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + "</button></div>";
+    if (tab === "dyn") {
+      const list = window.MBTemplateList ? window.MBTemplateList().filter(function (x) { return x.kind === "kit"; }) : [];
+      const cats = window.MB_KIT_CATS || {};
+      h += '<p class="muted">Insert a ready-made template into this board. Everything stays editable – move, recolour, add post-its.</p>';
+      ["executive", "feedback", "agile", "tech", "data", "diagram", "strategy"].forEach(function (c) {
+        const items = list.filter(function (x) { return x.cat === c; });
+        if (!items.length) return;
+        h += '<h3 class="tpl-cat no-i18n">' + esc(cats[c] || c) + '</h3><div class="tpl-grid">' + items.map(function (x) {
+          return '<button class="tpl-card" data-kit="' + x.id + '"><span class="tpl-pv">' + window.MBTemplatePreview(x.id) + '</span><b class="no-i18n">' + esc(x.name) + '</b><small class="no-i18n">' + esc(x.desc) + "</small></button>";
+        }).join("") + "</div>";
+      });
+    } else h += planPane();
     modal(h, function (root) {
       els.modal.classList.add("wide");
       root.querySelector("#tplClose").onclick = closeModal;
+      root.querySelectorAll("[data-ttab]").forEach(function (b) { b.onclick = function () { templatesModal(b.dataset.ttab); }; });
       root.querySelectorAll("[data-kit]").forEach(function (b) { b.onclick = function () { closeModal(); insertKit(b.dataset.kit); }; });
+      if (tab === "plan") bindPlanPane(root);
     });
+  }
+
+  /* ================= planning inside the board ================= */
+  const planInfoCache = {};
+  function planMethods() { return window.PLAN_METHODS || {}; }
+  function planPane() {
+    const M = planMethods(), order = window.PLAN_ORDER || [];
+    const IC = function (n, sz) { return window.CMIcon ? window.CMIcon(n, sz || 16) : ""; };
+    let h = '<p class="muted no-i18n">' + LL("Create a planning linked to this board: a Jira-style roadmap, a Waterfall schedule, Scrum or Kanban – with OKRs, e-mail alerts and Jira, Azure DevOps and Kanbanize integration. It opens on its own page and a shortcut card is added here.",
+      "Crie um planejamento ligado a este quadro: roadmap estilo Jira, cronograma Waterfall, Scrum ou Kanban – com OKRs, alertas por e-mail e integração com Jira, Azure DevOps e Kanbanize. Ele abre numa página própria e ganha um cartão de atalho aqui no quadro.") + "</p>";
+    if (!CFG.signedIn || !CFG.ws) return h + '<div class="pp-note no-i18n">' + LL("Planning is available on boards that belong to a workspace. Sign in and open the board from “My boards”.", "O planejamento está disponível em quadros de um workspace. Faça login e abra o quadro em “Meus quadros”.") + "</div>";
+    if (CFG.canPlan) {
+      h += '<form id="ppForm" class="pp-form no-i18n"><h3 class="tpl-cat">' + LL("1 · Choose the type", "1 · Escolha o tipo") + '</h3><div class="tpl-grid pp-grid">' + order.map(function (k, i) {
+        const m = M[k];
+        return '<label class="tpl-card pp-card"><input type="radio" name="method" value="' + k + '"' + (i === 0 ? " checked" : "") + '><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + "</span><b>" + IC(m.icon, 15) + " " + esc(m.name) + "</b><small>" + esc(m.desc) + "</small></label>";
+      }).join("") + "</div>" +
+        '<h3 class="tpl-cat">' + LL("2 · Name it", "2 · Dê um nome") + '</h3><div class="pp-row"><input name="title" required maxlength="80" autocomplete="off" placeholder="' + esc(LL("e.g. Product roadmap 2027", "ex.: Roadmap do produto 2027")) + '"><button class="btn primary">' + IC("plus", 16) + " " + LL("Create planning", "Criar planejamento") + "</button></div></form>";
+    } else {
+      h += '<div class="pp-note no-i18n">' + LL("Only the workspace owner or an administrator can create a planning. You can add existing plannings of this workspace to the board below.", "Somente o dono do workspace ou o administrador pode criar planejamentos. Abaixo você pode adicionar ao quadro os planejamentos que já existem neste workspace.") + "</div>";
+    }
+    h += '<h3 class="tpl-cat no-i18n">' + LL("Plannings in this workspace", "Planejamentos deste workspace") + '</h3><div id="ppList" class="pp-list no-i18n"><span class="muted small">' + LL("Loading…", "Carregando…") + "</span></div>";
+    return h;
+  }
+  function bindPlanPane(root) {
+    if (window.CMMarkSeen) window.CMMarkSeen("planning");
+    const f = root.querySelector("#ppForm");
+    if (f) {
+      setTimeout(function () { f.title.focus(); }, 40);
+      f.onsubmit = function (e) { e.preventDefault(); createPlanning(f); };
+    }
+    const box = root.querySelector("#ppList"); if (!box || !window.CMAuth || !CFG.ws) return;
+    window.CMAuth.db().ref("workspaces/" + CFG.ws + "/plannings").once("value").then(function (s) {
+      const v = s.val() || {}, ids = Object.keys(v).sort(function (a, b) { return (v[b].created || 0) - (v[a].created || 0); });
+      const onBoard = {}; Object.keys(S.stickies).forEach(function (k) { const o = S.stickies[k]; if (o && o.type === "plan") onBoard[o.plan] = 1; });
+      const M = planMethods();
+      box.innerHTML = ids.length ? ids.map(function (id) {
+        const p = v[id], m = M[p.method] || {};
+        return '<div class="pp-item"><span class="pp-ic">' + (window.CMIcon ? window.CMIcon(m.icon || "planning", 18) : "") + '</span><span class="pp-t"><b>' + esc(p.title || id) + '</b><small class="muted">' + esc(m.name || "Planning") + "</small></span>" +
+          '<a class="btn sm ghost" target="_blank" rel="noopener" href="' + ROOT + "planning/?id=" + encodeURIComponent(id) + '">' + LL("Open", "Abrir") + "</a>" +
+          (onBoard[id] ? '<span class="pp-on">' + LL("On this board", "Já está no quadro") + "</span>" : '<button class="btn sm" data-addplan="' + esc(id) + '">' + LL("Add to board", "Adicionar ao quadro") + "</button>") + "</div>";
+      }).join("") : '<span class="muted small">' + LL("No plannings yet in this workspace.", "Ainda não há planejamentos neste workspace.") + "</span>";
+      box.querySelectorAll("[data-addplan]").forEach(function (b) {
+        b.onclick = function () { const p = v[b.dataset.addplan]; closeModal(); addPlanCard(b.dataset.addplan, p.title, p.method); };
+      });
+    }, function () { box.innerHTML = '<span class="muted small">' + LL("Could not load the plannings.", "Não foi possível carregar os planejamentos.") + "</span>"; });
+  }
+  function planSlug(s) { return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48); }
+  function createPlanning(f) {
+    const title = f.title.value.trim(), method = f.method.value; if (!title || !window.PLAN_INITIAL) return;
+    const A = window.CMAuth, db = A.db(), user = A.user(), btn = f.querySelector(".btn.primary");
+    btn.disabled = true;
+    const limitP = CFG.isAdmin ? Promise.resolve(null) : Promise.all([
+      db.ref("plans/" + A.key(user.email)).once("value").then(function (s) { return window.CMPlan ? window.CMPlan(s.val()) : null; }, function () { return window.CMPlan ? window.CMPlan(null) : null; }),
+      db.ref("workspaces/" + CFG.ws + "/boards").once("value"), db.ref("workspaces/" + CFG.ws + "/plannings").once("value")
+    ]).then(function (r) { const used = Object.keys(r[1].val() || {}).length + Object.keys(r[2].val() || {}).length; return r[0] && used >= r[0].boards ? r[0] : null; });
+    limitP.then(function (over) {
+      if (over) { btn.disabled = false; return toast(LL("Your plan allows ", "Seu plano permite ") + over.boards + LL(" boards and plannings per workspace.", " quadros e planejamentos por workspace.")); }
+      const id = (planSlug(title) || "planning") + "-" + Math.random().toString(36).slice(2, 6), TS = window.firebase.database.ServerValue.TIMESTAMP, u = {};
+      u["planning/" + id + "/info"] = { title: title, ws: CFG.ws, method: method, created: TS, createdBy: user.email, board: CFG.id };
+      u["planning/" + id + "/data"] = window.PLAN_INITIAL(method, title);
+      u["workspaces/" + CFG.ws + "/plannings/" + id] = { title: title, method: method, created: TS };
+      return db.ref().update(u).then(function () {
+        planInfoCache[id] = { title: title, method: method };
+        addPlanCard(id, title, method);
+        const m = planMethods()[method] || {};
+        modal('<div class="pp-done no-i18n"><span class="pp-big">' + (window.CMIcon ? window.CMIcon(m.icon || "planning", 34) : "") + "</span><h2>" + LL("Planning created", "Planejamento criado") + "</h2><p class=\"muted\"><b>" + esc(title) + "</b> · " + esc(m.name || "") + "<br>" + LL("A shortcut card was added to this board.", "Um cartão de atalho foi adicionado a este quadro.") + "</p>" +
+          '<div class="modal-actions"><button class="btn ghost" id="ppStay">' + LL("Stay on the board", "Continuar no quadro") + '</button><a class="btn primary" id="ppGo" href="' + ROOT + "planning/?id=" + encodeURIComponent(id) + '">' + LL("Open planning", "Abrir planejamento") + "</a></div></div>", function (root) { root.querySelector("#ppStay").onclick = closeModal; });
+      });
+    }).catch(function (err) { btn.disabled = false; toast((err && err.message) || "Error"); });
+  }
+  function addPlanCard(id, title, method) {
+    if (!canEdit()) return;
+    const b = contentBox(), w = 380, h = 300;
+    let x, y;
+    if (b.empty) { const c = toWorld(window.innerWidth / 2, window.innerHeight / 2); x = Math.round(c.x - w / 2); y = Math.round(c.y - h / 2); }
+    else { x = Math.round(b.x + b.w + 120); y = Math.round(b.y); }
+    const o = newObj("plan", x, y, { w: w, h: h, plan: id, title: title, method: method });
+    if (createObj(o)) { selectOnly(o.id); focusBox({ x: x - 80, y: y - 80, w: w + 160, h: h + 160 }, 1); toast(LL("Planning added to the board", "Planejamento adicionado ao quadro")); }
+  }
+  function openPlan(id) { if (id) window.open(ROOT + "planning/?id=" + encodeURIComponent(id), "_blank", "noopener"); }
+  function renderPlanCard(o, el) {
+    const info = planInfoCache[o.plan] || {};
+    const title = info.title || o.title || "Planning", method = info.method || o.method || "hybrid";
+    const m = planMethods()[method] || {};
+    const key = title + "|" + method + "|" + (info.gone ? 1 : 0);
+    const inner = el.querySelector(".pc-in");
+    if (inner.dataset.k !== key) {
+      inner.dataset.k = key;
+      inner.innerHTML = '<div class="pc-head no-i18n">' + (window.CMIcon ? window.CMIcon("planning", 16) : "") + "<span>" + LL("Planning", "Planejamento") + " · " + esc(m.name || "") + '</span></div><div class="pc-title no-i18n">' + esc(title) + "</div>" +
+        '<div class="pc-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(method) : "") + "</div>" +
+        (info.gone ? '<div class="pc-gone no-i18n">' + LL("This planning was deleted or you have no access.", "Este planejamento foi excluído ou você não tem acesso.") + "</div>"
+          : '<a class="pc-open no-i18n" target="_blank" rel="noopener" href="' + ROOT + "planning/?id=" + encodeURIComponent(o.plan || "") + '">' + LL("Open planning", "Abrir planejamento") + " ↗</a>");
+    }
+    if (!planInfoCache[o.plan] && o.plan && window.CMAuth && window.CMAuth.enabled && CFG.signedIn) {
+      planInfoCache[o.plan] = { title: o.title, method: o.method, loading: true };
+      window.CMAuth.db().ref("planning/" + o.plan + "/info").once("value").then(function (s) {
+        const v = s.val();
+        planInfoCache[o.plan] = v ? { title: v.title, method: v.method } : { title: o.title, method: o.method, gone: true };
+        Object.keys(S.stickies).forEach(function (k) { const x = S.stickies[k]; if (x && x.type === "plan" && x.plan === o.plan) renderObj(x); });
+      }, function () { planInfoCache[o.plan] = { title: o.title, method: o.method, gone: true }; renderObj(o); });
+    }
   }
 
   /* ================= background ================= */
@@ -1540,6 +1654,7 @@
         return;
       }
       const objEl = e.target.closest(".obj");
+      if (e.target.closest(".pc-open")) return;
       if (objEl && editing === objEl.dataset.id && e.target.closest(".txt")) return;
       if (e.target.closest("[data-field]") || (e.target.closest(".photo") && canEdit())) { if (editing) stopEdit(); return; }
       if (editing) stopEdit();
@@ -1798,7 +1913,7 @@
     vp.addEventListener("dblclick", function (e) {
       if (!canEdit()) return;
       const objEl = e.target.closest(".obj");
-      if (objEl) { const o = S.stickies[objEl.dataset.id]; if (o && hasText(typeOf(o))) startEdit(o.id); return; }
+      if (objEl) { const o = S.stickies[objEl.dataset.id]; if (o && typeOf(o) === "plan") { openPlan(o.plan); return; } if (o && hasText(typeOf(o))) startEdit(o.id); return; }
       if (e.target.closest("[data-field],.photo")) return;
       const w = toWorld(e.clientX, e.clientY);
       const color = zoneColorAt(e.clientX, e.clientY) || placeColor || PALETTE[0];
@@ -1931,7 +2046,8 @@
     });
     $("#addSwatches").onclick = function (e) { const b = e.target.closest("button"); if (b) { placeColor = b.dataset.c; setTool("sticky"); toast("Click on the board to place the post-it"); } };
     $("#shapeFly").onclick = function (e) { const b = e.target.closest("button"); if (b) { placeShape = b.dataset.shape; setTool("shape"); toast("Click on the board to place the shape"); } };
-    $("#tbTemplates").onclick = templatesModal;
+    $("#tbTemplates").onclick = function () { templatesModal("dyn"); };
+    $("#tbPlanning").onclick = function () { templatesModal("plan"); };
     $("#tbTidy").onclick = tidyButton;
     $("#tbAI").onclick = function () { if (window.CMMarkSeen) window.CMMarkSeen("ai"); if (window.CMAI) window.CMAI.open(); else toast("AI assistant is not available"); };
     $("#tbIcons").onclick = iconModal;
@@ -2141,8 +2257,11 @@
         if (!info) return gateScreen("Board not found", t("This board does not exist or was removed."), '<a class="btn primary" href="' + ROOT + 'workspaces/">' + t("My boards") + "</a>");
         const wsP = info.ws ? db.ref("workspaces/" + info.ws + "/info/name").once("value").then(function (s) { return s.val(); }, function () { return null; }) : Promise.resolve(null);
         const roleP = admin ? Promise.resolve("editor") : db.ref("workspaces/" + info.ws + "/members/" + key + "/role").once("value").then(function (s) { return s.val() || "viewer"; });
-        return Promise.all([wsP, roleP]).then(function (x) {
+        const ownP = info.ws && !admin ? db.ref("workspaces/" + info.ws + "/info/owner").once("value").then(function (s) { return s.val() === key; }, function () { return false; }) : Promise.resolve(admin);
+        return Promise.all([wsP, roleP, ownP]).then(function (x) {
           const wsName = x[0], role = x[1];
+          CFG.ws = info.ws || null;
+          CFG.canPlan = !!(info.ws && (admin || x[2]));
           CFG.title = info.title || prettify(CFG.id);
           CFG.template = info.template || "persona";
           CFG.defaults = CFG.template === "persona" ? { name: info.title } : {};

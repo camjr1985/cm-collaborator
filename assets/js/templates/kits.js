@@ -13,8 +13,8 @@
   const PT = window.MB_LANG === "pt";
   function L(en, pt) { return PT ? pt : en; }
 
-  const C = { yellow: "#FFF59D", orange: "#FFCF8A", red: "#F7A8B0", pink: "#F6C1E4", purple: "#CDBDF6", blue: "#A9D1F7", teal: "#9FE3D3", green: "#C8EBA1", gray: "#E6E6E6" };
-  const BG = { white: "#ffffff", gray: "#f4f5f8", green: "#eaf7dc", red: "#fde7e9", blue: "#e3f0fd", yellow: "#fff8d6", purple: "#f4eefe", orange: "#fff3e0", teal: "#e3f8f2" };
+  const C = { yellow: "#FFDD4A", orange: "#FFAE45", red: "#FF8577", pink: "#FF8CC6", purple: "#AE8FFF", blue: "#5FAEFF", teal: "#3FD3B0", green: "#9BDD5C", gray: "#DDE3EC" };
+  const BG = { white: "#ffffff", gray: "#F2F4F8", green: "#E6F8D6", red: "#FFE4E0", blue: "#DCEEFF", yellow: "#FFF5C8", purple: "#EEE6FF", orange: "#FFEBD3", teal: "#D7F7EE" };
 
   /* ---------- builders ---------- */
   function kit() {
@@ -51,13 +51,13 @@
       }
     },
     retro: {
-      name: "Retrospective", desc: L("What went well, what didn't, ideas and actions.", "O que correu bem, o que não correu, ideias e ações."), cat: "agile",
+      name: "Retrospective", desc: L("What went well, what didn't, ideas and actions.", "O que deu certo, o que não correu, ideias e ações."), cat: "agile",
       build: function () {
         const k = kit();
-        k.F(0, 0, 1500, 900, L("Sprint retrospective", "Retrospetiva da sprint"));
-        k.T(40, 30, L("Sprint retrospective", "Retrospetiva da sprint"), 36, 900);
-        k.T(40, 84, L("Add your post-its, group similar ideas and vote (dot voting) on what matters most.", "Adicione os seus post-its, agrupe ideias semelhantes e vote (dot voting) no que mais importa."), 18, 1100, "#4a5068");
-        const cols = [[L("😀 What went well", "😀 O que correu bem"), BG.green, C.green], [L("😕 What didn't go well", "😕 O que não correu bem"), BG.red, C.red], [L("💡 Ideas to try", "💡 Ideias para testar"), BG.blue, C.blue], [L("✅ Action items", "✅ Ações"), BG.yellow, C.yellow]];
+        k.F(0, 0, 1500, 900, L("Sprint retrospective", "Retrospectiva da sprint"));
+        k.T(40, 30, L("Sprint retrospective", "Retrospectiva da sprint"), 36, 900);
+        k.T(40, 84, L("Add your post-its, group similar ideas and vote (dot voting) on what matters most.", "Adicione seus post-its, agrupe ideias semelhantes e vote (dot voting) no que mais importa."), 18, 1100, "#4a5068");
+        const cols = [[L("😀 What went well", "😀 O que deu certo"), BG.green, C.green], [L("😕 What didn't go well", "😕 O que não deu certo"), BG.red, C.red], [L("💡 Ideas to try", "💡 Ideias para testar"), BG.blue, C.blue], [L("✅ Action items", "✅ Ações"), BG.yellow, C.yellow]];
         cols.forEach(function (c, i) { k.F(40 + i * 360, 160, 340, 700, c[0], c[1]); k.S(60 + i * 360, 190, "", c[2]); });
         return k.out;
       }
@@ -97,7 +97,7 @@
         let y = gy + hh;
         const cells = [];
         rows.forEach(function (r) {
-          k.Sh(gx, y + 4, lw - 8, r[1] - 8, "rect", r[0], "#e3f0fd");
+          k.Sh(gx, y + 4, lw - 8, r[1] - 8, "rect", r[0], "#DCEEFF");
           const rowCells = [];
           iters.forEach(function (it, i) { rowCells.push(k.F(gx + lw + i * cw, y, cw, r[1], "", r[2])); });
           cells.push({ y: y, h: r[1] });
@@ -144,13 +144,13 @@
         k.F(0, 0, 1320, 720, L("Process flow", "Fluxo de processo"));
         k.F(40, 70, 1240, 280, L("Customer", "Cliente"), BG.gray);
         k.F(40, 400, 1240, 280, L("Team", "Equipe"), BG.blue);
-        const start = k.Sh(80, 175, 140, 70, "pill", L("Start", "Início"), "#C8EBA1");
+        const start = k.Sh(80, 175, 140, 70, "pill", L("Start", "Início"), "#9BDD5C");
         const submit = k.Sh(280, 165, 180, 90, "round", L("Submit request", "Enviar pedido"), "#ffffff");
         const adjust = k.Sh(540, 165, 180, 90, "round", L("Adjust request", "Ajustar pedido"), "#ffffff");
         const receive = k.Sh(820, 165, 180, 90, "round", L("Receive result", "Receber resultado"), "#ffffff");
-        const end = k.Sh(1080, 175, 140, 70, "pill", L("End", "Fim"), "#F7A8B0");
+        const end = k.Sh(1080, 175, 140, 70, "pill", L("End", "Fim"), "#FF8577");
         const review = k.Sh(280, 495, 180, 90, "round", L("Review request", "Analisar pedido"), "#ffffff");
-        const decision = k.Sh(540, 480, 180, 120, "diamond", L("Approved?", "Aprovado?"), "#FFF59D");
+        const decision = k.Sh(540, 480, 180, 120, "diamond", L("Approved?", "Aprovado?"), "#FFDD4A");
         const deliver = k.Sh(820, 495, 180, 90, "round", L("Deliver", "Entregar"), "#ffffff");
         k.A(start, submit); k.A(submit, review); k.A(review, decision); k.A(decision, deliver); k.A(decision, adjust); k.A(adjust, submit); k.A(deliver, receive); k.A(receive, end);
         k.T(740, 500, L("Yes", "Sim"), 18, 60); k.T(640, 380, L("No", "Não"), 18, 60);
@@ -162,9 +162,9 @@
       build: function () {
         const k = kit();
         k.F(0, 0, 1400, 860, L("Mind map", "Mapa mental"));
-        const c = k.Sh(590, 370, 220, 120, "ellipse", L("Main idea", "Ideia principal"), "#FFCF8A");
+        const c = k.Sh(590, 370, 220, 120, "ellipse", L("Main idea", "Ideia principal"), "#FFAE45");
         const pos = [[150, 150], [150, 390], [150, 630], [1050, 150], [1050, 390], [1050, 630]];
-        const cols = ["#A9D1F7", "#C8EBA1", "#F6C1E4", "#CDBDF6", "#9FE3D3", "#F7A8B0"];
+        const cols = ["#5FAEFF", "#9BDD5C", "#FF8CC6", "#AE8FFF", "#3FD3B0", "#FF8577"];
         pos.forEach(function (p, i) {
           const b = k.Sh(p[0], p[1], 200, 80, "round", L("Topic ", "Tema ") + (i + 1), cols[i]);
           k.A(c, b, false);
@@ -184,7 +184,7 @@
         stages.forEach(function (s, i) { k.Sh(gx + lw + i * cw + 4, gy, cw - 8, hh - 8, "round", s, "#1c2033", "#ffffff"); });
         rows.forEach(function (r, j) {
           const y = gy + hh + j * rh;
-          k.Sh(gx, y + 4, lw - 8, rh - 8, "rect", r, "#e3f0fd");
+          k.Sh(gx, y + 4, lw - 8, rh - 8, "rect", r, "#DCEEFF");
           stages.forEach(function (s, i) { k.F(gx + lw + i * cw, y, cw, rh, "", j % 2 ? BG.white : BG.gray); });
         });
         k.E(gx + lw + 20, gy + hh + 2 * rh + 30, 70, "🙂"); k.E(gx + lw + cw * 2 + 20, gy + hh + 2 * rh + 30, 70, "😟"); k.E(gx + lw + cw * 4 + 20, gy + hh + 2 * rh + 30, 70, "🤩");
@@ -198,7 +198,7 @@
         k.F(0, 0, 1200, 1120, L("Empathy map", "Mapa de empatia"));
         k.F(40, 60, 540, 380, L("💬 Says", "💬 Diz"), BG.blue); k.F(620, 60, 540, 380, L("💭 Thinks", "💭 Pensa"), BG.purple);
         k.F(40, 470, 540, 380, L("🏃 Does", "🏃 Faz"), BG.green); k.F(620, 470, 540, 380, L("❤️ Feels", "❤️ Sente"), BG.red);
-        k.Sh(500, 395, 200, 120, "ellipse", L("Persona", "Persona"), "#FFCF8A");
+        k.Sh(500, 395, 200, 120, "ellipse", L("Persona", "Persona"), "#FFAE45");
         k.F(40, 880, 540, 200, L("😣 Pains", "😣 Dores"), BG.orange); k.F(620, 880, 540, 200, L("🎁 Gains", "🎁 Ganhos"), BG.teal);
         return k.out;
       }
@@ -249,10 +249,10 @@
         k.T(40, 92, L("Explore freely for 7 days. Try the missions, leave post-its on the feedback wall and answer the short form (📣 Feedback button at the top).", "Explore à vontade durante 7 dias. Faça as missões, deixe post-its no mural de feedback e responda ao formulário curto (botão 📣 Feedback no topo)."), 20, 1700, "#4a5068");
         k.F(40, 180, 560, 880, L("🧭 Test missions", "🧭 Missões de teste"), BG.blue);
         k.T(64, 210, L("☐ 1. Draw a frame (F) and add post-its inside\n☐ 2. Build a small process with shapes (R) and connectors (L)\n☐ 3. Insert a template (grid button on the left)\n☐ 4. Paste or drop an image or GIF\n☐ 5. Add icons and emoji\n☐ 6. Comment and vote on a post-it\n☐ 7. Select several items, copy and paste them\n☐ 8. Switch the canvas to dark mode and back",
-          "☐ 1. Desenhe um frame (F) e coloque post-its dentro\n☐ 2. Monte um pequeno processo com formas (R) e conectores (L)\n☐ 3. Insira um template (botão de grelha à esquerda)\n☐ 4. Cole ou arraste uma imagem ou GIF\n☐ 5. Adicione ícones e emoji\n☐ 6. Comente e vote num post-it\n☐ 7. Selecione vários itens, copie e cole\n☐ 8. Mude o quadro para modo escuro e volte"), 20, 510);
+          "☐ 1. Desenhe um frame (F) e coloque post-its dentro\n☐ 2. Monte um pequeno processo com formas (R) e conectores (L)\n☐ 3. Insira um template (botão de grade à esquerda)\n☐ 4. Cole ou arraste uma imagem ou GIF\n☐ 5. Adicione ícones e emoji\n☐ 6. Comente e vote num post-it\n☐ 7. Selecione vários itens, copie e cole\n☐ 8. Mude o quadro para modo escuro e volte"), 20, 510);
         k.E(470, 950, 80, "🧪");
         const wall = [[L("👍 What works well", "👍 O que funciona bem"), BG.green, C.green], [L("😕 Confusing / friction", "😕 Confuso / atrito"), BG.orange, C.orange], [L("🐞 Bugs", "🐞 Bugs"), BG.red, C.red], [L("💡 Ideas & features", "💡 Ideias e funcionalidades"), BG.blue, C.blue], [L("🎨 UI / visual", "🎨 UI / visual"), BG.purple, C.purple]];
-        wall.forEach(function (c, i) { k.F(640 + i * 266, 180, 250, 880, c[0], c[1]); k.S(660 + i * 266, 210, L("Add yours…", "Adicione o seu…"), c[2]); });
+        wall.forEach(function (c, i) { k.F(640 + i * 266, 180, 250, 880, c[0], c[1]); k.S(660 + i * 266, 210, L("Add yours…", "Adicione seu…"), c[2]); });
         return k.out;
       }
     },
@@ -265,7 +265,7 @@
         k.T(40, 82, L("Programme / initiative: ________   ·   Date: __/__/____   ·   Sponsor: ________   ·   Participants: Directors / Executive committee", "Programa / iniciativa: ________   ·   Data: __/__/____   ·   Sponsor: ________   ·   Participantes: Diretores / Comité executivo"), 17, 1500, "#4a5068");
         // KPI strip
         k.F(40, 140, 1880, 150, L("📊 Key indicators vs target", "📊 Indicadores-chave vs meta"), BG.gray);
-        const kpis = [[L("Budget\n92% of plan ●", "Orçamento\n92% do plano ●"), "#C8EBA1"], [L("Schedule\n+2 weeks ●", "Prazo\n+2 semanas ●"), "#FFF59D"], [L("Scope\n85% delivered ●", "Escopo\n85% entregue ●"), "#C8EBA1"], [L("Quality\n3 critical defects ●", "Qualidade\n3 defeitos críticos ●"), "#F7A8B0"], [L("Risk level\nMedium ●", "Nível de risco\nMédio ●"), "#FFF59D"], [L("Benefits\nROI 1.8x ●", "Benefícios\nROI 1,8x ●"), "#C8EBA1"]];
+        const kpis = [[L("Budget\n92% of plan ●", "Orçamento\n92% do plano ●"), "#9BDD5C"], [L("Schedule\n+2 weeks ●", "Prazo\n+2 semanas ●"), "#FFDD4A"], [L("Scope\n85% delivered ●", "Escopo\n85% entregue ●"), "#9BDD5C"], [L("Quality\n3 critical defects ●", "Qualidade\n3 defeitos críticos ●"), "#FF8577"], [L("Risk level\nMedium ●", "Nível de risco\nMédio ●"), "#FFDD4A"], [L("Benefits\nROI 1.8x ●", "Benefícios\nROI 1,8x ●"), "#9BDD5C"]];
         kpis.forEach(function (q, i) { k.Sh(64 + i * 308, 168, 288, 100, "round", q[0], q[1]); });
         // PDCA quadrants
         const qx = 40, qy = 330, qw = 600, qh = 340;
@@ -318,26 +318,26 @@
         k.F(40, 100, 300, 860, L("👤 Users & clients", "👤 Usuários e clientes"), BG.gray);
         const user = k.Sh(90, 150, 200, 80, "pill", L("Customer", "Cliente"), "#ffffff");
         const admin = k.Sh(90, 260, 200, 80, "pill", L("Back-office user", "Usuário back-office"), "#ffffff");
-        const web = k.Sh(80, 430, 220, 110, "round", L("Web app\n[React / SPA]", "Aplicação web\n[React / SPA]"), "#A9D1F7");
-        const mob = k.Sh(80, 580, 220, 110, "round", L("Mobile app\n[iOS / Android]", "App móvel\n[iOS / Android]"), "#A9D1F7");
+        const web = k.Sh(80, 430, 220, 110, "round", L("Web app\n[React / SPA]", "Aplicação web\n[React / SPA]"), "#5FAEFF");
+        const mob = k.Sh(80, 580, 220, 110, "round", L("Mobile app\n[iOS / Android]", "App móvel\n[iOS / Android]"), "#5FAEFF");
         k.F(380, 100, 300, 860, L("🛡 Edge & security", "🛡 Edge e segurança"), BG.purple);
-        const cdn = k.Sh(410, 170, 240, 90, "round", L("CDN / WAF", "CDN / WAF"), "#CDBDF6");
-        const gw = k.Sh(410, 470, 240, 110, "round", L("API Gateway\nauth · rate limit · routing", "API Gateway\nauth · rate limit · routing"), "#CDBDF6");
-        const idp = k.Sh(410, 700, 240, 100, "round", L("Identity provider\n[OAuth2 / OIDC]", "Fornecedor de identidade\n[OAuth2 / OIDC]"), "#CDBDF6");
+        const cdn = k.Sh(410, 170, 240, 90, "round", L("CDN / WAF", "CDN / WAF"), "#AE8FFF");
+        const gw = k.Sh(410, 470, 240, 110, "round", L("API Gateway\nauth · rate limit · routing", "API Gateway\nauth · rate limit · routing"), "#AE8FFF");
+        const idp = k.Sh(410, 700, 240, 100, "round", L("Identity provider\n[OAuth2 / OIDC]", "Fornecedor de identidade\n[OAuth2 / OIDC]"), "#AE8FFF");
         k.F(720, 100, 520, 860, L("⚙️ Services (domain)", "⚙️ Serviços (domínio)"), BG.blue);
         const s1 = k.Sh(750, 160, 220, 110, "round", L("Accounts service\n[Java / Spring]", "Serviço de contas\n[Java / Spring]"), "#ffffff");
         const s2 = k.Sh(990, 160, 220, 110, "round", L("Orders service\n[Node.js]", "Serviço de pedidos\n[Node.js]"), "#ffffff");
         const s3 = k.Sh(750, 400, 220, 110, "round", L("Payments service\n[.NET]", "Serviço de pagamentos\n[.NET]"), "#ffffff");
         const s4 = k.Sh(990, 400, 220, 110, "round", L("Notifications service\n[Python]", "Serviço de notificações\n[Python]"), "#ffffff");
-        const mq = k.Sh(800, 650, 360, 90, "pill", L("Message broker / event bus\n[Kafka / RabbitMQ]", "Message broker / barramento de eventos\n[Kafka / RabbitMQ]"), "#FFCF8A");
+        const mq = k.Sh(800, 650, 360, 90, "pill", L("Message broker / event bus\n[Kafka / RabbitMQ]", "Message broker / barramento de eventos\n[Kafka / RabbitMQ]"), "#FFAE45");
         k.F(1280, 100, 300, 860, L("🗄 Data", "🗄 Dados"), BG.yellow);
-        const db1 = k.Sh(1310, 160, 240, 120, "ellipse", L("Relational DB\n[PostgreSQL]", "Base relacional\n[PostgreSQL]"), "#FFF59D");
-        const cache = k.Sh(1310, 330, 240, 100, "round", L("Cache\n[Redis]", "Cache\n[Redis]"), "#FFF59D");
-        const db2 = k.Sh(1310, 480, 240, 120, "ellipse", L("Document DB\n[MongoDB]", "Base documental\n[MongoDB]"), "#FFF59D");
-        const obj = k.Sh(1310, 660, 240, 100, "round", L("Object storage\n[files / backups]", "Object storage\n[arquivos / backups]"), "#FFF59D");
+        const db1 = k.Sh(1310, 160, 240, 120, "ellipse", L("Relational DB\n[PostgreSQL]", "Base relacional\n[PostgreSQL]"), "#FFDD4A");
+        const cache = k.Sh(1310, 330, 240, 100, "round", L("Cache\n[Redis]", "Cache\n[Redis]"), "#FFDD4A");
+        const db2 = k.Sh(1310, 480, 240, 120, "ellipse", L("Document DB\n[MongoDB]", "Base documental\n[MongoDB]"), "#FFDD4A");
+        const obj = k.Sh(1310, 660, 240, 100, "round", L("Object storage\n[files / backups]", "Object storage\n[arquivos / backups]"), "#FFDD4A");
         k.F(1620, 100, 260, 860, L("🌐 External systems", "🌐 Sistemas externos"), BG.red);
-        const psp = k.Sh(1640, 400, 220, 100, "round", L("Payment provider", "Fornecedor de pagamentos"), "#F7A8B0");
-        const mail = k.Sh(1640, 560, 220, 100, "round", L("E-mail / SMS service", "Serviço de e-mail / SMS"), "#F7A8B0");
+        const psp = k.Sh(1640, 400, 220, 100, "round", L("Payment provider", "Fornecedor de pagamentos"), "#FF8577");
+        const mail = k.Sh(1640, 560, 220, 100, "round", L("E-mail / SMS service", "Serviço de e-mail / SMS"), "#FF8577");
         k.A(user, web); k.A(admin, web); k.A(user, mob); k.A(web, cdn); k.A(mob, gw); k.A(cdn, gw); k.A(gw, idp);
         k.A(gw, s1); k.A(gw, s2); k.A(gw, s3); k.A(s1, db1); k.A(s2, db1); k.A(s2, cache); k.A(s3, psp); k.A(s2, mq); k.A(s3, mq); k.A(mq, s4); k.A(s4, mail); k.A(s4, db2);
         k.F(40, 980, 1840, 80, L("🔭 Cross-cutting: observability (logs · metrics · traces) · CI/CD · secrets management · backup & DR", "🔭 Transversal: observabilidade (logs · métricas · traces) · CI/CD · gestão de segredos · backup e DR"), BG.teal);
@@ -352,11 +352,11 @@
         k.T(40, 24, L("Data lakehouse – medallion architecture (Bronze · Silver · Gold)", "Data lakehouse – arquitetura medalhão (Bronze · Silver · Gold)"), 34, 1500);
         const cols = [
           [L("📥 Sources", "📥 Fontes"), BG.gray, "#ffffff", [L("ERP / core systems", "ERP / sistemas core"), L("CRM / SaaS apps", "CRM / apps SaaS"), L("APIs & events", "APIs e eventos"), L("IoT / streaming", "IoT / streaming"), L("Files (CSV, JSON)", "Arquivos (CSV, JSON)")]],
-          [L("🔄 Ingestion", "🔄 Ingestão"), BG.blue, "#A9D1F7", [L("Batch loads\n(Auto Loader / COPY)", "Cargas batch\n(Auto Loader / COPY)"), L("Streaming\n(Kafka / Event Hubs)", "Streaming\n(Kafka / Event Hubs)"), L("CDC\n(change data capture)", "CDC\n(captura de alterações)")]],
+          [L("🔄 Ingestion", "🔄 Ingestão"), BG.blue, "#5FAEFF", [L("Batch loads\n(Auto Loader / COPY)", "Cargas batch\n(Auto Loader / COPY)"), L("Streaming\n(Kafka / Event Hubs)", "Streaming\n(Kafka / Event Hubs)"), L("CDC\n(change data capture)", "CDC\n(captura de alterações)")]],
           [L("🥉 Bronze – raw", "🥉 Bronze – bruto"), "#f6e3d1", "#E7B98A", [L("Raw Delta tables\nappend-only", "Tabelas Delta brutas\nappend-only"), L("Full history\n& audit", "Histórico completo\ne auditoria"), L("Schema on read", "Schema on read")]],
           [L("🥈 Silver – cleaned", "🥈 Silver – tratado"), "#eceff3", "#D5DAE3", [L("Cleaned & deduplicated", "Limpo e sem duplicados"), L("Conformed entities\n(customer, product…)", "Entidades conformadas\n(cliente, produto…)"), L("Data quality checks", "Verificações de qualidade")]],
           [L("🥇 Gold – business", "🥇 Gold – negócio"), "#fbf1cc", "#F3D36B", [L("Business aggregates\n& KPIs", "Agregados de negócio\ne KPIs"), L("Data marts\n(star schema)", "Data marts\n(modelo em estrela)"), L("Feature tables (ML)", "Tabelas de features (ML)")]],
-          [L("📊 Consumers", "📊 Consumo"), BG.green, "#C8EBA1", [L("BI dashboards\n(Power BI, Tableau)", "Dashboards BI\n(Power BI, Tableau)"), L("SQL analytics", "Análise SQL"), L("ML / AI models", "Modelos ML / IA"), L("Data apps & APIs", "Data apps e APIs")]]
+          [L("📊 Consumers", "📊 Consumo"), BG.green, "#9BDD5C", [L("BI dashboards\n(Power BI, Tableau)", "Dashboards BI\n(Power BI, Tableau)"), L("SQL analytics", "Análise SQL"), L("ML / AI models", "Modelos ML / IA"), L("Data apps & APIs", "Data apps e APIs")]]
         ];
         const cw = 300, gap = 20, top = 100, h = 720;
         const firsts = [];
@@ -379,11 +379,11 @@
         k.T(40, 24, L("Database model – entity relationship (ER)", "Modelo de dados – entidade-relação (ER)"), 34, 1200);
         k.T(40, 76, L("🔑 PK = primary key · 🔗 FK = foreign key · 1 : N = one-to-many", "🔑 PK = chave primária · 🔗 FK = chave estrangeira · 1 : N = um-para-muitos"), 16, 1200, "#4a5068");
         const ent = function (x, y, title, fields, color) { return k.SL(x, y, 280, 60 + fields.length * 26, title.toUpperCase() + "\n────────────\n" + fields.join("\n"), color, 15); };
-        const cust = ent(60, 160, L("customer", "cliente"), ["🔑 customer_id  INT", "name  VARCHAR", "email  VARCHAR", "created_at  TIMESTAMP"], "#e3f0fd");
-        const ord = ent(560, 160, L("order", "pedido"), ["🔑 order_id  INT", "🔗 customer_id  INT", "order_date  DATE", "status  VARCHAR", "total  DECIMAL"], "#fff8d6");
-        const item = ent(560, 520, L("order_item", "item_pedido"), ["🔑 item_id  INT", "🔗 order_id  INT", "🔗 product_id  INT", "quantity  INT", "unit_price  DECIMAL"], "#fff8d6");
-        const prod = ent(1080, 520, L("product", "produto"), ["🔑 product_id  INT", "name  VARCHAR", "category  VARCHAR", "price  DECIMAL"], "#eaf7dc");
-        const pay = ent(1080, 160, L("payment", "pagamento"), ["🔑 payment_id  INT", "🔗 order_id  INT", "method  VARCHAR", "paid_at  TIMESTAMP"], "#fde7e9");
+        const cust = ent(60, 160, L("customer", "cliente"), ["🔑 customer_id  INT", "name  VARCHAR", "email  VARCHAR", "created_at  TIMESTAMP"], "#DCEEFF");
+        const ord = ent(560, 160, L("order", "pedido"), ["🔑 order_id  INT", "🔗 customer_id  INT", "order_date  DATE", "status  VARCHAR", "total  DECIMAL"], "#FFF5C8");
+        const item = ent(560, 520, L("order_item", "item_pedido"), ["🔑 item_id  INT", "🔗 order_id  INT", "🔗 product_id  INT", "quantity  INT", "unit_price  DECIMAL"], "#FFF5C8");
+        const prod = ent(1080, 520, L("product", "produto"), ["🔑 product_id  INT", "name  VARCHAR", "category  VARCHAR", "price  DECIMAL"], "#E6F8D6");
+        const pay = ent(1080, 160, L("payment", "pagamento"), ["🔑 payment_id  INT", "🔗 order_id  INT", "method  VARCHAR", "paid_at  TIMESTAMP"], "#FFE4E0");
         k.A(cust, ord); k.A(ord, item); k.A(prod, item); k.A(ord, pay);
         k.T(400, 230, "1 : N", 18, 80); k.T(640, 440, "1 : N", 18, 80); k.T(900, 600, "1 : N", 18, 80); k.T(920, 230, "1 : N", 18, 80);
         return k.out;
@@ -397,25 +397,25 @@
         k.T(40, 24, L("Cloud architecture & definitions", "Arquitetura e definições de cloud"), 36, 1200);
         // service models
         k.F(40, 100, 560, 460, L("☁️ Service models – who manages what", "☁️ Modelos de serviço – quem gere o quê"), BG.blue);
-        [[L("IaaS\nYou: OS, runtime, apps, data\nProvider: servers, network, storage", "IaaS\nVocê: SO, runtime, apps, dados\nFornecedor: servidores, rede, storage"), "#A9D1F7"],
-         [L("PaaS\nYou: apps and data\nProvider: OS, runtime, scaling", "PaaS\nVocê: apps e dados\nFornecedor: SO, runtime, escala"), "#9FE3D3"],
-         [L("SaaS\nYou: users and configuration\nProvider: everything else", "SaaS\nVocê: usuários e configuração\nFornecedor: todo o resto"), "#C8EBA1"]].forEach(function (m, i) { k.SL(60, 140 + i * 135, 520, 120, m[0], m[1], 16); });
+        [[L("IaaS\nYou: OS, runtime, apps, data\nProvider: servers, network, storage", "IaaS\nVocê: SO, runtime, apps, dados\nFornecedor: servidores, rede, storage"), "#5FAEFF"],
+         [L("PaaS\nYou: apps and data\nProvider: OS, runtime, scaling", "PaaS\nVocê: apps e dados\nFornecedor: SO, runtime, escala"), "#3FD3B0"],
+         [L("SaaS\nYou: users and configuration\nProvider: everything else", "SaaS\nVocê: usuários e configuração\nFornecedor: todo o resto"), "#9BDD5C"]].forEach(function (m, i) { k.SL(60, 140 + i * 135, 520, 120, m[0], m[1], 16); });
         k.F(40, 590, 560, 250, L("🏗 Deployment models", "🏗 Modelos de implementação"), BG.gray);
         [[L("Public cloud", "Cloud pública"), "#ffffff"], [L("Private cloud", "Cloud privada"), "#ffffff"], [L("Hybrid", "Híbrida"), "#ffffff"], [L("Multi-cloud", "Multi-cloud"), "#ffffff"]].forEach(function (m, i) { k.Sh(60 + (i % 2) * 265, 630 + Math.floor(i / 2) * 100, 250, 80, "round", m[0], m[1]); });
         // landing zone
         k.F(640, 100, 700, 740, L("🏢 Reference landing zone", "🏢 Landing zone de referência"), BG.white);
         const users = k.Sh(890, 130, 200, 60, "pill", L("Users", "Usuários"), "#ffffff");
-        k.F(670, 220, 640, 600, L("Region · 2+ availability zones", "Região · 2+ zonas de disponibilidade"), "#f4f5f8");
+        k.F(670, 220, 640, 600, L("Region · 2+ availability zones", "Região · 2+ zonas de disponibilidade"), "#F2F4F8");
         k.F(690, 270, 600, 530, L("Virtual network (VPC / VNet)", "Rede virtual (VPC / VNet)"), "#eaf2fb");
-        k.F(710, 310, 560, 120, L("Public subnet", "Subnet pública"), "#e3f8f2");
-        const cdn = k.Sh(730, 345, 240, 70, "round", L("CDN + WAF", "CDN + WAF"), "#9FE3D3");
-        const lb = k.Sh(1010, 345, 240, 70, "round", L("Load balancer", "Load balancer"), "#9FE3D3");
-        k.F(710, 450, 560, 160, L("Private subnet – application", "Subnet privada – aplicação"), "#e3f0fd");
-        const app = k.Sh(730, 490, 250, 100, "round", L("Containers\n(Kubernetes)", "Contentores\n(Kubernetes)"), "#A9D1F7");
-        const fn = k.Sh(1000, 490, 250, 100, "round", L("Serverless functions", "Funções serverless"), "#A9D1F7");
-        k.F(710, 630, 560, 150, L("Private subnet – data", "Subnet privada – dados"), "#fff8d6");
-        const dbm = k.Sh(730, 665, 250, 100, "ellipse", L("Managed database", "Base de dados gerida"), "#FFF59D");
-        const st = k.Sh(1000, 665, 250, 100, "round", L("Object storage", "Object storage"), "#FFF59D");
+        k.F(710, 310, 560, 120, L("Public subnet", "Subnet pública"), "#D7F7EE");
+        const cdn = k.Sh(730, 345, 240, 70, "round", L("CDN + WAF", "CDN + WAF"), "#3FD3B0");
+        const lb = k.Sh(1010, 345, 240, 70, "round", L("Load balancer", "Load balancer"), "#3FD3B0");
+        k.F(710, 450, 560, 160, L("Private subnet – application", "Subnet privada – aplicação"), "#DCEEFF");
+        const app = k.Sh(730, 490, 250, 100, "round", L("Containers\n(Kubernetes)", "Contentores\n(Kubernetes)"), "#5FAEFF");
+        const fn = k.Sh(1000, 490, 250, 100, "round", L("Serverless functions", "Funções serverless"), "#5FAEFF");
+        k.F(710, 630, 560, 150, L("Private subnet – data", "Subnet privada – dados"), "#FFF5C8");
+        const dbm = k.Sh(730, 665, 250, 100, "ellipse", L("Managed database", "Base de dados gerida"), "#FFDD4A");
+        const st = k.Sh(1000, 665, 250, 100, "round", L("Object storage", "Object storage"), "#FFDD4A");
         k.A(users, cdn); k.A(cdn, lb); k.A(lb, app); k.A(app, dbm); k.A(fn, st); k.A(app, fn);
         k.F(40, 870, 1300, 260, L("🛡 Shared services", "🛡 Serviços compartilhados"), BG.purple);
         [L("Identity & access (IAM, SSO, MFA)", "Identidade e acessos (IAM, SSO, MFA)"), L("Security (keys, secrets, policies)", "Segurança (chaves, segredos, políticas)"), L("Monitoring & logging", "Monitoramento e logs"), L("CI/CD & infrastructure as code", "CI/CD e infraestrutura como código"), L("Backup & disaster recovery", "Backup e recuperação de desastres"), L("Cost management (FinOps)", "Gestão de custos (FinOps)")].forEach(function (t, i) { k.Sh(60 + (i % 3) * 425, 910 + Math.floor(i / 3) * 105, 405, 85, "round", t, "#ffffff"); });
@@ -439,7 +439,7 @@
           let x = 1400;
           r.forEach(function (cell, j) {
             const hdr = i === 0, first = j === 0;
-            k.Sh(x, 140 + i * 88, cws[j] - 6, 80, "rect", cell, hdr ? "#1c2033" : (first ? "#e3f0fd" : "#ffffff"), hdr ? "#ffffff" : "#1c2033");
+            k.Sh(x, 140 + i * 88, cws[j] - 6, 80, "rect", cell, hdr ? "#1c2033" : (first ? "#DCEEFF" : "#ffffff"), hdr ? "#ffffff" : "#1c2033");
             x += cws[j];
           });
         });
@@ -526,9 +526,9 @@
       if (what === "blank") return '<svg viewBox="0 0 240 150" xmlns="http://www.w3.org/2000/svg"><rect width="240" height="150" fill="#fff"/><path d="M120 55v40M100 75h40" stroke="#4a5068" stroke-width="3" stroke-linecap="round"/></svg>';
       if (what === "moscow") return '<svg viewBox="0 0 240 150" xmlns="http://www.w3.org/2000/svg"><rect width="240" height="150" fill="#f7f7f9"/>' +
         [[20, 12, "#e5484d"], [124, 12, "#f76b15"], [20, 80, "#4262ff"], [124, 80, "#8b90a5"]].map(function (q) { return '<rect x="' + q[0] + '" y="' + q[1] + '" width="96" height="58" fill="#fff" stroke="#dfe2ea"/><rect x="' + q[0] + '" y="' + q[1] + '" width="3" height="58" fill="' + q[2] + '"/>'; }).join("") +
-        '<rect x="34" y="26" width="16" height="16" fill="#FFF59D"/><rect x="138" y="26" width="16" height="16" fill="#A9D1F7"/></svg>';
+        '<rect x="34" y="26" width="16" height="16" fill="#FFDD4A"/><rect x="138" y="26" width="16" height="16" fill="#5FAEFF"/></svg>';
       if (what === "persona") return '<svg viewBox="0 0 240 150" xmlns="http://www.w3.org/2000/svg"><rect width="240" height="150" fill="#f7f7f9"/><rect x="8" y="14" width="140" height="122" fill="#fff" stroke="#dfe2ea"/>' +
-        '<rect x="14" y="22" width="44" height="22" fill="#eaf7dc"/><rect x="14" y="50" width="44" height="22" fill="#fde7e9"/><rect x="14" y="78" width="44" height="22" fill="#e3f0fd"/><rect x="14" y="106" width="44" height="22" fill="#fdeef8"/>' +
+        '<rect x="14" y="22" width="44" height="22" fill="#E6F8D6"/><rect x="14" y="50" width="44" height="22" fill="#FFE4E0"/><rect x="14" y="78" width="44" height="22" fill="#DCEEFF"/><rect x="14" y="106" width="44" height="22" fill="#FFE4F2"/>' +
         '<circle cx="104" cy="66" r="24" fill="none" stroke="#8cc63f" stroke-width="5"/><circle cx="104" cy="66" r="11" fill="none" stroke="#ec4d3c" stroke-width="5"/>' +
         [[156, 14], [198, 14], [156, 78], [198, 78]].map(function (q) { return '<rect x="' + q[0] + '" y="' + q[1] + '" width="38" height="58" fill="#fff" stroke="#dfe2ea"/>'; }).join("") + "</svg>";
       return "";
@@ -548,7 +548,7 @@
         if (o.shape === "ellipse") h += '<ellipse cx="' + (x + w / 2) + '" cy="' + (y + hh / 2) + '" rx="' + w / 2 + '" ry="' + hh / 2 + '" fill="' + o.color + '" stroke="#1c2033" stroke-width=".6"/>';
         else if (o.shape === "diamond") h += '<polygon points="' + (x + w / 2) + "," + y + " " + (x + w) + "," + (y + hh / 2) + " " + (x + w / 2) + "," + (y + hh) + " " + x + "," + (y + hh / 2) + '" fill="' + o.color + '" stroke="#1c2033" stroke-width=".6"/>';
         else h += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + hh + '" rx="' + (o.shape === "pill" ? hh / 2 : o.shape === "round" ? 3 : 0) + '" fill="' + o.color + '" stroke="#1c2033" stroke-width=".6"/>';
-      } else if (o.type === "icon") h += '<circle cx="' + (x + w / 2) + '" cy="' + (y + hh / 2) + '" r="' + w / 2.5 + '" fill="#FFCF8A"/>';
+      } else if (o.type === "icon") h += '<circle cx="' + (x + w / 2) + '" cy="' + (y + hh / 2) + '" r="' + w / 2.5 + '" fill="#FFAE45"/>';
     });
     objs.forEach(function (o) {
       if (o.type !== "arrow" || !byId[o.from] || !byId[o.to]) return;
@@ -569,7 +569,7 @@
     return list;
   };
   // Portuguese names
-  const NPT = { betatest: "Kit de beta test", kanban: "Quadro Kanban", retro: "Retrospetiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap", pdca: "Reunião executiva PDCA", swarch: "Arquitetura de software", lakehouse: "Data lakehouse (medalhão)", datamodel: "Modelo de base de dados (ER)", cloud: "Arquitetura e definições de cloud" };
+  const NPT = { betatest: "Kit de beta test", kanban: "Quadro Kanban", retro: "Retrospectiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap", pdca: "Reunião executiva PDCA", swarch: "Arquitetura de software", lakehouse: "Data lakehouse (medalhão)", datamodel: "Modelo de base de dados (ER)", cloud: "Arquitetura e definições de cloud" };
   Object.keys(NPT).forEach(function (k) { KITS[k].namePT = NPT[k]; });
   window.MBTemplatePreview = function (id) {
     if (KITS[id]) { if (!KITS[id]._pv) KITS[id]._pv = window.MBKitPreview(KITS[id].build()); return KITS[id]._pv; }

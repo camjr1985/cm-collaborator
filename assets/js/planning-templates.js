@@ -11,14 +11,14 @@
   const METHODS = {
     hybrid: {
       id: "hybrid", icon: "roadmap", name: L("Roadmap (Jira-style)", "Roadmap (estilo Jira)"),
-      desc: L("Epics on a timeline, stories and tasks on a board. Best for product and programme roadmaps.", "Épicos numa linha do tempo, histórias e tarefas num quadro. Ideal para roadmaps de produto e programas."),
+      desc: L("Epics on a timeline, stories and tasks on a board. Best for product and programme roadmaps.", "Épicos em uma linha do tempo, histórias e tarefas em um quadro. Ideal para roadmaps de produto e programas."),
       views: ["timeline", "board", "list"], label: { timeline: L("Roadmap", "Roadmap") },
       statuses: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")],
       types: ["initiative", "epic", "story", "task", "bug", "milestone"]
     },
     waterfall: {
       id: "waterfall", icon: "gantt", name: L("Waterfall schedule", "Cronograma Waterfall"),
-      desc: L("Phases, tasks, dependencies and milestones on a Gantt chart. Best for projects with a fixed scope and dates.", "Fases, tarefas, dependências e marcos num Gantt. Ideal para projetos com escopo e datas definidos."),
+      desc: L("Phases, tasks, dependencies and milestones on a Gantt chart. Best for projects with a fixed scope and dates.", "Fases, tarefas, dependências e marcos em um Gantt. Ideal para projetos com escopo e datas definidos."),
       views: ["timeline", "list", "board"], label: { timeline: L("Schedule", "Cronograma") },
       statuses: [st("todo", "Not started", "Não iniciado", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("late", "At risk", "Em risco", "doing"), st("done", "Done", "Concluído", "done")],
       types: ["initiative", "phase", "task", "milestone"]

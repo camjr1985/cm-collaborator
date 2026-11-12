@@ -13,7 +13,7 @@
   const TYPES = {
     initiative: { ic: "initiative", name: L("Initiative", "Iniciativa"), color: "#c2410c", level: 2, desc: L("Groups epics around a business outcome.", "Agrupa épicos em torno de um resultado de negócio.") },
     epic: { ic: "epic", name: L("Epic", "Épico"), color: "#7c5cff", level: 1, desc: L("A large body of work split into stories.", "Um grande bloco de trabalho dividido em histórias.") },
-    phase: { ic: "phase", name: L("Phase", "Fase"), color: "#0e1a33", level: 1, desc: L("A stage of the schedule with its tasks.", "Uma etapa do cronograma com as suas tarefas.") },
+    phase: { ic: "phase", name: L("Phase", "Fase"), color: "#0e1a33", level: 1, desc: L("A stage of the schedule with its tasks.", "Uma etapa do cronograma com suas tarefas.") },
     story: { ic: "story", name: L("Story", "História"), color: "#36b37e", level: 0, desc: L("A user need – “As a…, I want…, so that…”.", "Uma necessidade do usuário – “Como…, quero…, para…”.") },
     task: { ic: "task", name: L("Task", "Tarefa"), color: "#2f80ed", level: 0, desc: L("A piece of work to be done.", "Um trabalho a ser feito.") },
     bug: { ic: "bug", name: "Bug", color: "#e5484d", level: 0, desc: L("Something that is not working.", "Algo que não está funcionando.") },
@@ -35,7 +35,7 @@
     n.textContent = msg; n.classList.add("show");
     clearTimeout(toast._t); toast._t = setTimeout(function () { n.classList.remove("show"); }, 2800);
   }
-  function fail(e) { console.warn(e); toast((e && e.message) || L("Something went wrong", "Algo correu mal")); }
+  function fail(e) { console.warn(e); toast((e && e.message) || L("Something went wrong", "Algo deu errado")); }
   function d2n(s) { return s ? Date.parse(s + "T00:00:00Z") : NaN; }
   function n2d(n) { return new Date(n).toISOString().slice(0, 10); }
   function today() { const d = new Date(); return n2d(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
@@ -115,7 +115,7 @@
     const due = items().filter(function (i) { return i.assignee && i.end && cat(i) !== "done" && d2n(i.end) - d2n(today()) <= 3 * DAY; });
     if (!due.length) return toast(L("No assigned items are overdue or due in the next 3 days.", "Não há itens atribuídos atrasados ou a vencer nos próximos 3 dias."));
     const people = {}; due.forEach(function (i) { people[i.assignee] = 1; });
-    modal('<h2>' + L("Send deadline reminders", "Enviar lembretes de prazo") + '</h2><p class="muted">' + L("An e-mail goes to each person with their items that are overdue or due in the next 3 days:", "Cada pessoa recebe um e-mail com os seus itens atrasados ou a vencer nos próximos 3 dias:") + "</p><ul class=\"pl-ul\">" +
+    modal('<h2>' + L("Send deadline reminders", "Enviar lembretes de prazo") + '</h2><p class="muted">' + L("An e-mail goes to each person with their items that are overdue or due in the next 3 days:", "Cada pessoa recebe um e-mail com seus itens atrasados ou a vencer nos próximos 3 dias:") + "</p><ul class=\"pl-ul\">" +
       Object.keys(people).map(function (e) { return "<li><b>" + esc(memberName(e)) + "</b> · " + esc(e) + " – " + due.filter(function (i) { return i.assignee === e; }).length + " " + L("item(s)", "item(ns)") + "</li>"; }).join("") + "</ul>" +
       '<div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="remGo">' + L("Send e-mails", "Enviar e-mails") + "</button></div>", function (box, close) {
       box.querySelector("#remGo").onclick = function () {
@@ -137,7 +137,7 @@
     if (views.indexOf(view) < 0) view = views[0];
     const who = {}; items().forEach(function (i) { if (i.assignee) who[i.assignee] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = 1; });
     app.innerHTML =
-      '<header class="pl-top"><a class="pl-back" href="../workspaces/" title="' + L("My boards", "Meus quadros") + '">←</a><span class="pl-logo">CM</span>' +
+      '<header class="pl-top"><a class="pl-back" href="' + (info.board ? "../board/?id=" + encodeURIComponent(info.board) : "../workspaces/") + '" title="' + (info.board ? L("Back to the board", "Voltar ao quadro") : L("My boards", "Meus quadros")) + '">←</a><span class="pl-logo">CM</span>' +
       '<div class="pl-title"><span class="pl-ws">' + esc(wsInfo.name || info.ws) + " · " + IC(m.icon, 13) + " " + esc(m.name) + '</span><h1>' + esc(info.title) + "</h1></div>" +
       '<nav class="pl-tabs">' + views.map(function (v) { return '<button data-view="' + v + '" class="' + (v === view ? "on" : "") + '">' + esc((m.label && m.label[v]) || VIEWN[v]) + (v === "okr" && window.CMNewBadge ? window.CMNewBadge("okr") : "") + "</button>"; }).join("") + "</nav>" +
       '<div class="pl-actions">' + (canEdit ? '<button class="pl-btn primary" id="newBtn">' + IC("plus", 16) + " " + L("Create", "Criar") + " ▾</button>" : '<span class="pl-ro">' + L("View only", "Só leitura") + "</span>") +
@@ -1242,8 +1242,8 @@
             const linked = Object.keys(PROV).filter(function (k) { return data.settings[k]; }).join(",");
             if (!document.getElementById("view") || (canEdit && linked !== shell._linked)) { shell._linked = linked; shell(); } else renderView();
           }, function (e) { gate(L("No access", "Sem acesso"), e.message); });
-        }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "O seu acesso a este workspace pode ter terminado.")); });
-      }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "O seu acesso a este workspace pode ter terminado.")); });
+        }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "Seu acesso a este workspace pode ter terminado.")); });
+      }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "Seu acesso a este workspace pode ter terminado.")); });
     });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") { const m = document.querySelector(".pl-modal"); if (m) m.remove(); else closeDrawer(); } });
   }

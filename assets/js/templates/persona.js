@@ -6,8 +6,8 @@
   "use strict";
 
   const C = {
-    yellow: "#FFF59D", green: "#C8EBA1", blue: "#A9D1F7", red: "#F7A8B0",
-    purple: "#CDBDF6", pink: "#F6C1E4", orange: "#FFCF8A", gray: "#E6E6E6", teal: "#9FE3D3"
+    yellow: "#FFDD4A", green: "#9BDD5C", blue: "#5FAEFF", red: "#FF8577",
+    purple: "#AE8FFF", pink: "#FF8CC6", orange: "#FFAE45", gray: "#DDE3EC", teal: "#3FD3B0"
   };
 
   function zone(x, y, w, h, color, tint, hint) {
@@ -52,13 +52,13 @@
 
   // Left column: mentoring questions
   html += label(70, 128, "What motivated you to seek mentoring?", "q", 490);
-  html += zone(70, 162, 490, 175, C.green, "#eaf7dc", "Double-click to add a post-it");
+  html += zone(70, 162, 490, 175, C.green, "#E6F8D6", "Double-click to add a post-it");
   html += label(70, 358, "Which challenges do you want to overcome with this mentoring?", "q", 490);
-  html += zone(70, 412, 490, 175, C.red, "#fde7e9");
+  html += zone(70, 412, 490, 175, C.red, "#FFE4E0");
   html += label(70, 608, "What are your goals for this mentoring?", "q", 490);
-  html += zone(70, 642, 490, 175, C.blue, "#e3f0fd");
+  html += zone(70, 642, 490, 175, C.blue, "#DCEEFF");
   html += label(70, 850, "Knowledge to be applied", "q strong", 490);
-  html += zone(70, 884, 490, 175, C.pink, "#fdeef8");
+  html += zone(70, 884, 490, 175, C.pink, "#FFE4F2");
   html += '<div class="divider" style="left:590px;top:125px;height:1050px"></div>';
 
   // Header: photo + identity
@@ -73,11 +73,11 @@
 
   // Graduation / Work / Home
   html += label(630, 510, icon("grad") + "I graduated in…", "sec");
-  html += zone(630, 542, 270, 92, C.blue, "#eef6fe");
+  html += zone(630, 542, 270, 92, C.blue, "#E8F3FF");
   html += label(630, 652, icon("work") + "I work at…", "sec");
-  html += zone(630, 684, 270, 92, C.blue, "#eef6fe");
+  html += zone(630, 684, 270, 92, C.blue, "#E8F3FF");
   html += label(630, 794, icon("home") + "I live in…", "sec");
-  html += zone(630, 826, 270, 92, C.yellow, "#fffbe0");
+  html += zone(630, 826, 270, 92, C.yellow, "#FFF8D9");
 
   // Skills profile rings
   html += label(930, 128, icon("target") + "Skills Profile", "sec center", 340);
@@ -88,23 +88,23 @@
 
   // Likes / dislikes
   html += label(1300, 128, icon("like") + "I like…", "sec");
-  html += zone(1300, 160, 235, 200, C.blue, "#e3f0fd");
+  html += zone(1300, 160, 235, 200, C.blue, "#DCEEFF");
   html += label(1300, 380, icon("dislike") + "I don't like…", "sec");
-  html += zone(1300, 412, 235, 190, C.red, "#fde7e9");
+  html += zone(1300, 412, 235, 190, C.red, "#FFE4E0");
 
   // Happiness / Food / Holidays / Hobbies
   html += label(930, 566, icon("happy") + "What makes me happy", "sec");
-  html += zone(930, 598, 170, 140, C.green, "#eaf7dc");
+  html += zone(930, 598, 170, 140, C.green, "#E6F8D6");
   html += label(1120, 566, icon("food") + "Favourite food", "sec");
-  html += zone(1120, 598, 150, 140, C.teal, "#e3f8f2");
+  html += zone(1120, 598, 150, 140, C.teal, "#D7F7EE");
   html += label(930, 756, icon("plane") + "Holidays · dream trip", "sec");
-  html += zone(930, 788, 340, 130, C.orange, "#fff3e0");
+  html += zone(930, 788, 340, 130, C.orange, "#FFEBD3");
   html += label(1300, 622, icon("game") + "Hobbies · favourite games", "sec");
-  html += zone(1300, 654, 235, 264, C.red, "#fde7e9");
+  html += zone(1300, 654, 235, 264, C.red, "#FFE4E0");
 
   // Personal improvement
   html += label(630, 948, icon("sprout") + "Personal improvement opportunities", "sec big", 905);
-  html += zone(630, 996, 905, 180, C.green, "#eaf7dc");
+  html += zone(630, 996, 905, 180, C.green, "#E6F8D6");
 
   /* ================= PRIORITY MAP ================= */
   html += label(1650, 22, "Priority Map", "board-title");

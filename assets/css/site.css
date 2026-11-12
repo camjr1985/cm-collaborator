@@ -96,7 +96,7 @@ a.mentee:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .mentee .av { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 18px; background: linear-gradient(135deg, #4262ff, #8e4ec6); flex: none; }
 .mentee .thumb { height: 120px; border-radius: 10px; background: #fbfbfd; border: 1px solid var(--line); background-image: radial-gradient(#dfe2ea 1px, transparent 1px); background-size: 12px 12px; position: relative; overflow: hidden; }
 .mentee .thumb i { position: absolute; width: 22px; height: 22px; box-shadow: 0 2px 4px rgba(0,0,0,.12); }
-.status { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #e3f8f2; color: #0b7a6b; }
+.status { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #D7F7EE; color: #0b7a6b; }
 .mentee.add { border-style: dashed; background: transparent; justify-content: center; }
 .journey { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 .journey span { background: #fff; border: 1px solid var(--line); padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
@@ -211,7 +211,7 @@ select option { color: #1c2033; }
 .form-grid3 .btn { justify-content: center; }
 .brow { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
 .b-ic { width: 32px; height: 32px; border-radius: 8px; flex: none; background: #fff; position: relative; overflow: hidden; }
-.b-ic::before, .b-ic::after { content: ""; position: absolute; width: 11px; height: 11px; top: 6px; left: 5px; background: #fff59d; box-shadow: 13px 0 0 #a9d1f7, 0 13px 0 #f7a8b0, 13px 13px 0 #c8eba1; }
+.b-ic::before, .b-ic::after { content: ""; position: absolute; width: 11px; height: 11px; top: 6px; left: 5px; background: #FFDD4A; box-shadow: 13px 0 0 #5FAEFF, 0 13px 0 #FF8577, 13px 13px 0 #9BDD5C; }
 .ws-sec { margin-top: 30px; }
 .ws-sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
 .ws-sec-head h2 { margin: 0; font-size: 24px; }
@@ -330,9 +330,9 @@ a.stat { text-decoration: none !important; color: inherit !important; }
 .bm-frame > span { position: absolute; top: -20px; left: 2px; font-size: 11px; font-weight: 600; color: #4a5068; }
 .bm-frame i { position: absolute; width: 58px; height: 58px; box-shadow: 0 3px 6px rgba(0,0,0,.12); }
 .bm-frame b { position: absolute; font-size: 11px; font-weight: 700; color: #1c2033; display: grid; place-items: center; }
-.bm-pill { width: 100px; height: 34px; border-radius: 999px; border: 2px solid #1c2033; background: #C8EBA1; }
+.bm-pill { width: 100px; height: 34px; border-radius: 999px; border: 2px solid #1c2033; background: #9BDD5C; }
 .bm-box { width: 120px; height: 40px; border-radius: 8px; border: 2px solid #1c2033; background: #fff; }
-.bm-dia { width: 62px; height: 62px; transform: rotate(45deg); border: 2px solid #1c2033; background: #FFF59D; }
+.bm-dia { width: 62px; height: 62px; transform: rotate(45deg); border: 2px solid #1c2033; background: #FFDD4A; }
 .bm-line { width: 2px; background: #1c2033; }
 .bm-emoji { position: absolute; font-size: 44px; }
 .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 32px; }

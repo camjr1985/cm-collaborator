@@ -94,8 +94,8 @@
   }
 
   /* ---------------- board objects from AI output ---------------- */
-  const NOTE = { yellow: "#FFF59D", green: "#C8EBA1", blue: "#A9D1F7", red: "#F7A8B0", purple: "#CDBDF6", orange: "#FFCF8A", teal: "#9FE3D3", gray: "#E6E6E6", pink: "#F6C1E4" };
-  const AREA = { yellow: "#fff8d6", green: "#eaf7dc", blue: "#e3f0fd", red: "#fde7e9", purple: "#f4eefe", orange: "#fff3e0", teal: "#e3f8f2", gray: "#f4f5f8", pink: "#fdeef8" };
+  const NOTE = { yellow: "#FFDD4A", green: "#9BDD5C", blue: "#5FAEFF", red: "#FF8577", purple: "#AE8FFF", orange: "#FFAE45", teal: "#3FD3B0", gray: "#DDE3EC", pink: "#FF8CC6" };
+  const AREA = { yellow: "#FFF5C8", green: "#E6F8D6", blue: "#DCEEFF", red: "#FFE4E0", purple: "#EEE6FF", orange: "#FFEBD3", teal: "#D7F7EE", gray: "#F2F4F8", pink: "#FFE4F2" };
   const ORDER = ["blue", "green", "yellow", "purple", "orange", "teal", "red", "gray"];
   function kit() {
     let n = 0; const out = [];
@@ -127,7 +127,7 @@
     });
     if (steps.length) {
       const x = 40 + frames.length * (colW + gap);
-      k.F(x, top, stepsW, fh, L("🧭 Facilitation script", "🧭 Roteiro da dinâmica"), "#f4f5f8");
+      k.F(x, top, stepsW, fh, L("🧭 Facilitation script", "🧭 Roteiro da dinâmica"), "#F2F4F8");
       k.T(x + 20, top + 24, steps.map(function (s, i) { return (i + 1) + ". " + (s.name || "") + (s.minutes ? " (" + s.minutes + "')" : "") + (s.how ? "\n   " + s.how : ""); }).join("\n"), 15, stepsW - 40);
     }
     return k.out;
@@ -155,7 +155,7 @@
     (a.priorities || []).slice(0, 6).forEach(function (s, j) { k.S(56 + (j % 3) * 158, yP + 30 + Math.floor(j / 3) * 130, s, NOTE.green, 145, 110); });
     k.F(60 + half, yP, half, pH, L("⚠️ Risks & blockers", "⚠️ Riscos e bloqueios"), AREA.red);
     (a.risks || []).slice(0, 6).forEach(function (s, j) { k.S(76 + half + (j % 3) * 158, yP + 30 + Math.floor(j / 3) * 130, s, NOTE.red, 145, 110); });
-    k.F(40, yA, W - 80, aH, L("➡️ Next actions", "➡️ Próximas ações"), "#f4f5f8");
+    k.F(40, yA, W - 80, aH, L("➡️ Next actions", "➡️ Próximas ações"), "#F2F4F8");
     const cols = [[L("Action", "Ação"), 0.6], [L("Owner", "Responsável"), 0.22], [L("When", "Prazo"), 0.18]];
     let x = 60; const tw2 = W - 120;
     cols.forEach(function (c) {
@@ -169,7 +169,7 @@
 
   /* ---------------- UI ---------------- */
   const AUD = [["team", L("Agile team", "Equipe ágil")], ["exec", L("Directors / executives", "Diretores / executivos")], ["mentor", L("Mentoring", "Mentoria")], ["ux", L("Customers / UX", "Clientes / UX")], ["tech", L("Architecture / IT", "Arquitetura / TI")]];
-  const EX = PT ? ["Retrospetiva da sprint 12 com 8 pessoas", "Decisão de investimento com diretores (PDCA)", "Mapear o processo de onboarding de clientes", "Plano de desenvolvimento do mentorado", "Revisão da arquitetura de migração para cloud"]
+  const EX = PT ? ["Retrospectiva da sprint 12 com 8 pessoas", "Decisão de investimento com diretores (PDCA)", "Mapear o processo de onboarding de clientes", "Plano de desenvolvimento do mentorado", "Revisão da arquitetura de migração para cloud"]
     : ["Sprint 12 retrospective with 8 people", "Investment decision with directors (PDCA)", "Map the customer onboarding process", "Mentee development plan", "Cloud migration architecture review"];
   let tab = "build", last = null;
   function form(btnLabel) {
