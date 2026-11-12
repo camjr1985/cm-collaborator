@@ -641,7 +641,7 @@
     d.innerHTML = '<header><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="sp"></span>' + (canEdit ? '<button class="pl-btn sm ghost danger" id="dDel">' + L("Delete", "Excluir") + "</button>" : "") + '<button class="pl-btn icon" id="dX">' + IC("close", 16) + "</button></header>" +
       '<form class="pl-form" id="dF"><textarea name="title" class="d-title" rows="2"' + dis + ">" + esc(it.title) + "</textarea>" +
       '<div class="g2"><label>' + L("Type", "Tipo") + '<select name="type"' + dis + ">" + Object.keys(TYPES).filter(function (t) { return method().types.indexOf(t) >= 0 || t === it.type; }).map(function (t) { return '<option value="' + t + '"' + (t === it.type ? " selected" : "") + ">" + TYPES[t].name + "</option>"; }).join("") + "</select></label>" +
-      "<label>" + L("Status", "Estado") + '<select name="status"' + dis + ">" + statuses().map(function (s) { return '<option value="' + s.id + '"' + (statusOf(it).id === s.id ? " selected" : "") + ">" + esc(s.name) + "</option>"; }).join("") + "</select></label></div>" +
+      "<label>" + L("Status", "Status") + '<select name="status"' + dis + ">" + statuses().map(function (s) { return '<option value="' + s.id + '"' + (statusOf(it).id === s.id ? " selected" : "") + ">" + esc(s.name) + "</option>"; }).join("") + "</select></label></div>" +
       "<label>" + L("Assignee", "Responsável") + '<select name="assignee"' + dis + '><option value="">' + L("Unassigned", "Sem responsável") + "</option>" + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + (m.email === it.assignee ? " selected" : "") + ">" + esc(m.name || m.email) + " · " + esc(m.email) + "</option>"; }).join("") + "</select></label>" +
       '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start" value="' + esc(it.start || "") + '"' + dis + "></label><label>" + L("Due / end", "Prazo / fim") + '<input type="date" name="end" value="' + esc(it.end || "") + '"' + dis + "></label></div>" +
       '<div class="g2"><label>' + L("Progress %", "Progresso %") + '<input type="number" min="0" max="100" step="5" name="progress" value="' + esc(it.progress == null ? "" : it.progress) + '"' + dis + "></label><label>" + L("Story points", "Story points") + '<input type="number" min="0" step="1" name="points" value="' + esc(it.points == null ? "" : it.points) + '"' + dis + "></label></div>" +
@@ -650,6 +650,7 @@
       "<label>" + L("Depends on (finish → start)", "Depende de (fim → início)") + '<select name="deps" multiple size="4"' + dis + ">" + others.map(function (o) { return '<option value="' + o.id + '"' + ((it.deps || {})[o.id] ? " selected" : "") + ">" + esc((o.key ? o.key + " · " : "") + o.title) + "</option>"; }).join("") + "</select></label>" +
       '<label class="chk prio"><input type="checkbox" name="prio"' + (it.prio ? " checked" : "") + dis + "> ★ " + L("Key activity – include in the e-mail alerts", "Atividade principal – incluir nos alertas por e-mail") + "</label>" +
       (allKrs().length ? "<label>" + L("Contributes to (OKR)", "Contribui para (OKR)") + '<select name="krs" multiple size="' + Math.min(5, allKrs().length) + '"' + dis + ">" + allKrs().map(function (k) { return '<option value="' + k.ref + '"' + ((it.krs || {})[k.ref] ? " selected" : "") + ">" + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
+      (it.src && it.src.board ? '<a class="pl-src" href="../board/?id=' + encodeURIComponent(it.src.board) + '">' + IC("board", 15) + " " + L("Open the source board (process step)", "Abrir o quadro de origem (passo do processo)") + "</a>" : "") +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +
       (canEdit && !it.ext ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button type="button" class="pl-btn sm" data-mk="' + k + '">' + IC("send", 14) + " " + L("Create in ", "Criar no ") + PROV[k].short + "</button>"; }).join(" ") : "") +
       '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc((PROV[it.ext.source] ? PROV[it.ext.source].short : it.ext.source) + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Assignee in ", "Responsável no ") + (PROV[it.ext.source] ? PROV[it.ext.source].short : "") + ": " + esc(it.ext.assigneeName) : "") + "</p></form>";
@@ -715,6 +716,7 @@
     modal("<h2>" + L("Create item", "Criar item") + '</h2><form class="pl-form" id="qcF"><div class="type-chips">' + types.map(function (t) { const T = TYPES[t]; return '<button type="button" data-tc="' + t + '" class="' + (t === type ? "on" : "") + '" style="--c:' + T.color + '">' + T.icon + " " + esc(T.name) + "</button>"; }).join("") + '</div><p class="muted small" id="tcDesc"></p>' +
       '<label id="parL">' + L("Parent", "Pai") + '<select name="parent"></select></label>' +
       "<label>" + L("Title", "Título") + '<input name="title" required autocomplete="off"></label>' +
+      (allKrs().length ? '<label id="krL">' + IC("objective", 14) + " " + L("Contributes to (OKR key result)", "Contribui para (resultado-chave do OKR)") + '<select name="kr"><option value="">—</option>' + allKrs().map(function (k) { return '<option value="' + esc(k.ref) + '">' + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Assignee", "Responsável") + '<select name="assignee"><option value="">' + L("Unassigned", "Sem responsável") + "</option>" + Object.keys(members).map(function (k) { return '<option value="' + esc(members[k].email) + '">' + esc(members[k].name || members[k].email) + "</option>"; }).join("") + "</select></label>" +
       '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start"></label><label>' + L("Due / end", "Prazo / fim") + '<input type="date" name="end"></label></div>' +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Create", "Criar") + "</button></div></form>", function (box, close) {
@@ -724,6 +726,7 @@
         box.querySelector("#tcDesc").textContent = TYPES[type].desc;
         const ps = parentChoices(type);
         box.querySelector("#parL").hidden = type === "initiative" || !ps.length;
+        const krl = box.querySelector("#krL"); if (krl) krl.hidden = !(type === "initiative" || ((type === "epic" || type === "phase") && !parentChoices(type).some(function (p) { return p.type === "initiative"; })));
         f.parent.innerHTML = '<option value="">—</option>' + ps.map(function (p) { return '<option value="' + p.id + '">' + esc(TYPES[p.type].name + " · " + (p.key ? p.key + " " : "") + p.title) + "</option>"; }).join("");
       }
       box.querySelectorAll("[data-tc]").forEach(function (b) { b.onclick = function () { type = b.dataset.tc; sync(); }; });
@@ -732,6 +735,7 @@
       f.onsubmit = function (e) {
         e.preventDefault();
         const o = { type: type, title: f.title.value.trim(), parent: f.parent.value || undefined, assignee: f.assignee.value || undefined, start: f.start.value || undefined, end: f.end.value || f.start.value || undefined };
+        if (f.kr && f.kr.value && !box.querySelector("#krL").hidden) { o.krs = {}; o.krs[f.kr.value] = true; }
         if (o.type === "milestone") o.end = o.start = o.end || o.start;
         if (info.method === "scrum" && !isContainer(o) && activeSprint() && view === "board") o.sprint = activeSprint();
         createItem(o).then(function (nid) { close(); if (nid && o.parent) collapsed[o.parent] = false; });
@@ -949,8 +953,12 @@
   function krList(o) { const k = o.krs || {}; return Object.keys(k).map(function (id) { return Object.assign({ id: id }, k[id]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); }); }
   function allKrs() { const out = []; okrs().forEach(function (o) { krList(o).forEach(function (k) { out.push({ ref: o.id + "|" + k.id, label: o.title + " › " + k.title }); }); }); return out; }
   function linkedItems(oid, kid) { return items().filter(function (i) { return i.krs && i.krs[oid + "|" + kid]; }); }
+  /* OKR → initiative → epic → story: an item contributes to a KR if it or any ancestor is linked to it */
+  function linksKr(it, ref) { let cur = it, guard = 0; while (cur && guard++ < 12) { if (cur.krs && cur.krs[ref]) return true; cur = cur.parent ? data.items[cur.parent] && Object.assign({ id: cur.parent }, data.items[cur.parent]) : null; } return false; }
+  function krLeaves(oid, kid) { const ref = oid + "|" + kid; return items().filter(function (i) { return !isContainer(i) && i.type !== "milestone" && linksKr(i, ref); }); }
+  function itemPct(it) { if (!isContainer(it)) return cat(it) === "done" ? 100 : cat(it) === "doing" ? 50 : 0; const r = rollup(it); return r ? Math.round(r.done) : 0; }
   function krProgress(o, kr) {
-    if (kr.auto) { const li = linkedItems(o.id, kr.id).filter(function (i) { return i.type !== "milestone"; }); return li.length ? Math.round(li.filter(function (i) { return cat(i) === "done"; }).length / li.length * 100) : 0; }
+    if (kr.auto) { const lv = krLeaves(o.id, kr.id); return lv.length ? Math.round(lv.filter(function (i) { return cat(i) === "done"; }).length / lv.length * 100) : 0; }
     const s0 = Number(kr.start) || 0, t = Number(kr.target), c = Number(kr.current);
     if (isNaN(t) || t === s0 || isNaN(c)) return 0;
     return Math.max(0, Math.min(100, Math.round((c - s0) / (t - s0) * 100)));
@@ -962,12 +970,31 @@
     const os = okrs();
     v.innerHTML = '<div class="okr"><div class="okr-head"><div><h2>' + IC("objective", 20) + " OKRs</h2><p class=\"muted\">" + L("Objectives and key results for this planning. Link initiatives, epics and stories to the key results they move.", "Objetivos e resultados-chave deste planejamento. Ligue iniciativas, épicos e histórias aos resultados-chave que eles movem.") + "</p></div>" +
       (canEdit ? '<button class="pl-btn primary" id="okrNew">' + IC("plus", 16) + " " + L("Objective", "Objetivo") + "</button>" : "") + "</div>" +
+      okrGaps() +
       (os.length ? os.map(objCard).join("") : '<div class="pl-empty big">' + IC("objective", 40, "big") + "<h2>" + L("No objectives yet", "Ainda não há objetivos") + "</h2><p>" + L("Example: “Delight our customers” – KR: NPS from 30 to 50.", "Exemplo: “Encantar nossos clientes” – KR: NPS de 30 para 50.") + "</p></div>") + "</div>";
     const nb = document.getElementById("okrNew"); if (nb) nb.onclick = function () { objDialog(); };
     v.querySelectorAll("[data-obj]").forEach(function (b) { b.onclick = function () { objDialog(b.dataset.obj); }; });
     v.querySelectorAll("[data-addkr]").forEach(function (b) { b.onclick = function () { krDialog(b.dataset.addkr); }; });
     v.querySelectorAll("[data-kr]").forEach(function (b) { b.onclick = function (e) { if (e.target.closest("[data-open]")) return; const p = b.dataset.kr.split("|"); krDialog(p[0], p[1]); }; });
     v.querySelectorAll("[data-open]").forEach(function (a) { a.onclick = function (e) { e.preventDefault(); openDrawer(a.dataset.open); }; });
+  }
+  function krNode(i, depth) {
+    const T = TYPES[i.type] || TYPES.task, p = itemPct(i);
+    const kids = depth < 1 && isContainer(i) ? children(i.id).filter(isContainer) : [];
+    return '<span class="kr-node" style="--d:' + depth + '"><a href="#" data-open="' + i.id + '" style="--c:' + T.color + '">' + T.icon + " " + esc((i.key ? i.key + " · " : "") + i.title) + '</a><span class="kn-pr"><span class="pbar"><i style="width:' + p + "%;background:" + pcol(p) + '"></i></span>' + p + "%</span></span>" +
+      kids.slice(0, 6).map(function (c) { return krNode(c, depth + 1); }).join("");
+  }
+  /* gaps in the chain: initiatives with no OKR, epics with no initiative */
+  function okrGaps() {
+    const all = items(), hasIni = all.some(function (i) { return i.type === "initiative"; }), hasKr = allKrs().length > 0;
+    const noOkr = hasKr ? all.filter(function (i) { return i.type === "initiative" && !(i.krs && Object.keys(i.krs).length); }) : [];
+    const noIni = hasIni ? all.filter(function (i) { return (i.type === "epic" || i.type === "phase") && !(i.parent && data.items[i.parent] && data.items[i.parent].type === "initiative"); }) : [];
+    if (!noOkr.length && !noIni.length) return hasKr && hasIni ? '<div class="okr-ok">' + IC("task", 16) + " " + L("Everything is connected: every initiative serves an OKR and every epic belongs to an initiative.", "Tudo conectado: toda iniciativa atende a um OKR e todo épico pertence a uma iniciativa.") + "</div>" : "";
+    const chip = function (i) { const T = TYPES[i.type] || TYPES.task; return '<a href="#" data-open="' + i.id + '" style="--c:' + T.color + '">' + T.icon + " " + esc((i.key ? i.key + " · " : "") + i.title) + "</a>"; };
+    return '<div class="okr-gaps">' +
+      (noOkr.length ? "<div><b>" + noOkr.length + " " + L("initiative(s) not linked to an OKR", "iniciativa(s) sem OKR") + '</b><span class="kr-items">' + noOkr.slice(0, 6).map(chip).join("") + "</span></div>" : "") +
+      (noIni.length ? "<div><b>" + noIni.length + " " + L("epic(s) without an initiative", "épico(s) sem iniciativa") + '</b><span class="kr-items">' + noIni.slice(0, 6).map(chip).join("") + "</span></div>" : "") +
+      '<span class="muted small">' + L("Open the item and choose its OKR or parent initiative.", "Abra o item e escolha o OKR ou a iniciativa pai.") + "</span></div>";
   }
   function objCard(o) {
     const pr = objProgress(o), ks = krList(o);
@@ -976,8 +1003,8 @@
       ks.map(function (k) {
         const p = krProgress(o, k), li = linkedItems(o.id, k.id);
         return '<div class="kr-row" data-kr="' + o.id + "|" + k.id + '"><span class="ti" style="color:#0f766e">' + IC("kr", 16) + '</span><div class="kr-t"><span>' + esc(k.title) + '</span><span class="muted small">' +
-          (k.auto ? L("measured by linked items: ", "medido pelos itens ligados: ") + li.filter(function (i) { return cat(i) === "done"; }).length + "/" + li.length + L(" done", " concluídos") : esc(String(k.current == null ? (k.start || 0) : k.current)) + " / " + esc(String(k.target)) + " " + esc(k.unit || "") + L(" (from ", " (de ") + esc(String(k.start || 0)) + ")") + "</span>" +
-          (li.length ? '<span class="kr-items">' + li.slice(0, 6).map(function (i) { const T = TYPES[i.type] || TYPES.task; return '<a href="#" data-open="' + i.id + '" style="--c:' + T.color + '">' + T.icon + " " + esc(i.key || "") + "</a>"; }).join("") + (li.length > 6 ? "<span>+" + (li.length - 6) + "</span>" : "") + "</span>" : "") + "</div>" +
+          (k.auto ? (function () { const lv = krLeaves(o.id, k.id); return L("measured by linked work: ", "medido pelo trabalho ligado: ") + lv.filter(function (i) { return cat(i) === "done"; }).length + "/" + lv.length + L(" items done", " itens concluídos"); })() : esc(String(k.current == null ? (k.start || 0) : k.current)) + " / " + esc(String(k.target)) + " " + esc(k.unit || "") + L(" (from ", " (de ") + esc(String(k.start || 0)) + ")") + "</span>" +
+          (li.length ? '<span class="kr-tree">' + li.slice(0, 8).map(function (i) { return krNode(i, 0); }).join("") + (li.length > 8 ? '<span class="muted small">+' + (li.length - 8) + "</span>" : "") + "</span>" : "") + "</div>" +
           '<div class="okr-pr sm"><span class="pbar"><i style="width:' + p + "%;background:" + pcol(p) + '"></i></span><b>' + p + "%</b></div></div>";
       }).join("") + (canEdit ? '<button class="kb-add" data-addkr="' + o.id + '">' + IC("plus", 14) + " " + L("Key result", "Resultado-chave") + "</button>" : "") + "</section>";
   }
@@ -1241,6 +1268,8 @@
             if (!data.items) data.items = {}; if (!data.settings) data.settings = {};
             const linked = Object.keys(PROV).filter(function (k) { return data.settings[k]; }).join(",");
             if (!document.getElementById("view") || (canEdit && linked !== shell._linked)) { shell._linked = linked; shell(); } else renderView();
+            const want = new URLSearchParams(location.search).get("item");
+            if (want && !start._opened && data.items[want]) { start._opened = 1; setTimeout(function () { openDrawer(want); }, 60); }
           }, function (e) { gate(L("No access", "Sem acesso"), e.message); });
         }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "Seu acesso a este workspace pode ter terminado.")); });
       }, function () { gate(L("No access", "Sem acesso"), L("Your access to this workspace may have ended.", "Seu acesso a este workspace pode ter terminado.")); });

@@ -25,7 +25,8 @@
   const TEXT_COLORS = ["#0E1A33", "#e5484d", "#f76b15", "#12a594", "#2F80ED", "#8e4ec6", "#B8860B", "#ffffff"];
   const FRAME_COLORS = ["#ffffff", "#F2F4F8", "#FBF3DA", "#E3F6F3", "#E6ECF7", "#FFF5C8", "#E6F8D6", "#DCEEFF", "#FFE4E0", "#EEE6FF", "#0E1A33"];
   const FILL_COLORS = ["#ffffff", "#FBF3DA", "#E3F6F3", "#E6ECF7", "#DCEEFF", "#FFF5C8", "#FFE4E0", "#EEE6FF", "#E8C468", "#2CC4B3", "#5FAEFF", "#0E1A33"];
-  const SHAPES = ["rect", "round", "pill", "ellipse", "diamond", "triangle", "hexagon"];
+  const SHAPES = ["rect", "round", "pill", "ellipse", "diamond", "triangle", "hexagon", "parallelogram", "document", "cylinder", "subprocess"];
+  const SVG_SHAPES = ["diamond", "triangle", "hexagon", "parallelogram", "document", "cylinder", "subprocess"];
   const PEOPLE_COLORS = ["#4262FF", "#E5484D", "#12A594", "#F76B15", "#8E4EC6", "#D6409F", "#0090FF", "#3E9B4F"];
   const t = function (s) { return window.MBt ? window.MBt(s) : s; };
   const ICONS = window.MB_ICONS || {};
@@ -130,7 +131,7 @@
   };
   function ico(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + I[n] + "</svg>"; }
   function shapeIco(k) {
-    const m = { rect: '<rect x="4" y="6" width="16" height="12"/>', round: '<rect x="4" y="6" width="16" height="12" rx="3"/>', pill: '<rect x="3" y="7" width="18" height="10" rx="5"/>', ellipse: '<ellipse cx="12" cy="12" rx="9" ry="6.5"/>', diamond: '<path d="M12 3l9 9-9 9-9-9z"/>', triangle: '<path d="M12 4l9 16H3z"/>', hexagon: '<path d="M7 4h10l5 8-5 8H7l-5-8z"/>' };
+    const m = { rect: '<rect x="4" y="6" width="16" height="12"/>', round: '<rect x="4" y="6" width="16" height="12" rx="3"/>', pill: '<rect x="3" y="7" width="18" height="10" rx="5"/>', ellipse: '<ellipse cx="12" cy="12" rx="9" ry="6.5"/>', diamond: '<path d="M12 3l9 9-9 9-9-9z"/>', triangle: '<path d="M12 4l9 16H3z"/>', hexagon: '<path d="M7 4h10l5 8-5 8H7l-5-8z"/>' , parallelogram: '<path d="M7 6h14l-4 12H3z"/>', document: '<path d="M4 5h16v11c-3-2-5 2-8 1s-5-1-8 1z"/>', cylinder: '<ellipse cx="12" cy="6.5" rx="8" ry="2.5"/><path d="M4 6.5v11c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5v-11"/>', subprocess: '<rect x="3" y="6" width="18" height="12"/><path d="M6.5 6v12M17.5 6v12"/>' };
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">' + m[k] + "</svg>";
   }
 
@@ -469,8 +470,13 @@
     });
   }
   function shapeSvg(kind) {
-    const pts = { diamond: "50,1 99,50 50,99 1,50", triangle: "50,2 98,98 2,98", hexagon: "25,2 75,2 98,50 75,98 25,98 2,50" }[kind];
-    return pts ? '<polygon points="' + pts + '" vector-effect="non-scaling-stroke"/>' : "";
+    const pts = { diamond: "50,1 99,50 50,99 1,50", triangle: "50,2 98,98 2,98", hexagon: "25,2 75,2 98,50 75,98 25,98 2,50", parallelogram: "18,2 99,2 82,98 1,98" }[kind];
+    if (pts) return '<polygon points="' + pts + '" vector-effect="non-scaling-stroke"/>';
+    const ve = ' vector-effect="non-scaling-stroke"';
+    if (kind === "document") return '<path d="M1,1 H99 V84 C80,72 64,98 46,92 C30,87 16,80 1,90 Z"' + ve + "/>";
+    if (kind === "cylinder") return '<path d="M1,12 C1,-3 99,-3 99,12 V88 C99,103 1,103 1,88 Z"' + ve + '/><path class="ln2" d="M1,12 C1,27 99,27 99,12"' + ve + "/>";
+    if (kind === "subprocess") return '<path d="M1,1 H99 V99 H1 Z"' + ve + '/><path class="ln2" d="M9,1 V99 M91,1 V99"' + ve + "/>";
+    return "";
   }
 
   function renderObj(o) {
@@ -512,7 +518,7 @@
       el.classList.toggle("darkframe", (o.color || "").toLowerCase() === "#1c2033");
       el.classList.toggle("notitle", !o.title);
     } else if (type === "shape") {
-      const k = o.shape || "rect", poly = ["diamond", "triangle", "hexagon"].indexOf(k) >= 0;
+      const k = o.shape || "rect", poly = SVG_SHAPES.indexOf(k) >= 0;
       el.dataset.shape = k;
       if (o.align) el.dataset.align = o.align; else delete el.dataset.align;
       const svg = el.querySelector(".shp");
@@ -557,6 +563,7 @@
     if (votes) h += '<span class="bd vote" title="' + esc(t(votes + " vote(s)")) + '">' + votes + "</span>";
     if (nC) h += '<span class="bd com" title="' + esc(t(nC + " comment(s)")) + '">' + ico("comment") + nC + "</span>";
     if (r !== null) h += '<span class="bd rice" title="RICE">' + fmt(r) + "</span>";
+    if (o.link) h += '<button class="bd lnk" data-follow="' + esc(o.id) + '" title="' + esc(linkLabel(o.link)) + '">' + (window.CMIcon ? window.CMIcon(o.link.kind === "planitem" ? "planning" : o.link.kind === "frame" ? "board" : "link", 13) : "🔗") + "<span>" + esc(o.link.key || o.link.title || o.link.url || "") + "</span></button>";
     b.innerHTML = h;
   }
   function fitText(el) {
@@ -675,7 +682,8 @@
       h += '<button class="cb vote" data-act="vote" title="Vote (dot voting)">' + ico("vote") + "<span>" + (totalVotes(one) || "") + "</span></button>" +
         (mine ? '<button class="cb" data-act="unvote" title="Remove my vote">−</button>' : "") +
         '<button class="cb" data-act="comment" title="Comments">' + ico("comment") + "</button>" +
-        '<button class="cb txt" data-act="rice" title="RICE score">RICE</button><span class="sep v"></span>';
+        '<button class="cb txt" data-act="rice" title="RICE score">RICE</button>' +
+        '<button class="cb' + (one.link ? " on" : "") + '" data-act="link" title="' + esc(LL("Link to a board, frame, planning or URL – or create a planning item", "Ligar a um quadro, frame, planejamento ou URL – ou criar item no planejamento")) + '">' + (window.CMIcon ? window.CMIcon("link", 18) : "🔗") + '</button><span class="sep v"></span>';
     } else if (!one) {
       h += '<span class="ctx-count">' + esc(t(list.length + " selected")) + '</span><span class="sep v"></span>';
     }
@@ -745,6 +753,7 @@
     if (act === "unvote") { const cur = (one.votes || {})[me.id] || 0; return write("stickies/" + one.id + "/votes/" + me.id, cur > 1 ? cur - 1 : null, { noHistory: true }); }
     if (act === "comment") { openPanel("comments"); return setTimeout(function () { const x = $("#cmtText"); if (x) x.focus(); }, 30); }
     if (act === "rice") return riceModal(one.id);
+    if (act === "link") return linkModal(one.id);
     if (act === "front") { let z = maxZ(); return commit(list.sort(function (a, b) { return (a.z || 1) - (b.z || 1); }).map(function (o) { return { path: "stickies/" + o.id + "/z", value: ++z }; })); }
     if (act === "back") { let z = minZ() - list.length; return commit(list.sort(function (a, b) { return (a.z || 1) - (b.z || 1); }).map(function (o) { return { path: "stickies/" + o.id + "/z", value: z++ }; })); }
     if (act === "dup") return duplicate();
@@ -1322,6 +1331,98 @@
     }
   }
 
+  /* ================= links: subprocess / other board / frame / planning / URL, and step → planning item ================= */
+  function linkLabel(l) {
+    if (!l) return "";
+    if (l.kind === "board") return LL("Open board: ", "Abrir quadro: ") + (l.title || "");
+    if (l.kind === "frame") return LL("Go to frame: ", "Ir para o frame: ") + (l.title || "");
+    if (l.kind === "plan") return LL("Open planning: ", "Abrir planejamento: ") + (l.title || "");
+    if (l.kind === "planitem") return LL("Planning item ", "Item do planejamento ") + (l.key || "") + " · " + (l.title || "");
+    return l.url || "";
+  }
+  function followLink(id) {
+    const o = S.stickies[id]; const l = o && o.link; if (!l) return;
+    if (l.kind === "frame") { const f = S.stickies[l.id]; if (f) { setSel([f.id]); focusBox({ x: f.x - 60, y: f.y - 60, w: f.w + 120, h: f.h + 120 }, 1.2); } else toast(LL("That frame no longer exists", "Esse frame não existe mais")); return; }
+    if (l.kind === "board") { location.href = ROOT + "board/?id=" + encodeURIComponent(l.id); return; }
+    if (l.kind === "plan") return openPlan(l.id);
+    if (l.kind === "planitem") { window.open(ROOT + "planning/?id=" + encodeURIComponent(l.plan) + "&item=" + encodeURIComponent(l.item), "_blank", "noopener"); return; }
+    if (l.url && /^https?:\/\//i.test(l.url)) window.open(l.url, "_blank", "noopener");
+  }
+  function setLink(id, link) {
+    const o = S.stickies[id]; if (!o) return;
+    const n = clone(o); if (link) n.link = link; else delete n.link;
+    commit([{ path: "stickies/" + id, value: n }]);
+  }
+  function objText(o) { return String(o.text || o.title || "").replace(/\s+/g, " ").trim().slice(0, 120); }
+  function linkModal(id) {
+    const o = S.stickies[id]; if (!o) return;
+    const db = window.CMAuth && window.CMAuth.enabled && CFG.signedIn ? window.CMAuth.db() : null;
+    const frames = Object.keys(S.stickies).map(function (k) { return S.stickies[k]; }).filter(function (x) { return typeOf(x) === "frame" && x.id !== id && x.title; });
+    const IC = function (n) { return window.CMIcon ? window.CMIcon(n, 16) : ""; };
+    let h = '<div class="tpl-head"><h2 class="no-i18n">' + LL("Link and connect", "Ligar e conectar") + '</h2><button class="icon-btn" id="lkClose" title="Close">' + ico("close") + "</button></div>" +
+      (o.link ? '<div class="lk-cur no-i18n">' + IC("link") + "<span>" + esc(linkLabel(o.link)) + '</span><button class="btn sm ghost" id="lkGo">' + LL("Open", "Abrir") + '</button><button class="btn sm ghost" id="lkDel">' + LL("Remove link", "Remover link") + "</button></div>" : "") +
+      '<div class="lk-grid no-i18n">' +
+      '<section><h3 class="tpl-cat">' + IC("planning") + " " + LL("Create a planning item from this step", "Criar item no planejamento a partir deste passo") + "</h3>" +
+      (db && CFG.ws ? '<form id="lkPI" class="lk-form"><label>' + LL("Planning", "Planejamento") + '<select name="plan" required><option value="">' + LL("Loading…", "Carregando…") + "</option></select></label>" +
+        "<label>" + LL("Type", "Tipo") + '<select name="type"><option value="epic">' + LL("Epic", "Épico") + '</option><option value="initiative">' + LL("Initiative", "Iniciativa") + '</option><option value="story">' + LL("Story", "História") + '</option><option value="task" selected>' + LL("Task", "Tarefa") + '</option><option value="milestone">' + LL("Milestone", "Marco") + "</option></select></label>" +
+        "<label>" + LL("Title", "Título") + '<input name="title" required maxlength="140" value="' + esc(objText(o)) + '"></label><button class="btn primary">' + LL("Create item and link", "Criar item e ligar") + "</button></form>"
+        : '<p class="muted small">' + LL("Available on boards inside a workspace.", "Disponível em quadros de um workspace.") + "</p>") + "</section>" +
+      '<section><h3 class="tpl-cat">' + IC("link") + " " + LL("Link to…", "Ligar a…") + "</h3>" +
+      '<label>' + LL("A frame on this board (sub-process / detail)", "Um frame deste quadro (subprocesso / detalhe)") + '<select id="lkFrame"><option value="">—</option>' + frames.map(function (f) { return '<option value="' + esc(f.id) + '">' + esc(f.title) + "</option>"; }).join("") + "</select></label>" +
+      (db && CFG.ws ? '<label>' + LL("Another board of this workspace", "Outro quadro deste workspace") + '<select id="lkBoard"><option value="">' + LL("Loading…", "Carregando…") + "</option></select></label>" +
+        '<label>' + LL("A planning", "Um planejamento") + '<select id="lkPlan"><option value="">' + LL("Loading…", "Carregando…") + "</option></select></label>" : "") +
+      '<label>' + LL("External link (URL)", "Link externo (URL)") + '<input id="lkUrl" type="url" placeholder="https://"></label>' +
+      '<button class="btn" id="lkSave">' + LL("Save link", "Salvar link") + "</button></section></div>";
+    modal(h, function (root) {
+      els.modal.classList.add("wide");
+      root.querySelector("#lkClose").onclick = closeModal;
+      const del = root.querySelector("#lkDel"); if (del) del.onclick = function () { setLink(id, null); closeModal(); };
+      const go = root.querySelector("#lkGo"); if (go) go.onclick = function () { closeModal(); followLink(id); };
+      let plans = {}, boards = {};
+      if (db && CFG.ws) {
+        db.ref("workspaces/" + CFG.ws + "/plannings").once("value").then(function (sn) {
+          plans = sn.val() || {};
+          const opts = Object.keys(plans).map(function (k) { return '<option value="' + esc(k) + '">' + esc(plans[k].title || k) + "</option>"; }).join("");
+          root.querySelectorAll('[name="plan"], #lkPlan').forEach(function (sel) { sel.innerHTML = '<option value="">' + (Object.keys(plans).length ? "—" : LL("No plannings yet", "Ainda não há planejamentos")) + "</option>" + opts; });
+          const linked = o.link && (o.link.plan || (o.link.kind === "plan" && o.link.id)); const pf = root.querySelector('[name="plan"]'); if (pf && linked) pf.value = linked; else if (pf && Object.keys(plans).length === 1) pf.value = Object.keys(plans)[0];
+        }, function () {});
+        db.ref("workspaces/" + CFG.ws + "/boards").once("value").then(function (sn) {
+          boards = sn.val() || {}; delete boards[CFG.id];
+          const sel = root.querySelector("#lkBoard"); if (sel) sel.innerHTML = '<option value="">—</option>' + Object.keys(boards).map(function (k) { return '<option value="' + esc(k) + '">' + esc(boards[k].title || k) + "</option>"; }).join("");
+        }, function () {});
+      }
+      root.querySelector("#lkSave").onclick = function () {
+        const fr = root.querySelector("#lkFrame").value, bd = (root.querySelector("#lkBoard") || {}).value, pl = (root.querySelector("#lkPlan") || {}).value, url = root.querySelector("#lkUrl").value.trim();
+        let link = null;
+        if (fr) link = { kind: "frame", id: fr, title: (S.stickies[fr] || {}).title || "" };
+        else if (bd) link = { kind: "board", id: bd, title: (boards[bd] || {}).title || "" };
+        else if (pl) link = { kind: "plan", id: pl, title: (plans[pl] || {}).title || "" };
+        else if (/^https?:\/\/\S+$/i.test(url)) link = { kind: "url", url: url, title: url.replace(/^https?:\/\//, "").slice(0, 40) };
+        if (!link) return toast(LL("Choose where to link", "Escolha onde ligar"));
+        setLink(id, link); closeModal(); toast(LL("Linked – click the badge to follow it", "Ligado – clique no selo para seguir o link"));
+      };
+      const f = root.querySelector("#lkPI");
+      if (f) f.onsubmit = function (e) {
+        e.preventDefault();
+        const pid = f.plan.value, title = f.title.value.trim(), type = f.type.value; if (!pid || !title) return;
+        const btn = f.querySelector(".btn.primary"); btn.disabled = true;
+        const base = db.ref("planning/" + pid + "/data");
+        base.child("settings").once("value").then(function (sn) {
+          const st = sn.val() || {};
+          return base.child("settings/seq").transaction(function (v) { return (v || 0) + 1; }).then(function (r) {
+            const seq = r.snapshot.val(), key = (st.prefix || "PL") + "-" + seq, iid = "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+            const statuses = st.statuses || []; const stt = (statuses.find(function (x) { return x.cat === "todo"; }) || statuses[0] || { id: "todo" }).id;
+            const item = { type: type, title: title, status: stt, key: key, order: seq, created: Date.now(), by: ((window.CMAuth && window.CMAuth.user && window.CMAuth.user()) || {}).email || me.name || "", src: { board: CFG.id, obj: id } };
+            return base.child("items/" + iid).set(item).then(function () {
+              setLink(id, { kind: "planitem", plan: pid, item: iid, key: key, title: title });
+              closeModal(); toast(LL("Created ", "Criado ") + key + LL(" in the planning", " no planejamento"));
+            });
+          });
+        }).catch(function (err) { btn.disabled = false; toast((err && err.message) || "Error"); });
+      };
+    });
+  }
+
   /* ================= background ================= */
   function applyBg() {
     const dark = darkCanvas();
@@ -1656,6 +1757,7 @@
       }
       const objEl = e.target.closest(".obj");
       if (e.target.closest(".pc-open")) return;
+      const fl = e.target.closest("[data-follow]"); if (fl) { e.preventDefault(); e.stopPropagation(); followLink(fl.dataset.follow); return; }
       if (objEl && editing === objEl.dataset.id && e.target.closest(".txt")) return;
       if (e.target.closest("[data-field]") || (e.target.closest(".photo") && canEdit())) { if (editing) stopEdit(); return; }
       if (editing) stopEdit();

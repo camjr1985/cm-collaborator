@@ -132,14 +132,14 @@
       const t1 = k.Sh(230, r(0) - 10, 200, 100, "round", L("Open request", "Abrir solicitação"), WHITE);
       const t2 = k.Sh(500, r(1) - 10, 200, 100, "round", L("Analyse request", "Analisar solicitação"), WHITE);
       const g1 = k.Sh(780, r(1) - 20, 140, 120, "diamond", L("Approved?", "Aprovado?"), GOLDL);
-      const t3 = k.Sh(1000, r(2) - 10, 200, 100, "round", L("Issue invoice", "Emitir cobrança"), WHITE);
+      const t3 = k.Sh(1000, r(2) - 10, 200, 100, "subprocess", L("Issue invoice", "Emitir cobrança"), WHITE);
       const t4 = k.Sh(1000, r(0) - 10, 200, 100, "round", L("Notify refusal", "Avisar recusa"), WHITE);
       const t5 = k.Sh(1290, r(2) - 10, 200, 100, "round", L("Confirm payment", "Confirmar pagamento"), WHITE);
       const t6 = k.Sh(1560, r(1) - 10, 200, 100, "round", L("Deliver service", "Entregar serviço"), WHITE);
       const en = k.Sh(1830, r(1), 80, 80, "ellipse", L("End", "Fim"), NAVY, "#ffffff");
       [[st, t1], [t1, t2], [t2, g1], [g1, t3], [g1, t4], [t3, t5], [t5, t6], [t6, en]].forEach(function (p) { k.A(p[0], p[1]); });
       k.T(930, r(1) + 70, L("yes", "sim"), 14, 60, MUTED); k.T(850, r(1) - 70, L("no", "não"), 14, 60, MUTED);
-      note(k, 40, y + 700, 1400, L("Legend: ● start / end · ▭ task · ◇ decision (gateway) · → sequence flow. Double-click a task to rename it; drag shapes and the arrows follow.", "Legenda: ● início / fim · ▭ tarefa · ◇ decisão (gateway) · → fluxo. Dê duplo clique numa tarefa para renomear; arraste as formas e as setas acompanham."));
+      note(k, 40, y + 700, 1400, L("Legend: ● start / end · ▭ task · ▯ sub-process · ◇ decision (gateway) · → flow. Drag shapes and the arrows follow. Select a step and use 🔗 to link it to another process or create a planning item.", "Legenda: ● início / fim · ▭ tarefa · ▯ subprocesso · ◇ decisão (gateway) · → fluxo. Arraste as formas e as setas acompanham. Selecione um passo e use 🔗 para ligá-lo a outro processo ou criar um item no planejamento."));
       return k.out;
     } };
   K.sipoc = { cat: "process", name: "SIPOC", desc: L("Suppliers, inputs, process, outputs and customers on one page.", "Fornecedores, entradas, processo, saídas e clientes numa só página."),
@@ -297,7 +297,7 @@
       const mob = k.Sh(780, y + 50, 300, 120, "round", L("Mobile app\n[Flutter]", "App celular\n[Flutter]"), TEALL);
       const api = k.Sh(600, y + 260, 320, 130, "round", L("API\n[Node / Java]\nbusiness rules", "API\n[Node / Java]\nregras de negócio"), NAVY, "#ffffff");
       const wk = k.Sh(1120, y + 270, 300, 110, "round", L("Worker\n[jobs]", "Worker\n[processos]"), WHITE);
-      const db = k.Sh(470, y + 520, 300, 130, "round", L("🗄 Database\n[PostgreSQL]", "🗄 Banco de dados\n[PostgreSQL]"), GOLDL);
+      const db = k.Sh(470, y + 520, 300, 130, "cylinder", L("Database\n[PostgreSQL]", "Banco de dados\n[PostgreSQL]"), GOLDL);
       const q = k.Sh(870, y + 520, 300, 130, "round", L("📨 Queue / events\n[Kafka / RabbitMQ]", "📨 Fila / eventos\n[Kafka / RabbitMQ]"), GOLDL);
       const ext = k.Sh(1560, y + 280, 300, 110, "round", L("External API\n[partner]", "API externa\n[parceiro]"), GRAY);
       [[u, web], [u, mob], [web, api], [mob, api], [api, db], [api, q], [q, wk], [wk, ext]].forEach(function (p) { k.A(p[0], p[1]); });
@@ -340,7 +340,7 @@
       names.forEach(function (n, i) {
         const x = 120 + i * 400;
         const sv = k.Sh(x, y + 320, 360, 110, "round", n, TEALL); k.A(gw, sv);
-        const db = k.Sh(x + 60, y + 480, 240, 90, "round", "🗄 " + L("own DB", "banco próprio"), WHITE); k.A(sv, db);
+        const db = k.Sh(x + 60, y + 480, 240, 90, "cylinder", L("own DB", "banco próprio"), WHITE); k.A(sv, db);
       });
       k.F(1740, y, 140, 720, L("Observability", "Observabilidade"), GRAY); k.T(1755, y + 40, "logs\nmetrics\ntraces\nalerts", 15, 110, MUTED);
       return k.out;
@@ -367,7 +367,7 @@
       k.F(270, y + 60, 560, 330, L("Trust boundary", "Fronteira de confiança"), BG.red);
       const w = k.Sh(300, y + 160, 160, 90, "round", "Web / API", WHITE);
       const p = k.Sh(520, y + 110, 160, 80, "round", L("Service", "Serviço"), WHITE);
-      const d = k.Sh(520, y + 250, 160, 80, "round", L("🗄 Data", "🗄 Dados"), GOLDL);
+      const d = k.Sh(520, y + 250, 160, 80, "cylinder", L("Data", "Dados"), GOLDL);
       [[u, w], [w, p], [p, d]].forEach(function (a) { k.A(a[0], a[1]); });
       const cats = [["S", L("Spoofing", "Falsificação de identidade"), L("MFA, strong auth", "MFA, autenticação forte")], ["T", L("Tampering", "Adulteração"), L("Signatures, integrity checks", "Assinaturas, verificação de integridade")], ["R", L("Repudiation", "Repúdio"), L("Audit logs", "Logs de auditoria")], ["I", L("Information disclosure", "Vazamento de informação"), L("Encryption, least privilege", "Criptografia, privilégio mínimo")], ["D", L("Denial of service", "Negação de serviço"), L("Rate limit, WAF, autoscale", "Rate limit, WAF, autoscale")], ["E", L("Elevation of privilege", "Elevação de privilégio"), L("RBAC, input validation", "RBAC, validação de entrada")]];
       cats.forEach(function (c, i) {
@@ -388,7 +388,7 @@
       const waf = k.Sh(560, y + 120, 340, 100, "hexagon", "WAF · CDN · DDoS", GOLD, INK);
       const lb = k.Sh(560, y + 300, 340, 100, "round", L("Load balancer / reverse proxy", "Balanceador / proxy reverso"), WHITE);
       const app = k.Sh(1050, y + 200, 340, 110, "round", L("App servers / containers", "Servidores de aplicação / contêineres"), WHITE);
-      const db = k.Sh(1540, y + 120, 340, 100, "round", L("🗄 Databases (encrypted)", "🗄 Bancos de dados (criptografados)"), WHITE);
+      const db = k.Sh(1540, y + 120, 340, 100, "cylinder", L("Databases (encrypted)", "Bancos de dados (criptografados)"), WHITE);
       const vt = k.Sh(1540, y + 300, 340, 100, "round", L("🔑 Secrets vault / KMS", "🔑 Cofre de segredos / KMS"), WHITE);
       [[us, waf], [waf, lb], [lb, app], [app, db], [app, vt]].forEach(function (a) { k.A(a[0], a[1]); });
       k.F(40, y + 600, 1910, 230, L("Management zone – SIEM · bastion · backups · monitoring", "Zona de gestão – SIEM · bastion · backups · monitoramento"), GRAY);

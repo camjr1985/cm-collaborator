@@ -570,3 +570,22 @@ body.canvas-dark .planobj { border-color: #2c3554; }
   #toolbar { display: grid; grid-template-columns: repeat(2, 40px); gap: 2px; max-height: none; overflow: visible; }
   #toolbar > .sep, #toolbar > hr, #toolbar > .tb-sep { grid-column: 1 / -1; }
 }
+/* v5: links on objects + process shapes */
+.badges .bd.lnk { pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; border: 0; background: #0E1A33; color: #fff; border-radius: 99px; padding: 1px 7px 1px 5px; font: 700 10px/1.6 var(--font); max-width: 140px; }
+.badges .bd.lnk span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badges .bd.lnk svg { width: 12px; height: 12px; flex: none; }
+.badges .bd.lnk:hover { background: #13A596; }
+.shapeobj .shp .ln2 { fill: none !important; }
+.shapeobj[data-shape="parallelogram"] .txt { width: 70%; }
+.shapeobj[data-shape="document"] .txt { max-height: 70%; margin-top: -8%; }
+.shapeobj[data-shape="cylinder"] .txt { margin-top: 12%; max-height: 70%; }
+.shapeobj[data-shape="subprocess"] .txt { width: 76%; }
+.lk-cur { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #E3F6F3; margin: 10px 0; flex-wrap: wrap; }
+.lk-cur span { flex: 1 1 200px; font-weight: 600; font-size: 14px; }
+.lk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.lk-grid section { min-width: 0; }
+.lk-grid .tpl-cat { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-size: 15px; color: #0E1A33; }
+.lk-grid label { display: block; font-weight: 600; font-size: 13px; margin: 10px 0 0; }
+.lk-grid select, .lk-grid input { width: 100%; margin-top: 4px; }
+.lk-grid .btn { margin-top: 14px; }
+@media (max-width: 760px) { .lk-grid { grid-template-columns: 1fr; gap: 6px; } }
