@@ -648,7 +648,7 @@
     "Please enter your full name.": "Indique seu nome completo.",
     "Please enter a valid e-mail.": "Indique um e-mail válido.",
     "Please choose your role.": "Escolha sua função.",
-    "Please accept to be contacted about the beta.": "Aceite ser contactado(a) sobre o beta.",
+    "Please accept to be contacted about the beta.": "Aceito ser contatado(a) sobre o beta.",
     "People on this board": "Pessoas neste quadro", "Tools": "Ferramentas"
   };
 

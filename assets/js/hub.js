@@ -29,9 +29,26 @@
   function startStrip(canCreate) {
     if (!canCreate) return "";
     return '<section class="hub-sec"><div class="hub-sec-head"><h2>Start something new</h2><span class="muted small">' + t("Pick a template – everything stays editable.") + "</span></div>" +
-      '<div class="tpl-strip">' + TPL.map(function (x) {
-        return '<button class="tpl-tile' + (x.id === "blank" ? " blank" : "") + '" data-new="' + x.id + '"><span class="tpl-pv">' + pv(x.id) + '</span><b class="no-i18n">' + esc(x.name) + "</b></button>";
+      tplChips() +
+      '<div class="tpl-strip" id="tplStrip">' + TPL.map(function (x) {
+        return '<button class="tpl-tile' + (x.id === "blank" ? " blank" : "") + '" data-new="' + x.id + '" data-cat="' + esc(x.cat || "") + '"><span class="tpl-pv">' + pv(x.id) + '</span><b class="no-i18n">' + esc(x.name) + "</b></button>";
       }).join("") + "</div></section>";
+  }
+  /* category chips over the template strip (Design e UX, Design Thinking, Processos…) */
+  function tplChips() {
+    const cats = window.MB_KIT_CATS || {}, order = (window.MB_KIT_CAT_ORDER || []).filter(function (c) { return TPL.some(function (x) { return x.cat === c; }); });
+    if (!order.length) return "";
+    return '<div class="tpl-chips no-i18n" role="tablist"><button class="on" data-tcat="">' + esc(LL("All", "Todos")) + "</button>" + order.map(function (c) { return '<button data-tcat="' + c + '">' + esc(cats[c] || c) + "</button>"; }).join("") + "</div>";
+  }
+  function bindChips() {
+    el.querySelectorAll("[data-tcat]").forEach(function (b) {
+      b.onclick = function () {
+        el.querySelectorAll("[data-tcat]").forEach(function (x) { x.classList.toggle("on", x === b); });
+        const c = b.dataset.tcat, strip = el.querySelector("#tplStrip");
+        strip.querySelectorAll(".tpl-tile").forEach(function (t) { t.hidden = !!c && t.dataset.cat !== c && t.dataset.new !== "blank"; });
+        strip.scrollLeft = 0;
+      };
+    });
   }
   function planStrip(canCreate) {
     if (!canCreate || !window.PLAN_ORDER) return "";
@@ -178,6 +195,7 @@
     el.innerHTML = '<div class="notice"><b>Demo mode.</b> <span>Sign-in and private access switch on as soon as Firebase is configured (see README). Until then, boards are saved only in your browser.</span></div>' +
       searchBar() + startStrip(true) + recentRows(null);
     el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, {}); }; });
+    bindChips();
     bindSearch();
   }
   function login() {
@@ -308,6 +326,7 @@
         if (!admin && firstBeta && !welcomed) setTimeout(function () { welcomeDialog(user); }, 400);
         document.getElementById("soBtn").onclick = A.signOut;
         el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, wss); }; });
+        bindChips();
         el.querySelectorAll("[data-newplan]").forEach(function (b) { b.onclick = function () { planDialog(wss, b.dataset.newplan); }; });
         el.querySelectorAll("[data-newplanm]").forEach(function (b) { b.onclick = function () { const strip = el.querySelector(".tpl-strip"); planDialog(wss, strip && strip.dataset.ws, b.dataset.newplanm); }; });
         el.querySelectorAll("[data-newin]").forEach(function (b) {

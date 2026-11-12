@@ -20,10 +20,11 @@
   const VOTES = window.CMCOLLAB_VOTES_PER_USER || 5;
   const ROOT = CFG.root || "./";
   const LL = function (en, pt) { return window.MB_LANG === "pt" ? pt : en; };
-  const PALETTE = ["#FFDD4A", "#FFAE45", "#FF8577", "#FF8CC6", "#AE8FFF", "#5FAEFF", "#3FD3B0", "#9BDD5C", "#DDE3EC"];
-  const TEXT_COLORS = ["#1c2033", "#e5484d", "#f76b15", "#12a594", "#4262ff", "#8e4ec6", "#ffffff"];
-  const FRAME_COLORS = ["#ffffff", "#F2F4F8", "#FFF5C8", "#E6F8D6", "#DCEEFF", "#FFE4E0", "#EEE6FF", "#1c2033"];
-  const FILL_COLORS = ["#ffffff", "#DCEEFF", "#D7F7EE", "#FFF5C8", "#FFE4E0", "#EEE6FF", "#5FAEFF", "#3FD3B0", "#FFAE45", "#1E2A4A"];
+  /* CM palette: brand first (gold · teal · navy-light), then vivid, then pastels */
+  const PALETTE = ["#F2D585", "#8FE3D8", "#AFC3EA", "#FFAE45", "#FF8577", "#FF8CC6", "#AE8FFF", "#5FAEFF", "#9BDD5C", "#FFF3B0", "#D6F5EF", "#DCE8FF", "#FFE0EC", "#ECE3FF", "#E6E9EF"];
+  const TEXT_COLORS = ["#0E1A33", "#e5484d", "#f76b15", "#12a594", "#2F80ED", "#8e4ec6", "#B8860B", "#ffffff"];
+  const FRAME_COLORS = ["#ffffff", "#F2F4F8", "#FBF3DA", "#E3F6F3", "#E6ECF7", "#FFF5C8", "#E6F8D6", "#DCEEFF", "#FFE4E0", "#EEE6FF", "#0E1A33"];
+  const FILL_COLORS = ["#ffffff", "#FBF3DA", "#E3F6F3", "#E6ECF7", "#DCEEFF", "#FFF5C8", "#FFE4E0", "#EEE6FF", "#E8C468", "#2CC4B3", "#5FAEFF", "#0E1A33"];
   const SHAPES = ["rect", "round", "pill", "ellipse", "diamond", "triangle", "hexagon"];
   const PEOPLE_COLORS = ["#4262FF", "#E5484D", "#12A594", "#F76B15", "#8E4EC6", "#D6409F", "#0090FF", "#3E9B4F"];
   const t = function (s) { return window.MBt ? window.MBt(s) : s; };
@@ -650,7 +651,7 @@
   function selObjs() { return Array.from(sel).map(function (id) { return S.stickies[id]; }).filter(Boolean); }
   function single() { return sel.size === 1 ? S.stickies[Array.from(sel)[0]] : null; }
   function swatches(act, colors, cur) {
-    return '<div class="ctx-colors">' + colors.map(function (c) { return '<button data-act="' + act + '" data-c="' + c + '" style="background:' + c + '"' + (cur && cur.toLowerCase() === c.toLowerCase() ? ' class="on"' : "") + ' title="Change colour"></button>'; }).join("") + '</div><span class="sep v"></span>';
+    return '<div class="ctx-colors' + (colors.length > 10 ? " many" : "") + '">' + colors.map(function (c) { return '<button data-act="' + act + '" data-c="' + c + '" style="background:' + c + '"' + (cur && cur.toLowerCase() === c.toLowerCase() ? ' class="on"' : "") + ' title="Change colour"></button>'; }).join("") + '</div><span class="sep v"></span>';
   }
   function updateCtx() {
     const list = selObjs();
@@ -1203,7 +1204,7 @@
       const list = window.MBTemplateList ? window.MBTemplateList().filter(function (x) { return x.kind === "kit"; }) : [];
       const cats = window.MB_KIT_CATS || {};
       h += '<p class="muted">Insert a ready-made template into this board. Everything stays editable – move, recolour, add post-its.</p>';
-      ["executive", "feedback", "agile", "tech", "data", "diagram", "strategy"].forEach(function (c) {
+      (window.MB_KIT_CAT_ORDER || ["executive", "feedback", "agile", "tech", "data", "diagram", "strategy"]).forEach(function (c) {
         const items = list.filter(function (x) { return x.cat === c; });
         if (!items.length) return;
         h += '<h3 class="tpl-cat no-i18n">' + esc(cats[c] || c) + '</h3><div class="tpl-grid">' + items.map(function (x) {

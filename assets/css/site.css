@@ -445,3 +445,10 @@ a.stat { text-decoration: none !important; color: inherit !important; }
 .pm-opt .pm-ic { color: var(--gold); }
 .pl-adm-h { display: flex; align-items: center; gap: 6px; margin-top: 18px; }
 .b-ic.plan { display: inline-grid; place-items: center; background: rgba(232,196,104,.15); color: var(--gold); }
+/* template category chips (hub) */
+.tpl-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 12px; scrollbar-width: none; }
+.tpl-chips::-webkit-scrollbar { display: none; }
+.tpl-chips button { flex: none; border: 1px solid var(--line); background: transparent; color: var(--ink-2); padding: 6px 14px; border-radius: 99px; font: 600 13px var(--font); white-space: nowrap; cursor: pointer; }
+.tpl-chips button:hover { color: var(--ink); border-color: var(--teal, #2cc4b3); }
+.tpl-chips button.on { background: var(--gold, #e8c468); border-color: var(--gold, #e8c468); color: var(--navy, #0e1a33); }
+.tpl-tile[hidden] { display: none; }

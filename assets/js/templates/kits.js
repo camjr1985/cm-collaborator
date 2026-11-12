@@ -13,8 +13,8 @@
   const PT = window.MB_LANG === "pt";
   function L(en, pt) { return PT ? pt : en; }
 
-  const C = { yellow: "#FFDD4A", orange: "#FFAE45", red: "#FF8577", pink: "#FF8CC6", purple: "#AE8FFF", blue: "#5FAEFF", teal: "#3FD3B0", green: "#9BDD5C", gray: "#DDE3EC" };
-  const BG = { white: "#ffffff", gray: "#F2F4F8", green: "#E6F8D6", red: "#FFE4E0", blue: "#DCEEFF", yellow: "#FFF5C8", purple: "#EEE6FF", orange: "#FFEBD3", teal: "#D7F7EE" };
+  const C = { gold: "#F2D585", mint: "#8FE3D8", navyL: "#AFC3EA", yellow: "#F2D585", orange: "#FFAE45", red: "#FF8577", pink: "#FF8CC6", purple: "#AE8FFF", blue: "#5FAEFF", teal: "#3FD3B0", green: "#9BDD5C", gray: "#DDE3EC" };
+  const BG = { gold: "#FBF3DA", mint: "#E3F6F3", navy: "#E6ECF7", white: "#ffffff", gray: "#F2F4F8", green: "#E6F8D6", red: "#FFE4E0", blue: "#DCEEFF", yellow: "#FFF5C8", purple: "#EEE6FF", orange: "#FFEBD3", teal: "#D7F7EE" };
 
   /* ---------- builders ---------- */
   function kit() {
@@ -29,6 +29,15 @@
       A: function (from, to, head) { const o = { id: "t" + (++n), type: "arrow", from: from, to: to, x1: 0, y1: 0, x2: 0, y2: 0, color: "#3B4A6B", route: "elbow", head: head !== false }; out.push(o); return o.id; },
       I: function (x, y, size, name, color) { const o = { id: "t" + (++n), type: "icon", x: x, y: y, w: size, h: size, name: name, color: color || "#1c2033" }; out.push(o); return o.id; },
       SL: function (x, y, w, h, text, color, fs) { const o = { id: "t" + (++n), type: "shape", shape: "rect", align: "left", x: x, y: y, w: w, h: h, text: text || "", color: color || "#ffffff", tcolor: "#1c2033" }; if (fs) o.fs = fs; out.push(o); return o.id; },
+      /* brand header: navy banner + gold rule, white title, light subtitle (Superando Obstáculos palette) */
+      H: function (x, y, w, title, sub) {
+        const hh = sub ? 112 : 84;
+        out.push({ id: "t" + (++n), type: "shape", shape: "rect", x: x, y: y, w: w, h: hh, text: "", color: "#0E1A33", tcolor: "#ffffff", brand: true });
+        out.push({ id: "t" + (++n), type: "shape", shape: "rect", x: x, y: y + hh, w: w, h: 6, text: "", color: "#E8C468", tcolor: "#0E1A33", brand: true });
+        out.push({ id: "t" + (++n), type: "text", x: x + 36, y: y + 20, w: Math.min(w - 72, 1100), fs: 34, text: title, color: "#ffffff" });
+        if (sub) out.push({ id: "t" + (++n), type: "text", x: x + 36, y: y + 66, w: Math.min(w - 72, 1200), fs: 17, text: sub, color: "#C9D2E3" });
+        return y + hh + 6;
+      },
       E: function (x, y, size, emoji) { const o = { id: "t" + (++n), type: "icon", x: x, y: y, w: size, h: size, emoji: emoji }; out.push(o); return o.id; }
     };
     return api;
@@ -51,7 +60,7 @@
       }
     },
     retro: {
-      name: "Retrospective", desc: L("What went well, what didn't, ideas and actions.", "O que deu certo, o que não correu, ideias e ações."), cat: "agile",
+      name: "Retrospective", desc: L("What went well, what didn't, ideas and actions.", "O que deu certo, o que não deu certo, ideias e ações."), cat: "agile",
       build: function () {
         const k = kit();
         k.F(0, 0, 1500, 900, L("Sprint retrospective", "Retrospectiva da sprint"));
@@ -77,7 +86,7 @@
         k.S(940, 370, L("Ana · 8 days", "Ana · 8 dias"), C.teal, 120, 90); k.S(1080, 370, L("Rui · 10 days", "Rui · 10 dias"), C.teal, 120, 90); k.S(940, 480, L("Velocity: 30 pts", "Velocidade: 30 pts"), C.orange, 260, 80);
         k.F(1240, 340, 320, 280, L("⚠️ Risks & dependencies", "⚠️ Riscos e dependências"), BG.red);
         k.F(1240, 660, 320, 280, L("✔ Definition of Done", "✔ Definition of Done"), BG.purple);
-        k.T(1260, 690, L("☐ Code reviewed\n☐ Tests passing\n☐ Documented\n☐ Accepted by PO", "☐ Código revisto\n☐ Testes a passar\n☐ Documentado\n☐ Aceite pelo PO"), 18, 280);
+        k.T(1260, 690, L("☐ Code reviewed\n☐ Tests passing\n☐ Documented\n☐ Accepted by PO", "☐ Código revisado\n☐ Testes passando\n☐ Documentado\n☐ Aceito pelo PO"), 18, 280);
         return k.out;
       }
     },
@@ -114,7 +123,7 @@
         k.A(f1, f2); k.A(d1, f2);
         k.F(gx, yObj, 900, 280, L("🎯 PI objectives (team · objective · business value)", "🎯 Objetivos do PI (equipe · objetivo · valor de negócio)"), BG.green);
         k.S(gx + 20, yObj + 30, L("Alpha · Launch login · BV 8", "Alpha · Lançar login · BV 8"), C.green, 200, 100);
-        const roam = [[L("Resolved", "Resolvido"), BG.green], [L("Owned", "Assumido"), BG.blue], [L("Accepted", "Aceite"), BG.yellow], [L("Mitigated", "Mitigado"), BG.purple]];
+        const roam = [[L("Resolved", "Resolvido"), BG.green], [L("Owned", "Assumido"), BG.blue], [L("Accepted", "Aceito"), BG.yellow], [L("Mitigated", "Mitigado"), BG.purple]];
         const rx = gx + 940, rw = (W - gx - rx) / 4;
         roam.forEach(function (r, i) { k.F(rx + i * rw, yObj, rw - 10, 280, "ROAM · " + r[0], r[1]); });
         return k.out;
@@ -270,7 +279,7 @@
         // PDCA quadrants
         const qx = 40, qy = 330, qw = 600, qh = 340;
         const Q = [
-          [L("P · PLAN – What did we plan?", "P · PLAN – O que planeámos?"), BG.blue, C.blue, L("Objective, targets and expected outcome", "Objetivo, metas e resultado esperado")],
+          [L("P · PLAN – What did we plan?", "P · PLAN – O que planejamos?"), BG.blue, C.blue, L("Objective, targets and expected outcome", "Objetivo, metas e resultado esperado")],
           [L("D · DO – What was executed?", "D · DO – O que foi executado?"), BG.green, C.green, L("Deliveries and actions done this period", "Entregas e ações realizadas no período")],
           [L("C · CHECK – Results vs plan", "C · CHECK – Resultados vs plano"), BG.yellow, C.yellow, L("Gaps, root causes and lessons learned", "Desvios, causas-raiz e lições aprendidas")],
           [L("A · ACT – What do we adjust?", "A · ACT – O que ajustamos?"), BG.purple, C.purple, L("Corrective actions and standardisation", "Ações corretivas e padronização")]
@@ -460,8 +469,58 @@
   };
 
   window.MB_KITS = KITS;
-  window.MB_KIT_ORDER = ["betatest", "pdca", "kanban", "retro", "planning", "piplanning", "sysdemo", "swarch", "cloud", "lakehouse", "datamodel", "process", "mindmap", "journey", "empathy", "swot", "eisenhower", "okr", "roadmap"];
-  window.MB_KIT_CATS = { executive: L("Executive & governance", "Executivo e governança"), tech: L("Architecture & cloud", "Arquitetura e cloud"), data: L("Data & databases", "Dados e bases de dados"), agile: "Agile", diagram: L("Maps & diagrams", "Mapas e diagramas"), strategy: L("Strategy", "Estratégia"), feedback: L("Feedback & testing", "Feedback e testes"), mentoring: L("Mentoring", "Mentoria"), basic: L("Basic", "Básico") };
+  /* categories (gallery order) */
+  const RECAT = { swarch: "software", cloud: "arch", process: "process", mindmap: "dthinking", journey: "design", empathy: "design" };
+  Object.keys(RECAT).forEach(function (k) { if (KITS[k]) KITS[k].cat = RECAT[k]; });
+  window.MB_KIT_ORDER = ["betatest", "pdca", "journey", "empathy", "mindmap", "process", "kanban", "retro", "planning", "piplanning", "sysdemo", "cloud", "swarch", "lakehouse", "datamodel", "swot", "eisenhower", "okr", "roadmap"];
+  window.MB_KIT_CATS = { design: L("Design & UX", "Design e UX"), dthinking: "Design Thinking", process: L("Processes & flows", "Processos e fluxos"), product: L("Product management", "Gestão de produto"), arch: L("Architecture", "Arquitetura"), software: L("Software architecture", "Arquitetura de software"), security: L("Security architecture", "Arquitetura de segurança"), agile: "Agile", strategy: L("Strategy", "Estratégia"), executive: L("Executive & governance", "Executivo e governança"), data: L("Data & databases", "Dados e bancos de dados"), feedback: L("Feedback & testing", "Feedback e testes"), mentoring: L("Mentoring", "Mentoria"), basic: L("Basic", "Básico"), tech: L("Architecture & cloud", "Arquitetura e cloud"), diagram: L("Maps & diagrams", "Mapas e diagramas") };
+  window.MB_KIT_CAT_ORDER = ["design", "dthinking", "process", "product", "arch", "software", "security", "agile", "strategy", "executive", "data", "feedback"];
+  /* brand every template: a navy header band behind the main title (+ subtitle), gold rule underneath */
+  function brandize(objs, meta) {
+    if (!objs || !objs.length || objs.some(function (o) { return o.brand; })) return objs;
+    const fr = objs[0]; if (fr.type !== "frame") return objs;
+    const title = objs.find(function (o) { return o.type === "text" && (o.fs || 24) >= 28 && o.y >= fr.y && o.y < fr.y + 120; });
+    if (!title) return shiftBrand(objs, meta);
+    const sub = objs.find(function (o) { return o !== title && o.type === "text" && (o.fs || 24) <= 20 && o.y > title.y && o.y < title.y + 100; });
+    const lines = function (o) { return String(o.text || "").split("\n").length; };
+    let bottom = Math.max(title.y + (title.fs || 24) * 1.35 * lines(title), sub ? sub.y + (sub.fs || 18) * 1.45 * lines(sub) : 0) + 14;
+    const clash = objs.some(function (o) { return o !== fr && o !== title && o !== sub && o.type !== "arrow" && o.y < bottom + 8 && o.y + (o.h || 30) > fr.y; });
+    const nextTop = Math.min.apply(null, objs.filter(function (o) { return o !== fr && o !== title && o !== sub && o.type !== "arrow"; }).map(function (o) { return o.y; }).concat([fr.y + fr.h]));
+    if (clash || nextTop - 44 < bottom - 2) return shiftBrand(objs, meta);
+    const h = Math.round(Math.min(bottom + 10, nextTop - 44) - fr.y);
+    const band = { id: "bh1", type: "shape", shape: "rect", x: fr.x, y: fr.y, w: fr.w, h: h, text: "", color: "#0E1A33", tcolor: "#ffffff", brand: true };
+    const rule = { id: "bh2", type: "shape", shape: "rect", x: fr.x, y: fr.y + h, w: fr.w, h: 6, text: "", color: "#E8C468", tcolor: "#0E1A33", brand: true };
+    title.color = "#ffffff"; if (sub) sub.color = "#C9D2E3";
+    return [fr, band, rule].concat(objs.slice(1));
+  }
+  /* no room above the content: push everything down and add a full header (frame title + description) */
+  function shiftBrand(objs, meta) {
+    const fr = objs[0], D = 146;
+    const ttl = objs.find(function (o) { return o !== fr && o.type === "text" && (o.fs || 24) >= 28 && o.y < fr.y + 120; });
+    objs.forEach(function (o) {
+      if (o === fr) return;
+      if (o.type === "arrow") { if (!o.from && o.y1 != null) o.y1 += D; if (!o.to && o.y2 != null) o.y2 += D; return; }
+      o.y += D;
+    });
+    fr.h += D;
+    const k = kit(), title = (ttl && ttl.text) || (meta && meta.name) || fr.title || "";
+    if (ttl) objs.splice(objs.indexOf(ttl), 1);
+    k.H(fr.x, fr.y, fr.w, title, meta && meta.desc);
+    k.out.forEach(function (o, i) { o.id = "bh" + (i + 1); });
+    return [fr].concat(k.out, objs.slice(1));
+  }
+  /* make sure the outer frame wraps everything (+ padding) */
+  function fitOuter(objs) {
+    const fr = objs && objs[0]; if (!fr || fr.type !== "frame") return objs;
+    let r = fr.x + fr.w, btm = fr.y + fr.h;
+    objs.forEach(function (o) { if (o === fr || o.type === "arrow") return; r = Math.max(r, o.x + (o.w || 0) + 40); btm = Math.max(btm, o.y + (o.h || ((o.fs || 24) * 1.4 * String(o.text || "").split("\n").length)) + 40); });
+    fr.w = Math.round(r - fr.x); fr.h = Math.round(btm - fr.y);
+    objs.forEach(function (o) { if (o.brand) o.w = fr.w; });
+    return objs;
+  }
+  window.MBKitBrand = function (objs, meta) { return fitOuter(brandize(objs, meta)); };
+  Object.keys(KITS).forEach(function (k) { const b = KITS[k].build; KITS[k].build = function () { return window.MBKitBrand(b(), { name: PT ? (KITS[k].namePT || KITS[k].name) : KITS[k].name, desc: KITS[k].desc }); }; });
+  window.MBKit = kit; window.MB_KC = C; window.MB_KBG = BG;
 
   /* ---------- icons (24×24 stroke) ---------- */
   window.MB_ICONS = {
@@ -569,7 +628,7 @@
     return list;
   };
   // Portuguese names
-  const NPT = { betatest: "Kit de beta test", kanban: "Quadro Kanban", retro: "Retrospectiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap", pdca: "Reunião executiva PDCA", swarch: "Arquitetura de software", lakehouse: "Data lakehouse (medalhão)", datamodel: "Modelo de base de dados (ER)", cloud: "Arquitetura e definições de cloud" };
+  const NPT = { betatest: "Kit de beta test", kanban: "Quadro Kanban", retro: "Retrospectiva", planning: "Sprint planning", piplanning: "PI Planning", sysdemo: "System demo", process: "Fluxo de processo", mindmap: "Mapa mental", journey: "Jornada do cliente", empathy: "Mapa de empatia", swot: "Análise SWOT", eisenhower: "Matriz de Eisenhower", okr: "OKRs", roadmap: "Roadmap", pdca: "Reunião executiva PDCA", swarch: "Arquitetura de software", lakehouse: "Data lakehouse (medalhão)", datamodel: "Modelo de banco de dados (ER)", cloud: "Arquitetura e definições de cloud" };
   Object.keys(NPT).forEach(function (k) { KITS[k].namePT = NPT[k]; });
   window.MBTemplatePreview = function (id) {
     if (KITS[id]) { if (!KITS[id]._pv) KITS[id]._pv = window.MBKitPreview(KITS[id].build()); return KITS[id]._pv; }
