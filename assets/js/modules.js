@@ -69,12 +69,127 @@
       if (ok || !el) return ok;
       const m = get(mod) || { name: mod, full: mod, desc: "" };
       el.innerHTML = '<div class="mod-gate"><div class="mod-gate-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h1>" + esc(m.full) + "</h1><p>" + esc(m.desc) + "</p><p>" +
-        esc(L("You don't have access to this module yet. Contact the Administration to get the licence (beta access available).", "Você ainda não tem acesso a este módulo. Entre em contato com a Administração para ter acesso ao licenciamento (há acesso beta disponível).")) +
-        '</p><div class="mod-gate-acts"><button class="btn primary" id="modReq">' + esc(L("Notify the Administration", "Avisar a Administração")) + '</button><a class="btn" href="' + esc((window.CMCOLLAB_BASE || "../") + "workspaces/") + '">' + esc(L("Back to my boards", "Voltar para Meus quadros")) + "</a></div></div></div>";
+        esc(L("This module is not part of your licence yet. Contact the CM Collaborator administration to purchase it.", "Este módulo ainda não faz parte da sua licença. Entre em contato com a administração do CM Collaborator para fazer a aquisição.")) +
+        '</p><div class="mod-gate-acts"><button class="btn primary" id="modReq">' + esc(L("Contact the administration", "Falar com a administração")) + '</button><a class="btn" href="' + esc((window.CMCOLLAB_BASE || "../") + "workspaces/") + '">' + esc(L("Back to my boards", "Voltar para Meus quadros")) + "</a></div></div></div>";
       const b = el.querySelector("#modReq");
       if (b) b.onclick = function () { b.disabled = true; request(mod, wsId).then(function () { b.textContent = L("Request sent ✓", "Pedido enviado ✓"); }, function () { b.disabled = false; }); };
       return false;
     });
   }
-  window.CMModules = { LIST: LIST, PACKAGES: PACKAGES, get: get, active: active, has: has, forWorkspace: forWorkspace, gate: gate, request: request, key: key };
+  /* ---------- "Módulos" switcher in the top bar (like the Jira / Google app switcher) ----------
+     Colaboração and Planejamento are always included; ITSM and Business Game open when licensed,
+     otherwise they show the "contact the CM Collaborator administration" dialog. */
+  const BASE = (function () { const sc = document.currentScript && document.currentScript.src; return sc ? sc.replace(/assets\/js\/modules\.js.*$/, "") : "../"; })();
+  const EMO = { collab: "🧩", planning: "🗺️", itsm: "🛠️", game: "🎲" };
+  function apps() {
+    return [
+      { id: "collab", name: L("Collaboration", "Colaboração"), desc: L("AI whiteboards, templates and live workshops", "Quadros colaborativos com IA, templates e dinâmicas ao vivo"), core: true, icon: "board", href: "workspaces/#colaboracao" },
+      { id: "planning", name: L("Planning", "Planejamento"), desc: L("Roadmap, Waterfall, Scrum, Kanban, OKRs and reports", "Roadmap, Waterfall, Scrum, Kanban, OKRs e relatórios"), core: true, icon: "planning", href: "workspaces/#planejamento" },
+      { id: "itsm", name: "ITSM", desc: L("Service management (ITIL 4)", "Gestão de serviços (ITIL 4)"), icon: "itsm", href: "itsm/" },
+      { id: "game", name: "Business Game", desc: L("Business simulation for education", "Simulação empresarial para educação"), icon: "game", href: "workspaces/#business-game" }
+    ];
+  }
+  const pageOk = {};
+  function pageExists(path) {
+    if (pageOk[path] === undefined) pageOk[path] = fetch(BASE + path, { method: "HEAD", cache: "no-store" }).then(function (r) { return r.ok; }, function () { return false; });
+    return pageOk[path];
+  }
+  let accessP = null;
+  function access() { // → { admin, itsm: {ok, ws: []}, game: {ok, ws: []} }
+    if (accessP) return accessP;
+    const u = user();
+    if (!u) return Promise.resolve({ admin: false });
+    accessP = Promise.all([isAdmin(), mine(), once("userWorkspaces/" + key(u.email))]).then(function (r) {
+      const wsIds = Object.keys(r[2] || {}).filter(function (w) { const x = r[2][w] || {}; return !x.expires || x.expires > Date.now(); });
+      return Promise.all(wsIds.map(function (w) { return once("entitlements/ws/" + w).then(function (e) { return [w, e || {}]; }); })).then(function (rows) {
+        const out = { admin: !!r[0] };
+        LIST.forEach(function (m) {
+          const ws = rows.filter(function (x) { return active(x[1][m.id]); }).map(function (x) { return x[0]; });
+          out[m.id] = { ok: !!r[0] || active((r[1] || {})[m.id]) || ws.length > 0, ws: ws.length ? ws : wsIds };
+        });
+        return out;
+      });
+    });
+    return accessP;
+  }
+  function icon(a) { const ic = window.CMIcon ? window.CMIcon(a.icon, 18) : ""; return ic && ic.indexOf("<svg") >= 0 ? ic : EMO[a.id]; }
+  function contact(mod, wsId) {
+    const m = get(mod) || { id: mod, full: mod, desc: "" };
+    const d = document.createElement("div"); d.className = "modsw-dlg"; d.setAttribute("role", "dialog");
+    d.innerHTML = '<div class="modsw-dlg-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h2>" + (EMO[mod] || "🧩") + " " + esc(m.full) + "</h2><p>" +
+      esc(L("This module is not part of your licence yet. Contact the CM Collaborator administration to purchase it.", "Este módulo ainda não faz parte da sua licença. Entre em contato com a administração do CM Collaborator para fazer a aquisição.")) +
+      '</p><p class="modsw-muted">' + esc(m.desc) + '</p><div class="mod-gate-acts"><button class="modsw-b primary" data-req>' + esc(L("Contact the administration", "Falar com a administração")) + '</button><button class="modsw-b" data-x>' + esc(L("Close", "Fechar")) + "</button></div></div>";
+    document.body.appendChild(d);
+    const close = function () { d.remove(); };
+    d.addEventListener("click", function (e) { if (e.target === d) close(); });
+    d.querySelector("[data-x]").onclick = close;
+    const r = d.querySelector("[data-req]");
+    r.onclick = function () { r.disabled = true; request(mod, wsId || "").then(function () { r.textContent = L("Request sent ✓ – we will contact you", "Pedido enviado ✓ – vamos entrar em contato"); }, function () { r.disabled = false; }); };
+  }
+  function soon(name) {
+    const d = document.createElement("div"); d.className = "modsw-dlg";
+    d.innerHTML = '<div class="modsw-dlg-card"><h2>' + esc(name) + "</h2><p>" + esc(L("Your licence is active. The module is being finished and opens here as soon as it is published.", "Sua licença está ativa. O módulo está em finalização e abre aqui assim que for publicado.")) + '</p><div class="mod-gate-acts"><button class="modsw-b primary" data-x>OK</button></div></div>';
+    document.body.appendChild(d);
+    d.addEventListener("click", function (e) { if (e.target === d || e.target.hasAttribute("data-x")) d.remove(); });
+  }
+  function rows(acc, avail) {
+    return apps().map(function (a) {
+      let chip, cls = "", ok = true;
+      if (a.core) chip = L("Included", "Incluído");
+      else if (acc.admin) chip = L("Administrator", "Administrador");
+      else if (acc[a.id] && acc[a.id].ok) chip = L("Licensed", "Licenciado");
+      else { chip = "🔒 " + L("Add-on", "Adicional"); cls = " locked"; ok = false; }
+      if (a.id === "itsm" && ok && !avail.itsm) chip += " · " + L("soon", "em breve");
+      return '<button type="button" role="menuitem" class="modsw-row' + cls + '" data-app="' + a.id + '"><span class="modsw-ic">' + icon(a) + '</span><span class="modsw-t"><b>' + esc(a.name) + "</b><small>" + esc(a.desc) + '</small></span><span class="modsw-chip' + (ok ? "" : " no") + '">' + esc(chip) + "</span></button>";
+    }).join("");
+  }
+  function mountInto(host, after) {
+    if (!host || host.querySelector(".modsw")) return;
+    const w = document.createElement("div"); w.className = "modsw no-i18n";
+    w.innerHTML = '<button type="button" class="modsw-btn" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></g></svg><span>' + esc(L("Modules", "Módulos")) + '</span><span class="modsw-car" aria-hidden="true">▾</span></button><div class="modsw-pop" role="menu" hidden></div>';
+    if (after && after.parentNode === host) host.insertBefore(w, after.nextSibling); else host.insertBefore(w, host.firstChild);
+    const btn = w.querySelector(".modsw-btn"), pop = w.querySelector(".modsw-pop");
+    function close() { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+    btn.onclick = function (e) {
+      e.stopPropagation();
+      if (!pop.hidden) return close();
+      pop.hidden = false; btn.setAttribute("aria-expanded", "true");
+      pop.innerHTML = '<div class="modsw-h">' + esc(L("Modules", "Módulos")) + '</div><div class="modsw-load">' + esc(L("Loading…", "Carregando…")) + "</div>";
+      Promise.all([access(), pageExists("itsm/")]).then(function (r) {
+        const acc = r[0], avail = { itsm: r[1] };
+        pop.innerHTML = '<div class="modsw-h">' + esc(L("Modules", "Módulos")) + "<small>" + esc(acc.admin ? L("Main administrator · full access", "Administrador principal · acesso total") : L("What your licence includes", "O que a sua licença inclui")) + "</small></div>" + rows(acc, avail) +
+          (acc.admin ? '<a class="modsw-foot" href="' + BASE + 'admin/#modulos">' + esc(L("Manage licences", "Gerenciar licenças")) + " →</a>" : "");
+        pop.querySelectorAll("[data-app]").forEach(function (b) { b.onclick = function () {
+          const a = apps().find(function (x) { return x.id === b.dataset.app; }); close();
+          if (!a.core && !acc.admin && !(acc[a.id] && acc[a.id].ok)) return contact(a.id, ((acc[a.id] || {}).ws || [])[0]);
+          if (a.id === "itsm" && !avail.itsm) return soon(a.name);
+          const ws = ((acc[a.id] || {}).ws || [])[0];
+          const url = BASE + a.href + (a.id === "itsm" && ws ? "?ws=" + encodeURIComponent(ws) : "");
+          if (location.href.split("#")[0] === url.split("#")[0] && url.indexOf("#") > 0) { location.hash = url.split("#")[1]; return; }
+          location.href = url;
+        }; });
+      });
+    };
+    document.addEventListener("click", function (e) { if (!w.contains(e.target)) close(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  }
+  function mount() {
+    if (!user()) return;
+    const nav = document.querySelector("header.nav .nav-in");
+    if (nav) mountInto(nav, nav.querySelector(".nav-links"));
+    const pl = document.querySelector(".pl-top"); if (pl) mountInto(pl, pl.querySelector(".pl-back"));
+    const gm = document.querySelector(".gm-top"); if (gm) mountInto(gm, gm.querySelector(".gm-back"));
+  }
+  function start() {
+    const A = window.CMAuth; if (!A || !A.enabled) return;
+    A.ready().then(function () { listen(); }, function () { /* offline */ });
+  }
+  function listen() {
+    try { window.firebase.auth().onAuthStateChanged(function (u) { accessP = null; if (u) mount(); else document.querySelectorAll(".modsw").forEach(function (x) { x.remove(); }); }); } catch (e) { return; }
+    // planning and game pages redraw their top bar: re-attach the switcher when it disappears
+    new MutationObserver(function () { if (user() && ((document.querySelector(".pl-top") && !document.querySelector(".pl-top .modsw")) || (document.querySelector(".gm-top") && !document.querySelector(".gm-top .modsw")))) mount(); }).observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else setTimeout(start, 0);
+
+  window.CMModules = { LIST: LIST, PACKAGES: PACKAGES, get: get, active: active, has: has, forWorkspace: forWorkspace, gate: gate, request: request, key: key, access: access, contact: contact, apps: apps };
 })();

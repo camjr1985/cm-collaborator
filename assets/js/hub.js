@@ -28,7 +28,7 @@
   /* ---------------- pieces ---------------- */
   function startStrip(canCreate) {
     if (!canCreate) return "";
-    return '<section class="hub-sec"><div class="hub-sec-head"><h2>Start something new</h2><span class="muted small">' + t("Pick a template – everything stays editable.") + "</span></div>" +
+    return '<section class="hub-sec start-sec"><div class="hub-sec-head"><h2>Start something new</h2><span class="muted small">' + t("Pick a template – everything stays editable.") + "</span></div>" +
       tplChips() +
       '<div class="tpl-strip" id="tplStrip">' + TPL.map(function (x) {
         return '<button class="tpl-tile' + (x.id === "blank" ? " blank" : "") + '" data-new="' + x.id + '" data-cat="' + esc(x.cat || "") + '"><span class="tpl-pv">' + pv(x.id) + '</span><b class="no-i18n">' + esc(x.name) + "</b></button>";
@@ -59,53 +59,25 @@
         return '<button class="tpl-tile plan-tile" data-newplanm="' + k + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + '</span><b class="no-i18n">' + (window.CMIcon ? window.CMIcon(m.icon, 15) : "") + " " + esc(m.name) + "</b></button>";
       }).join("") + "</div></section>";
   }
-  /* add-on modules (ITSM, Business Game): always visible; open when licensed, otherwise "contact the administration" */
-  const MOD_EMO = { itsm: "🛠️", game: "🎲" };
-  function modStrip(admin) {
-    const MODS = (window.CMModules && window.CMModules.LIST) || []; if (!MODS.length) return "";
-    return '<section class="hub-sec mod-sec"><div class="hub-sec-head"><h2>' + esc(LL("Add-on modules", "Módulos adicionais")) + '</h2><span class="muted small">' + esc(admin ? LL("As the main administrator you see every module. Grant licences in Administration → Modules & packages.", "Como administrador principal você vê todos os módulos. Conceda licenças em Administração → Módulos e pacotes.") : LL("Extra licences for your company or for you – connectable to Planning.", "Licenças extras para sua empresa ou para você – conectáveis ao Planning.")) + "</span>" +
-      (admin ? '<a class="btn sm ghost" href="../admin/#modulos">' + esc(LL("Manage licences", "Gerenciar licenças")) + "</a>" : "") + '</div><div class="mod-grid">' +
-      MODS.map(function (m) {
-        return '<article class="mod-card" data-mod="' + m.id + '"><div class="mod-top"><span class="mod-ic" aria-hidden="true">' + (MOD_EMO[m.id] || "🧩") + '</span><div><b class="no-i18n">' + esc(m.name) + '</b><span class="mod-st" data-modst="' + m.id + '">' + esc(LL("Checking licence…", "Verificando licença…")) + '</span></div></div><p class="muted small">' + esc(m.desc) + '</p><button class="btn sm primary" data-modopen="' + m.id + '">' + esc(LL("Open ", "Abrir ")) + '<span class="no-i18n">' + esc(m.name) + "</span></button></article>";
-      }).join("") + "</div></section>";
-  }
-  function bindModStrip(el, admin, wsIds) {
-    const CM = window.CMModules; if (!CM) return;
-    const avail = {}, lic = {};
-    // which workspaces license each module (company package) or the person (individual) – admins see all
-    const checks = (wsIds.length ? wsIds : [null]).map(function (id) { return CM.forWorkspace(id).then(function (o) { return [id, o]; }); });
-    const pages = CM.LIST.map(function (m) { return fetch("../" + m.path, { method: "HEAD", cache: "no-store" }).then(function (r) { avail[m.id] = r.ok; }, function () { avail[m.id] = false; }); });
-    Promise.all(checks).then(function (rows) {
-      CM.LIST.forEach(function (m) { lic[m.id] = rows.filter(function (r) { return r[1][m.id]; }).map(function (r) { return r[0]; }); });
-      return Promise.all(pages);
-    }).then(function () {
-      CM.LIST.forEach(function (m) {
-        const st = el.querySelector('[data-modst="' + m.id + '"]'), card = el.querySelector('[data-mod="' + m.id + '"]'); if (!st) return;
-        const ok = admin || lic[m.id].length > 0;
-        card.classList.toggle("locked", !ok);
-        st.className = "mod-st " + (admin ? "adm" : ok ? "ok" : "no");
-        st.textContent = admin ? LL("Administrator · full access", "Administrador · acesso total") : ok ? LL("Licensed", "Licenciado") : LL("Not included in your licence", "Não incluído na sua licença");
-        if (!avail[m.id]) st.textContent += " · " + LL("in development", "em desenvolvimento");
-      });
+  /* module views reached from the top-bar "Módulos" switcher: #colaboracao · #planejamento · #business-game */
+  const VIEWS = { colaboracao: "boards", planejamento: "plans", "business-game": "games" };
+  function applyView(el) {
+    const v = VIEWS[(location.hash || "").slice(1)] || "";
+    el.dataset.view = v;
+    el.querySelectorAll(".ws-sec").forEach(function (sec) {
+      if (!v) { sec.classList.remove("vf-empty"); return; }
+      const sel = v === "plans" ? ".is-plan" : v === "games" ? ".is-game" : ".board-card:not(.is-plan):not(.is-game)";
+      sec.classList.toggle("vf-empty", !sec.querySelector(sel) && !(v === "games" && sec.querySelector("[data-newgame]:not(.locked)")) && !(v === "plans" && sec.querySelector("[data-newplan]")));
     });
-    el.querySelectorAll("[data-modopen]").forEach(function (b) { b.onclick = function () {
-      const id = b.dataset.modopen, m = CM.get(id), ok = admin || (lic[id] || []).length > 0;
-      if (!ok) return modContact(m);
-      if (!avail[id]) return toast(LL("This module is being finished and will open here as soon as it is published.", "Este módulo está em finalização e abre aqui assim que for publicado."));
-      const ws = (lic[id] || []).filter(Boolean)[0] || wsIds[0] || "";
-      // Business Game opens the "new game" flow in the licensed workspace (existing games are listed in each workspace and in "My games")
-      location.href = "../" + m.path + (ws ? (id === "game" ? "?new=1&ws=" : "?ws=") + encodeURIComponent(ws) : "");
-    }; });
-  }
-  function modContact(m) {
-    const d = document.createElement("div"); d.className = "modal-lite"; d.setAttribute("role", "dialog");
-    d.innerHTML = '<div class="card mod-contact"><span class="mod-gate-tag">' + esc(LL("Add-on module", "Módulo adicional")) + "</span><h2>" + (MOD_EMO[m.id] || "🧩") + ' <span class="no-i18n">' + esc(m.full) + "</span></h2><p>" + esc(LL("You don't have access to this module yet. Contact the Administration to get the licence.", "Você ainda não tem acesso a este módulo. Entre em contato com a Administração para ter acesso ao licenciamento.")) + '</p><p class="muted small">' + esc(m.desc) + '</p><div class="mod-gate-acts"><button class="btn primary" id="mcReq">' + esc(LL("Notify the Administration", "Avisar a Administração")) + '</button><button class="btn" id="mcX">' + esc(LL("Close", "Fechar")) + "</button></div></div>";
-    document.body.appendChild(d);
-    const close = function () { d.remove(); };
-    d.addEventListener("click", function (e) { if (e.target === d) close(); });
-    d.querySelector("#mcX").onclick = close;
-    const r = d.querySelector("#mcReq");
-    r.onclick = function () { r.disabled = true; window.CMModules.request(m.id, "").then(function () { r.textContent = LL("Request sent ✓ – the Administration will contact you", "Pedido enviado ✓ – a Administração vai entrar em contato"); }, function () { r.disabled = false; toast(LL("Could not send – try again", "Não foi possível enviar – tente de novo")); }); };
+    let bar = el.querySelector(".view-bar");
+    if (!v) { if (bar) bar.remove(); return; }
+    const T = { boards: [LL("Collaboration", "Colaboração"), LL("Your boards, by workspace. Start a new one from a template.", "Seus quadros, por workspace. Comece um novo a partir de um template.")],
+      plans: [LL("Planning", "Planejamento"), LL("Your plannings, by workspace. Create a new one with the methods below.", "Seus planejamentos, por workspace. Crie um novo com os métodos abaixo.")],
+      games: ["Business Game", LL("Your games, by workspace. Professors create a new game with “New game”.", "Suas partidas, por workspace. Professores criam uma nova partida em “Nova partida”.")] }[v];
+    const html = '<div class="view-bar"><div><span class="eyebrow">' + esc(LL("Module", "Módulo")) + '</span><h2>' + esc(T[0]) + '</h2><p class="muted small">' + esc(T[1]) + '</p></div><a class="btn sm" href="#">' + esc(LL("Show everything", "Ver tudo")) + "</a></div>";
+    if (bar) bar.outerHTML = html; else { const ub = el.querySelector(".userbar"); if (ub) ub.insertAdjacentHTML("afterend", html); }
+    el.querySelector(".view-bar a").onclick = function (e) { e.preventDefault(); history.replaceState(null, "", location.pathname + location.search); applyView(el); };
+    window.scrollTo({ top: 0 });
   }
   function planCard(id, p, wsName) {
     const m = (window.PLAN_METHODS || {})[p.method] || {};
@@ -145,7 +117,7 @@
   function recentRows(allowed) {
     const r = recents().filter(function (x) { return !allowed || allowed[x.id]; }).slice(0, 6);
     if (!r.length) return "";
-    return '<section class="hub-sec"><div class="hub-sec-head"><h2>Jump back to recents</h2></div><div class="recent-list">' + r.map(function (x) {
+    return '<section class="hub-sec recent-sec"><div class="hub-sec-head"><h2>Jump back to recents</h2></div><div class="recent-list">' + r.map(function (x) {
       const info = allowed ? allowed[x.id] : x;
       if (x.kind === "itsm" || (info && info.kind === "itsm")) {
         return '<a class="recent-row" href="../itsm/?id=' + encodeURIComponent(x.id) + '"><span class="rr-pv">' + itsmPreview() + '</span><span class="rr-t"><b class="no-i18n">' + esc((info && info.title) || x.title) + '</b><span class="muted small no-i18n">ITSM · ' + esc((info && info.ws) || "") + '</span></span><span class="muted small">' + ago(x.t) + "</span></a>";
@@ -416,11 +388,11 @@
           const bs = Object.keys(wss[firstBeta.id].boards || {}).sort();
           FIRST_BOARD = bs.filter(function (b) { return /comece|start|^1-/.test(b); })[0] || bs[0] || null;
         }
-        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + planStrip(Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }) || !entries.length) + modStrip(admin) + recentRows(allowed) + '<div id="gameSlot"></div>' +
+        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + planStrip(Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }) || !entries.length) + recentRows(allowed) + '<div id="gameSlot"></div>' +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
             : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
         bindFeedback();
-        bindModStrip(el, admin, ids);
+        applyView(el); window.addEventListener("hashchange", function () { applyView(el); });
         el.querySelectorAll("[data-howto]").forEach(function (b) { b.onclick = function () { welcomeDialog(user); }; });
         db.ref("announcement").once("value").then(function (s) {
           const slot = document.getElementById("annSlot"); if (!slot) return;

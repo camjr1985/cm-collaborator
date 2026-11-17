@@ -657,3 +657,13 @@ body.mkt h1, body.mkt h2, body.mkt h3 { font-weight: 700; }
 .mod-st.ok, .mod-st.adm { color: #5fe0d1; } .mod-st.no { color: var(--gold); }
 .mod-contact h2 { font-size: var(--fs-20); margin: 10px 0 8px; }
 .plans4 .plan { display: flex; flex-direction: column; } .plans4 .plan ul { flex: 1; } .plans4 .plan h3 { gap: 8px; }
+/* hub module views (#colaboracao, #planejamento, #business-game) */
+.view-bar { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 16px 18px; margin: 4px 0 8px; border-radius: 14px; border: 1px solid rgba(44,196,179,.35); background: rgba(44,196,179,.08); }
+.view-bar h2 { margin: 4px 0 2px; font-size: var(--fs-24); } .view-bar p { margin: 0; }
+#hub[data-view="plans"] .start-sec, #hub[data-view="plans"] .recent-sec, #hub[data-view="plans"] #gameSlot,
+#hub[data-view="games"] .start-sec, #hub[data-view="games"] .recent-sec, #hub[data-view="games"] .plan-sec,
+#hub[data-view="boards"] .plan-sec, #hub[data-view="boards"] #gameSlot { display: none; }
+#hub[data-view="plans"] .board-card:not(.is-plan), #hub[data-view="games"] .board-card:not(.is-game), #hub[data-view="boards"] .board-card.is-plan, #hub[data-view="boards"] .board-card.is-game { display: none; }
+#hub[data-view] .ws-sec.vf-empty { display: none; }
+#hub[data-view="plans"] [data-newin], #hub[data-view="games"] [data-newin], #hub[data-view="games"] [data-newplan], #hub[data-view="boards"] [data-newplan], #hub[data-view="boards"] [data-newgame], #hub[data-view="plans"] [data-newgame] { display: none; }
+#hub[data-view=""] .view-bar { display: none; }

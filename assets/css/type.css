@@ -32,3 +32,40 @@ b, strong { font-weight: var(--fw-semibold); }
 input, select, textarea, button { font-family: inherit; }
 table, .tnum, .kpi, .kpis, [data-num] { font-variant-numeric: tabular-nums; }
 code, kbd, pre { font-family: var(--font-mono); }
+
+/* ---------- "Módulos" switcher (top bar, all app pages) ---------- */
+.modsw { position: relative; display: inline-flex; align-items: center; margin-left: 12px; font-family: var(--font); }
+.modsw-btn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(127,140,170,.35); background: rgba(127,140,170,.12); color: inherit; font: 600 var(--fs-13)/1 var(--font); cursor: pointer; white-space: nowrap; }
+.modsw-btn:hover, .modsw-btn[aria-expanded="true"] { border-color: #2cc4b3; background: rgba(44,196,179,.16); }
+.modsw-btn svg { color: #2cc4b3; }
+.modsw-car { font-size: 10px; opacity: .7; }
+.modsw-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 200; width: min(400px, calc(100vw - 24px)); background: #fff; color: #1c2033; border: 1px solid #e3e6ef; border-radius: 14px; box-shadow: 0 18px 50px rgba(10,20,45,.28); padding: 8px; }
+.modsw-pop[hidden] { display: none; }
+.modsw-h { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; font: 700 var(--fs-11)/1.2 var(--font); letter-spacing: .06em; text-transform: uppercase; color: #626a80; border-bottom: 1px solid #eef0f5; margin-bottom: 4px; }
+.modsw-h small { font: 500 var(--fs-12)/1.3 var(--font); letter-spacing: 0; text-transform: none; color: #626a80; }
+.modsw-load { padding: 14px 10px; font-size: var(--fs-13); color: #626a80; }
+.modsw-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 10px; border: 0; border-radius: 10px; background: none; text-align: left; color: inherit; cursor: pointer; font-family: var(--font); }
+.modsw-row:hover, .modsw-row:focus-visible { background: #f2f5fa; outline: none; }
+.modsw-ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: #0e1a33; color: #2cc4b3; font-size: 18px; }
+.modsw-row.locked .modsw-ic { background: #eef0f5; color: #8a93a8; filter: grayscale(.6); }
+.modsw-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.modsw-t b { font-size: var(--fs-14); font-weight: 600; }
+.modsw-t small { font-size: var(--fs-12); color: #626a80; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modsw-row.locked .modsw-t b { color: #4b5368; }
+.modsw-chip { font: 600 var(--fs-11)/1 var(--font); padding: 5px 8px; border-radius: 999px; background: #dff7f3; color: #0b7d70; white-space: nowrap; }
+.modsw-chip.no { background: #fdf3d8; color: #8a6100; }
+.modsw-foot { display: block; margin-top: 4px; padding: 10px; border-top: 1px solid #eef0f5; font: 600 var(--fs-13) var(--font); color: #0b7d70; text-decoration: none; }
+.modsw-dlg { position: fixed; inset: 0; z-index: 300; background: rgba(5,10,25,.6); display: grid; place-items: center; padding: 16px; font-family: var(--font); }
+.modsw-dlg-card { width: min(520px, 100%); background: #fff; color: #1c2033; border-radius: 16px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.modsw-dlg-card h2 { font-size: var(--fs-20); margin: 10px 0 8px; }
+.modsw-dlg-card p { font-size: var(--fs-14); line-height: 1.5; margin: 0 0 8px; }
+.modsw-muted { color: #626a80; font-size: var(--fs-13) !important; }
+.modsw-dlg .mod-gate-tag { display: inline-block; font: 600 var(--fs-11)/1 var(--font); text-transform: uppercase; letter-spacing: .06em; padding: 5px 9px; border-radius: 999px; background: #fdf3d8; color: #8a6100; }
+.modsw-dlg .mod-gate-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.modsw-b { height: 38px; padding: 0 16px; border-radius: 10px; border: 1px solid #d9dde8; background: #fff; color: #1c2033; font: 600 var(--fs-14) var(--font); cursor: pointer; }
+.modsw-b.primary { background: #e8c468; border-color: #e8c468; color: #0e1a33; }
+@media (max-width: 720px) {
+  .modsw { margin-left: 6px; }
+  .modsw-btn { padding: 0 10px; } .modsw-btn > span:not(.modsw-car) { display: none; }
+  .modsw-pop { position: fixed; top: 64px; left: 12px; right: 12px; width: auto; }
+}
