@@ -11,7 +11,7 @@
 (function () {
   "use strict";
   const PT = window.MB_LANG === "pt";
-  function L(en, pt) { return PT ? pt : en; }
+  function L(en, pt) { return window.MBL ? window.MBL(en, pt) : (PT ? pt : en); }
 
   const C = { gold: "#F2D585", mint: "#8FE3D8", navyL: "#AFC3EA", yellow: "#F2D585", orange: "#FFAE45", red: "#FF8577", pink: "#FF8CC6", purple: "#AE8FFF", blue: "#5FAEFF", teal: "#3FD3B0", green: "#9BDD5C", gray: "#DDE3EC" };
   const BG = { gold: "#FBF3DA", mint: "#E3F6F3", navy: "#E6ECF7", white: "#ffffff", gray: "#F2F4F8", green: "#E6F8D6", red: "#FFE4E0", blue: "#DCEEFF", yellow: "#FFF5C8", purple: "#EEE6FF", orange: "#FFEBD3", teal: "#D7F7EE" };

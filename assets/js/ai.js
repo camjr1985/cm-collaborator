@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   const PT = window.MB_LANG === "pt";
-  const L = function (en, pt) { return PT ? pt : en; };
+  const L = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (PT ? pt : en); };
   const CFG = window.CMCOLLAB_AI || {};
   const API = function () { return window.CMBoardAPI; };
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -137,7 +137,7 @@
     const themes = (a.themes || []).slice(0, 6);
     const tw = 330, gap = 20;
     const W = Math.max(1100, 40 + themes.length * (tw + gap) + 20);
-    const date = new Date().toLocaleDateString(PT ? "pt-BR" : "en-GB");
+    const date = new Date().toLocaleDateString(window.MB_LOCALE || (window.MB_LOCALE || (PT ? "pt-BR" : "en-GB")));
     const tH = 70 + 2 * 125 + 30;
     const yT = 150, yP = yT + tH + 40, pH = 300, yA = yP + pH + 40;
     const actions = (a.actions || []).slice(0, 8), aH = 70 + (actions.length + 1) * 48;

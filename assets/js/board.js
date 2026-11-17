@@ -19,7 +19,7 @@
   let T = null, W = 1600, H = 1000;
   const VOTES = window.CMCOLLAB_VOTES_PER_USER || 5;
   const ROOT = CFG.root || "./";
-  const LL = function (en, pt) { return window.MB_LANG === "pt" ? pt : en; };
+  const LL = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (window.MB_LANG === "pt" ? pt : en); };
   /* CM palette: brand first (gold · teal · navy-light), then vivid, then pastels */
   const PALETTE = ["#F2D585", "#8FE3D8", "#AFC3EA", "#FFAE45", "#FF8577", "#FF8CC6", "#AE8FFF", "#5FAEFF", "#9BDD5C", "#FFF3B0", "#D6F5EF", "#DCE8FF", "#FFE0EC", "#ECE3FF", "#E6E9EF"];
   const TEXT_COLORS = ["#0E1A33", "#e5484d", "#f76b15", "#12a594", "#2F80ED", "#8e4ec6", "#B8860B", "#ffffff"];

@@ -9,7 +9,7 @@
   let db, me, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
-  function fmtDate(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
+  function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short", year: "numeric" }); }
   function expiryBadge(m) {
     if (!m.expires) return '<span class="xp none">' + t("Full access") + "</span>";
     const d = daysLeft(m.expires);
@@ -574,12 +574,12 @@
   }
 
   /* ---------- administration shell (Jira-like side menu) ---------- */
-  const LL = function (en, pt) { return window.MB_LANG === "pt" ? pt : en; };
+  const LL = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (window.MB_LANG === "pt" ? pt : en); };
   const SEL = {}; let drawerK = null;
   const UF = (function () { try { return JSON.parse(localStorage.getItem("cmcollab:admuf") || "{}"); } catch (e) { return {}; } })();
   function saveUF() { try { localStorage.setItem("cmcollab:admuf", JSON.stringify(UF)); } catch (e) { /* ignore */ } }
   function accSt(m) { if (!m.expires) return "none"; const d = daysLeft(m.expires); return d <= 0 ? "off" : d <= 7 ? "soon" : "ok"; }
-  function fmtShort(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-BR" : "en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }); }
+  function fmtShort(ts) { return new Date(ts).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "2-digit", year: "numeric" }); }
   function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
   function buildUsers() {
     const map = {};

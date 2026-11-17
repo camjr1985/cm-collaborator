@@ -244,7 +244,7 @@
       '<button class="btn" data-feedback>💬 <span>Give feedback</span></button>' +
       (admin ? '<a class="btn" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';
   }
-  function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LANG === "pt" ? "pt-BR" : "en-GB", { day: "2-digit", month: "short" }); }
+  function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LOCALE || (window.MB_LANG === "pt" ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short" }); }
   function accessBanner(entries) {
     const now = Date.now();
     const active = entries.filter(function (e) { return e.expires && e.expires > now; });
@@ -269,7 +269,7 @@
     window.MBFeedback.render(document.getElementById("fbBox"), { board: "hub" });
   }
   /* ---------------- welcome / how-to and announcements ---------------- */
-  function LL(en, pt) { return window.MB_LANG === "pt" ? pt : en; }
+  function LL(en, pt) { return window.MBL ? window.MBL(en, pt) : (window.MB_LANG === "pt" ? pt : en); }
   let FIRST_BOARD = null, WELCOME_ENTRY = null;
   function welcomeDialog(user) {
     if (document.getElementById("welDlg")) return;

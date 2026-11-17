@@ -24,7 +24,7 @@
 (function () {
   "use strict";
   const PT = function () { return window.MB_LANG !== "en"; };
-  const L = function (en, pt) { return PT() ? pt : en; };
+  const L = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (PT() ? pt : en); };
   const LIST = [
     { id: "itsm", name: "ITSM", full: L("ITSM – service management (ITIL 4)", "ITSM – gestão de serviços (ITIL 4)"), icon: "itsm", path: "itsm/", area: "service",
       desc: L("Service desk, incidents, requests, problems, changes, SLAs and CMDB – connectable to Planning.", "Central de serviço, incidentes, requisições, problemas, mudanças, SLAs e CMDB – conectável ao Planning.") },

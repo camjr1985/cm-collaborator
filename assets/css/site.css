@@ -628,3 +628,4 @@ body.mkt h1, body.mkt h2, body.mkt h3 { font-weight: 700; }
 .mod-gate-card h1 { font-size: var(--fs-24); margin: 10px 0 8px; }
 .mod-gate-tag { display: inline-block; font: var(--fw-semibold) var(--fs-11)/1 var(--font); text-transform: uppercase; letter-spacing: .06em; padding: 5px 9px; border-radius: 999px; background: rgba(232,196,104,.18); color: var(--gold, #e8c468); }
 .mod-gate-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+@media (max-width: 560px) { .lang button { padding: 4px 6px; font-size: var(--fs-11); } }

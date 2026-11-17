@@ -5,7 +5,7 @@
   "use strict";
   const A = window.CMAuth;
   const PT = window.MB_LANG === "pt";
-  const L = function (en, pt) { return PT ? pt : en; };
+  const L = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (PT ? pt : en); };
   const app = document.getElementById("app");
   const ID = (new URLSearchParams(location.search).get("id") || "").toLowerCase();
   const DAY = 86400000;
@@ -33,7 +33,7 @@
   }
   /* money (budget vs actual) */
   function cur() { return (data.settings && data.settings.currency) || (PT ? "BRL" : "EUR"); }
-  function money(v) { try { return new Intl.NumberFormat(PT ? "pt-BR" : "en-GB", { style: "currency", currency: cur(), maximumFractionDigits: 0 }).format(v || 0); } catch (e) { return String(Math.round(v || 0)); } }
+  function money(v) { try { return new Intl.NumberFormat(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { style: "currency", currency: cur(), maximumFractionDigits: 0 }).format(v || 0); } catch (e) { return String(Math.round(v || 0)); } }
   function moneyOf(it) { /* own + all descendants */
     let b = Number(it.budget) || 0, a = Number(it.actual) || 0;
     if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
@@ -57,7 +57,7 @@
   function d2n(s) { return s ? Date.parse(s + "T00:00:00Z") : NaN; }
   function n2d(n) { return new Date(n).toISOString().slice(0, 10); }
   function today() { const d = new Date(); return n2d(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
-  function fmt(s) { if (!s) return ""; const d = new Date(d2n(s)); return d.toLocaleDateString(PT ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
+  function fmt(s) { if (!s) return ""; const d = new Date(d2n(s)); return d.toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short", timeZone: "UTC" }); }
   function method() { return (window.PLAN_METHODS || {})[info.method] || window.PLAN_METHODS.hybrid; }
   function statuses() { return (data.settings && data.settings.statuses) || method().statuses; }
   function statusOf(it) { const ss = statuses(); return ss.find(function (s) { return s.id === it.status; }) || ss[0]; }
@@ -294,7 +294,7 @@
     return { lo: lo, hi: hi, px: px, g: g };
   }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-  function mLabel(d, long) { return cap(d.toLocaleDateString(PT ? "pt-BR" : "en-GB", { month: long ? "long" : "short", timeZone: "UTC" }).replace(".", "")); }
+  function mLabel(d, long) { return cap(d.toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { month: long ? "long" : "short", timeZone: "UTC" }).replace(".", "")); }
   function isoWeek(n) { const d = new Date(n); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day + 3); const y = d.getUTCFullYear(), f = new Date(Date.UTC(y, 0, 4)); return 1 + Math.round(((d - f) / DAY - 3 + ((f.getUTCDay() + 6) % 7)) / 7); }
   function headers(R, x) {
     let h1 = "", h2 = "", grid = "";
@@ -669,7 +669,7 @@
   /* ---------------- reports & indicators (Jira overview + sprint / capacity dashboard) ---------------- */
   const RPAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
   let rpt = { sprint: "", type: "", status: "", who: "", epic: "", unit: "sp" };
-  function nf(n, d) { return (Number(n) || 0).toLocaleString(PT ? "pt-BR" : "en-GB", { maximumFractionDigits: d || 0, minimumFractionDigits: d || 0 }); }
+  function nf(n, d) { return (Number(n) || 0).toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { maximumFractionDigits: d || 0, minimumFractionDigits: d || 0 }); }
   function pct(a, b) { return b ? nf(a / b * 100, 1) + "%" : "–"; }
   function donut(rows, total, label) {
     const R = 54, C = 2 * Math.PI * R; let off = 0;
@@ -791,7 +791,7 @@
         : '<section class="rp-card rp-hint"><p class="muted small">' + L("Sprint reports (story points per sprint, planned × delivered, burndown) appear when the planning has sprints – use the Scrum method or add a “Sprint board (Scrum)” in Boards.", "Os relatórios de sprint (story points por sprint, planejado × entregue, burndown) aparecem quando o planejamento tem sprints – use o método Scrum ou adicione um “Quadro da sprint (Scrum)” em Quadros.") + "</p></section>") +
       '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Epics · delivered and remaining", "Épicos · entregue e restante") + " (" + (unitSp ? "SP" : L("items", "itens")) + ")</h3>" + (epRows.length ? hstack(epRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No items linked to epics yet.", "Ainda não há itens ligados a épicos.") + "</p>") + "</section>" +
       '<section class="rp-card"><h3>' + L("Budget × actual", "Orçado × realizado") + "</h3>" + (mb || ma ? '<div class="rp-money"><div><span>' + L("Budget", "Orçado") + "</span><b>" + money(mb) + "</b></div><div><span>" + L("Actual", "Realizado") + '</span><b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></div><div><span>" + L("Used", "Consumido") + "</span><b>" + pct(ma, mb) + '</b></div></div><span class="pbar big"><i style="width:' + Math.min(100, mb ? ma / mb * 100 : 0) + "%;background:" + (ma > mb ? "#e5484d" : "#1baf7a") + '"></i></span>' : '<p class="muted small">' + L("Fill in budget and actual on the items to follow the costs.", "Preencha orçado e realizado nos itens para acompanhar os custos.") + "</p>") + "</section></div>" +
-      '<p class="muted small rp-foot">' + L("Updated live from this planning", "Atualizado ao vivo a partir deste planejamento") + " · " + new Date().toLocaleString(PT ? "pt-BR" : "en-GB", { dateStyle: "short", timeStyle: "short" }) + "</p></div>";
+      '<p class="muted small rp-foot">' + L("Updated live from this planning", "Atualizado ao vivo a partir deste planejamento") + " · " + new Date().toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { dateStyle: "short", timeStyle: "short" }) + "</p></div>";
     v.querySelectorAll("[data-rp]").forEach(function (sl) { sl.onchange = function () { rpt[sl.dataset.rp] = sl.value; reportsView(v); }; });
     document.getElementById("rpCsv").onclick = function () {
       const q = function (x) { x = x == null ? "" : String(x); return /[",;\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
@@ -1311,7 +1311,7 @@
     const card = function (k) {
       const P = PROV[k], C = wsInteg[k], S = data.settings && data.settings[k];
       if (C) return '<div class="int-card on"><b>' + P.name + '</b><p class="small">✅ ' + L("Connected to ", "Conectado a ") + "<b>" + esc(String(C.site).replace("https://", "")) + "</b>" + (C.account ? " · " + esc(C.account) : "") + "</p>" +
-        (S ? '<p class="muted small">' + L("This planning syncs with ", "Este planning sincroniza com ") + "<b>" + esc(S.projectName || S.project || "") + "</b>" + (S.query ? " · <code>" + esc(S.query) + "</code>" : "") + (S.lastSync ? " · " + L("last sync ", "última sincronização ") + new Date(S.lastSync).toLocaleString(PT ? "pt-BR" : "en-GB") : "") + "</p>" : "") +
+        (S ? '<p class="muted small">' + L("This planning syncs with ", "Este planning sincroniza com ") + "<b>" + esc(S.projectName || S.project || "") + "</b>" + (S.query ? " · <code>" + esc(S.query) + "</code>" : "") + (S.lastSync ? " · " + L("last sync ", "última sincronização ") + new Date(S.lastSync).toLocaleString(window.MB_LOCALE || (window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"))) : "") + "</p>" : "") +
         '<div class="pl-row-end" style="justify-content:flex-start">' + (canEdit ? '<button class="pl-btn primary sm" data-imp="' + k + '">' + (S ? L("Change import / sync", "Alterar importação / sincronizar") : L("Import from ", "Importar do ") + P.short) + "</button>" : "") + (owner ? '<button class="pl-btn ghost danger sm" data-off="' + k + '">' + L("Disconnect", "Desconectar") + "</button>" : "") + "</div></div>";
       if (!owner) return '<div class="int-card"><b>' + P.name + '</b><p class="muted small">' + P.desc + '</p><p class="muted small">' + L("Ask the workspace owner or an admin to connect it.", "Peça ao dono do workspace ou a um administrador para conectar.") + "</p></div>";
       return '<div class="int-card"><b>' + P.name + '</b><p class="muted small">' + P.desc + '</p><button class="pl-btn sm" data-con="' + k + '">' + L("Connect", "Conectar") + "</button></div>";

@@ -3,7 +3,7 @@
 (function () {
   "use strict";
   const PT = window.MB_LANG === "pt";
-  const L = function (en, pt) { return PT ? pt : en; };
+  const L = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (PT ? pt : en); };
   function day(offset) { const d = new Date(); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); }
   function monday(offset) { const d = new Date(); d.setUTCHours(0, 0, 0, 0); const wd = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - wd + offset); return d.toISOString().slice(0, 10); }
   function st(id, en, pt, cat, wip) { const s = { id: id, name: L(en, pt), cat: cat }; if (wip) s.wip = wip; return s; }

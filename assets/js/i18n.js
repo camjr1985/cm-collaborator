@@ -1,21 +1,53 @@
 /*
- * CM Collaborator i18n – English (default) / Português.
+ * CM Collaborator i18n – English (default) / Português (Brasil) / Português (Portugal) / Español.
  * Pages are written in English; when PT is active, interface text is
  * translated in place. User content (post-its, fields, comments) is never touched.
  * Add a translation: put the exact English text as key in PT below.
  */
 (function () {
   "use strict";
+  /* Languages: en · pt (Português do Brasil, default for Portuguese) · pt-pt (Português de Portugal) · es (Español).
+     MB_LANG keeps the base language used by the code ("pt" for both Portuguese variants); MB_VARIANT / MB_LOCALE carry the exact one. */
+  const LANGS = ["en", "pt", "pt-pt", "es"];
+  function norm(v) { v = String(v || "").toLowerCase().replace("_", "-"); if (v === "pt-br" || v === "br") return "pt"; if (v === "pt-pt" || v === "ptpt") return "pt-pt"; return LANGS.indexOf(v) >= 0 ? v : ""; }
   let lang = "en";
-  // priority: ?lang=pt|en in the link (also remembered) → saved choice → browser language
-  const urlLang = (new URLSearchParams(location.search).get("lang") || "").toLowerCase();
+  // priority: ?lang=… in the link (also remembered) → saved choice → browser language
+  const urlLang = norm(new URLSearchParams(location.search).get("lang"));
   let saved = null;
-  try { saved = localStorage.getItem("cmcollab:lang"); } catch (e) { /* ignore */ }
-  if (urlLang === "pt" || urlLang === "en") { lang = urlLang; try { localStorage.setItem("cmcollab:lang", lang); } catch (e) { /* ignore */ } }
-  else if (saved === "pt" || saved === "en") lang = saved;
-  else lang = /^pt/i.test(navigator.language || "") ? "pt" : "en";
-  document.documentElement.lang = lang === "pt" ? "pt" : "en";
+  try { saved = norm(localStorage.getItem("cmcollab:lang")); } catch (e) { /* ignore */ }
+  const nav = String(navigator.language || "").toLowerCase();
+  if (urlLang) { lang = urlLang; try { localStorage.setItem("cmcollab:lang", lang); } catch (e) { /* ignore */ } }
+  else if (saved) lang = saved;
+  else lang = /^pt-pt/.test(nav) ? "pt-pt" : /^pt/.test(nav) ? "pt" : /^es/.test(nav) ? "es" : "en";
+  const BASE = lang === "pt-pt" ? "pt" : lang;
+  const LOCALE = { en: "en-GB", pt: "pt-BR", "pt-pt": "pt-PT", es: "es-ES" }[lang];
+  document.documentElement.lang = { en: "en", pt: "pt-BR", "pt-pt": "pt-PT", es: "es" }[lang];
 
+  /* Português de Portugal: derived from the PT-BR texts by vocabulary (only when PT-PT is chosen). */
+  const PTPT = [
+    ["planejamentos", "planeamentos"], ["planejamento", "planeamento"], ["planejados", "planeados"], ["planejadas", "planeadas"], ["planejado", "planeado"], ["planejada", "planeada"], ["planejar", "planear"], ["planejamos", "planeamos"], ["planejo", "planeio"],
+    ["usuários", "utilizadores"], ["usuárias", "utilizadoras"], ["usuário", "utilizador"], ["usuária", "utilizadora"],
+    ["equipes", "equipas"], ["equipe", "equipa"], ["times de produto", "equipas de produto"],
+    ["celulares", "telemóveis"], ["celular", "telemóvel"], ["telas", "ecrãs"], ["tela", "ecrã"],
+    ["arquivos", "ficheiros"], ["arquivo", "ficheiro"],
+    ["registros", "registos"], ["registro", "registo"], ["registrar", "registar"], ["registrado", "registado"], ["registrada", "registada"],
+    ["contatos", "contactos"], ["contato", "contacto"], ["contatar", "contactar"], ["contatado(a)", "contactado(a)"], ["contatado", "contactado"],
+    ["cadastro", "registo"], ["cadastrar", "registar"],
+    ["gerenciamento", "gestão"], ["gerenciar", "gerir"], ["gerencie", "gira"], ["gerenciados", "geridos"], ["gerenciadas", "geridas"], ["gerenciado", "gerido"],
+    ["excluir", "eliminar"], ["excluídos", "eliminados"], ["excluídas", "eliminadas"], ["excluído", "eliminado"], ["excluída", "eliminada"], ["exclui", "elimina"],
+    ["salvar", "guardar"], ["salvos", "guardados"], ["salvas", "guardadas"], ["salvo", "guardado"], ["salve", "guarde"], ["salvando", "a guardar"],
+    ["baixar", "transferir"], ["compartilhar", "partilhar"], ["compartilhados", "partilhados"], ["compartilhado", "partilhado"], ["compartilhada", "partilhada"], ["compartilhe", "partilhe"], ["compartilham", "partilham"],
+    ["acessar", "aceder"], ["acesse", "aceda"], ["treinamento", "formação"], ["aplicativo", "aplicação"], ["mouse", "rato"],
+    ["carregando", "a carregar"], ["enviando", "a enviar"], ["gerando", "a gerar"], ["importando", "a importar"], ["conectando", "a ligar"], ["verificando", "a verificar"], ["adicionando", "a adicionar"],
+    ["acompanhando", "a acompanhar"], ["pensando", "a pensar"], ["conversando", "a conversar"], ["editando", "a editar"], ["vencendo", "a vencer"], ["explorando", "a explorar"], ["passando", "a passar"], ["fluindo", "a fluir"], ["sendo", "a ser"],
+    ["fale conosco", "fale connosco"], ["fato", "facto"], ["seção", "secção"], ["acadêmico", "académico"], ["cronômetro", "cronómetro"], ["econômico", "económico"], ["anônimo", "anónimo"], ["gênero", "género"]
+  ].map(function (x) { return [new RegExp("(^|[^\\p{L}])(" + x[0].replace(/[()]/g, "\\$&") + ")(?![\\p{L}])", "giu"), x[1]]; });
+  function ptpt(s) {
+    if (!s) return s;
+    let out = String(s);
+    PTPT.forEach(function (r) { out = out.replace(r[0], function (m, pre, w) { const rep = r[1]; return pre + (w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase() ? rep[0].toUpperCase() + rep.slice(1) : rep); }); });
+    return out;
+  }
   const PT = {
     // navigation / site
     "Home": "Início", "Mentoring": "Mentoria", "Open board": "Abrir quadro", "Open Mentoring": "Abrir Mentoria", "Open my workspaces": "Abrir meus workspaces", "Workspaces": "Workspaces",
@@ -686,22 +718,59 @@
     [/^Your account \((.+)\) is not an administrator\.$/, "Sua conta ($1) não é administradora."]
   ];
 
-  function tr(s) {
-    if (lang !== "pt" || !s) return s;
+  const ES_PATTERNS = [
+    [/^Added by (.+)$/, "Añadido por $1"],
+    [/^(\d+) vote\(s\)$/, "$1 voto(s)"],
+    [/^(\d+) comment\(s\)$/, "$1 comentario(s)"],
+    [/^You have used all (\d+) votes$/, "Ya usaste tus $1 votos"],
+    [/^(\d+) vote\(s\) left$/, "Quedan $1 voto(s)"],
+    [/^Dot voting: everyone has (\d+) votes\. You have $/, "Votación por puntos: cada persona tiene $1 votos. Aún te quedan "],
+    [/^ left\. Select a post-it and press the dot to vote\.$/, " por usar. Selecciona un post-it y haz clic en el punto para votar."],
+    [/^(\d+)m ago$/, "hace $1 min"], [/^(\d+)h ago$/, "hace $1 h"],
+    [/^(.+) \(you\)$/, "$1 (tú)"],
+    [/^(\d+) min$/, "$1 min"],
+    [/^(\d+) selected$/, "$1 seleccionados"],
+    [/^Your account \((.+)\) doesn't have access to this board\. Ask the mentor for an invitation\.$/, "Tu cuenta ($1) no tiene acceso a este tablero. Pide una invitación al mentor."],
+    [/^Your account \((.+)\) is not an administrator\.$/, "Tu cuenta ($1) no es administradora."]
+  ];
+  function trEs(s) {
+    const ES = window.MB_ES || {};
+    if (Object.prototype.hasOwnProperty.call(ES, s)) return ES[s];
+    const trimmed = s.trim();
+    if (trimmed !== s && Object.prototype.hasOwnProperty.call(ES, trimmed)) return s.replace(trimmed, ES[trimmed]);
+    for (let i = 0; i < ES_PATTERNS.length; i++) if (ES_PATTERNS[i][0].test(s)) return s.replace(ES_PATTERNS[i][0], ES_PATTERNS[i][1]);
+    return s;
+  }
+  function trPt(s) {
     if (Object.prototype.hasOwnProperty.call(PT, s)) return PT[s];
     const trimmed = s.trim();
     if (trimmed !== s && Object.prototype.hasOwnProperty.call(PT, trimmed)) return s.replace(trimmed, PT[trimmed]);
     for (let i = 0; i < PATTERNS.length; i++) if (PATTERNS[i][0].test(s)) return s.replace(PATTERNS[i][0], PATTERNS[i][1]);
     return s;
   }
+  function tr(s) {
+    if (lang === "en" || !s) return s;
+    if (lang === "es") return trEs(s);
+    const v = trPt(s);
+    return lang === "pt-pt" ? ptpt(v) : v;
+  }
+  /* inline pairs used across the app: L("English", "Português") */
+  window.MBL = function (en, pt) {
+    if (lang === "en") return en;
+    if (lang === "es") { const ES = window.MB_ES || {}; return Object.prototype.hasOwnProperty.call(ES, en) ? ES[en] : pt; }
+    return lang === "pt-pt" ? ptpt(pt) : pt;
+  };
+  window.MBptpt = ptpt;
   window.MBt = tr;
-  window.MB_LANG = lang;
+  window.MB_LANG = BASE;
+  window.MB_VARIANT = lang;
+  window.MB_LOCALE = LOCALE;
 
   const SKIP = ".txt,[data-field],.cmt-text,.rank-t,.thread-head,.cursor,.no-i18n,input,textarea,script,style";
   const ATTRS = ["title", "placeholder", "aria-label", "data-ph"];
   function skip(node) { const el = node.nodeType === 1 ? node : node.parentElement; return !el || !!el.closest(SKIP); }
   function walk(root) {
-    if (lang !== "pt" || !root) return;
+    if (lang === "en" || !root) return;
     if (root.nodeType === 3) { if (!skip(root)) { const v = tr(root.nodeValue); if (v !== root.nodeValue) root.nodeValue = v; } return; }
     if (root.nodeType !== 1 || skip(root)) return;
     ATTRS.forEach(function (a) { if (root.hasAttribute(a)) { const v = tr(root.getAttribute(a)); if (v !== root.getAttribute(a)) root.setAttribute(a, v); } });
@@ -729,7 +798,7 @@
       if (box.dataset.ready) return;
       box.dataset.ready = "1";
       box.classList.add("no-i18n");
-      box.innerHTML = '<button type="button" data-l="en" aria-pressed="' + (lang === "en") + '">EN</button><button type="button" data-l="pt" aria-pressed="' + (lang === "pt") + '">PT</button>';
+      box.innerHTML = [["en", "EN", "English"], ["pt", "PT-BR", "Português (Brasil)"], ["pt-pt", "PT-PT", "Português (Portugal)"], ["es", "ES", "Español"]].map(function (x) { return '<button type="button" data-l="' + x[0] + '" title="' + x[2] + '" aria-label="' + x[2] + '" aria-pressed="' + (lang === x[0]) + '">' + x[1] + "</button>"; }).join("");
       box.addEventListener("click", function (e) { const b = e.target.closest("button"); if (b && b.dataset.l !== lang) setLang(b.dataset.l); });
     });
   }
@@ -740,7 +809,7 @@
     if (document.title) document.title = tr(document.title);
     const mo = new MutationObserver(function (muts) {
       mountSwitch();
-      if (lang !== "pt") return;
+      if (lang === "en") return;
       mo.disconnect();
       muts.forEach(function (m) {
         if (m.type === "characterData") walk(m.target);

@@ -7,7 +7,7 @@
   "use strict";
   if (!window.MBKit || !window.MB_KITS) return;
   const PT = window.MB_LANG === "pt";
-  const L = function (en, pt) { return PT ? pt : en; };
+  const L = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (PT ? pt : en); };
   const C = window.MB_KC, BG = window.MB_KBG, kit = window.MBKit;
   const NAVY = "#0E1A33", TEAL = "#2CC4B3", GOLD = "#E8C468", INK = "#0E1A33", MUTED = "#4a5068";
   const TEALL = "#D6F5EF", NAVYL = "#E6ECF7", GOLDL = "#FBF3DA", WHITE = "#ffffff", GRAY = "#F2F4F8";
