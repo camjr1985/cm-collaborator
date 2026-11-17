@@ -44,15 +44,19 @@ function doPost(e) {
     info.boards = get("workspaces/" + wsId + "/boards", req.idToken) || {};
     var isAdmin = get("admins/" + key(who.email), req.idToken) === true;
     if (!isAdmin && info.owner !== key(who.email)) throw new Error("not allowed");
+    var isProspect = req.kind === "prospect";
+    if (req.kind && !isProspect) throw new Error("unknown e-mail type");
     var list = [].concat(req.to || []).slice(0, CFG.maxPerCall);
     var sent = [], skipped = [];
     list.forEach(function (to) {
       to = String(to).toLowerCase();
       var m = get("workspaces/" + wsId + "/members/" + key(to), req.idToken);
       if (!m) { skipped.push(to); return; }
-      var mail = welcome(m, info, req.lang === "en" ? "en" : "pt", brand);
+      // a prospect e-mail says "your access is active": never send it to an expired member
+      if (isProspect && m.expires && m.expires < Date.now()) { skipped.push(to); return; }
+      var mail = isProspect ? prospect(m, info, brand, req.variant === "b") : welcome(m, info, req.lang === "en" ? "en" : "pt", brand);
       var opt = { name: brand, htmlBody: mail.html };
-      if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+      if (CFG.replyTo) opt.replyTo = CFG.replyTo; // empty = replies ("remover", demo requests) go to this platform account
       MailApp.sendEmail(m.email, mail.subject, mail.text, opt);
       sent.push(to);
     });
@@ -138,6 +142,53 @@ function welcome(m, info, lang, brand) {
     '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + L.auto + "</div></div></div>";
   var text = html.replace(/<li>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1)").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
   return { subject: L.subject, html: html, text: text };
+}
+
+/* Commercial prospecting e-mail ("convite de teste para lideranças"), pt-BR only.
+ * Variables come from the database, never from the request: member name/e-mail, workspace name, member.expires. */
+function prospect(m, info, brand, altSubject) {
+  brand = brand || CFG.brand;
+  var w0 = brand.split(/\s+/)[0], mark = (w0.length <= 3 ? w0 : brand.split(/\s+/).map(function (w) { return w[0]; }).join("").slice(0, 2)).toUpperCase();
+  var first = String(m.name || "").split(" ")[0] || "";
+  var hub = CFG.site + "workspaces/";
+  var until = m.expires ? Utilities.formatDate(new Date(m.expires), "America/Sao_Paulo", "dd/MM/yyyy") : "";
+  var wsName = info.name || "";
+  var subject = altSubject
+    ? "Estratégia e execução no mesmo lugar, com IA. Seu acesso já está liberado"
+    : (first ? first + ", seu" : "Seu") + " acesso ao " + brand + " está ativo 🚀 (teste gratuito)";
+  var li = function (ic, t, d) { return '<li style="margin:0 0 10px">' + ic + " <b>" + t + "</b> " + d + "</li>"; };
+  var html =
+    '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">' +
+    '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
+    '<div style="background:#0e1a33;padding:22px 24px;color:#ffffff"><span style="display:inline-block;background:#2cc4b3;color:#0e1a33;font-weight:bold;border-radius:8px;padding:6px 8px;font-size:13px">' + esc(mark) + '</span>' +
+    ' <span style="font-size:18px;font-weight:bold;vertical-align:middle">' + esc(brand) + '</span></div>' +
+    '<div style="padding:24px;color:#1d2433;font-size:15px;line-height:1.55">' +
+    "<p>Olá" + (first ? ", " + esc(first) : "") + ",</p>" +
+    "<p>Seu acesso exclusivo ao workspace <b>“" + esc(wsName) + "”</b> no " + esc(brand) + " já está ativo. 🎉</p>" +
+    "<p>Toda liderança conhece o roteiro: a estratégia nasce num quadro, o plano vai para uma planilha, a execução corre no Jira, e o status chega na reunião de segunda já desatualizado. Cada passagem custa horas de retrabalho e decisões tomadas no escuro.</p>" +
+    "<p>O " + esc(brand) + " junta essas pontas. Por isso liberamos para você um teste completo" + (until ? ", <b>válido até " + until + "</b>" : "") + ".</p>" +
+    '<h3 style="margin:18px 0 6px;font-size:16px">Como entrar (leva 1 minuto)</h3><ol style="padding-left:20px;margin:0">' +
+    '<li>Acesse <a href="' + hub + '">' + hub.replace("https://", "") + "</a></li>" +
+    "<li>Entre com <b>este mesmo e-mail</b> (" + esc(m.email) + "), pelo botão Google ou pelo link de acesso.</li>" +
+    "<li>Abra o workspace e veja estratégia e execução no mesmo lugar.</li></ol>" +
+    '<p style="text-align:center;margin:22px 0"><a href="' + hub + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Abrir meus quadros →</a></p>' +
+    '<div style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px"><b>Por que líderes estão trocando reuniões de alinhamento por um único quadro:</b><ul style="padding-left:18px;margin:10px 0 0">' +
+    li("🤖", "IA que trabalha junto com o time.", "Você descreve o objetivo e ela monta o quadro completo, sugere a dinâmica certa com tempo cronometrado e, no fim, transforma as ideias em um plano de ação com responsáveis. A workshop que levava uma tarde de preparo fica pronta em minutos.") +
+    li("🔗", "Integração nativa com Jira, Azure DevOps e Kanbanize.", "O roadmap e os OKRs desenhados no quadro viram itens reais nas ferramentas que sua engenharia já usa, e o progresso volta sozinho. Sem copiar e colar, sem relatório paralelo.") +
+    li("🎯", "Do OKR à tarefa, com visibilidade.", "Objetivo, iniciativa, épico e história conectados, com alertas automáticos por e-mail antes de um marco atrasar.") +
+    "</ul></div>" +
+    "<p>Se fizer sentido, separo 20 minutos para mostrar como isso funcionaria na sua operação. É só responder este e-mail.</p>" +
+    "<p>Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company + "</p></div>" +
+    '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Você recebeu este convite porque atua com liderança em tecnologia e produto. Se preferir não receber mais mensagens, é só responder “remover”.</div></div></div>';
+  var text = html.replace(/<li[^>]*>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1)").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\n{3,}/g, "\n\n").trim();
+  return { subject: subject, html: html, text: text };
+}
+
+/* Run from the editor: sends a sample prospecting e-mail to this (platform) account only. */
+function testProspectToMe() {
+  var me = Session.getActiveUser().getEmail();
+  var mail = prospect({ email: me, name: "Carlos Teste", expires: Date.now() + 14 * 864e5 }, { name: "Empresa Exemplo – Teste" }, CFG.brand);
+  MailApp.sendEmail(me, mail.subject, mail.text, { name: CFG.brand, htmlBody: mail.html });
 }
 
 /* Run once from the editor to authorise MailApp/UrlFetch and test the template. */

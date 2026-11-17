@@ -77,7 +77,9 @@
     if (!name) return toast("Give the workspace a name");
     if (OWNER && Object.keys(ws).length >= PLAN.workspaces) return limit(t("Your plan allows") + " " + PLAN.workspaces + " " + t(PLAN.workspaces === 1 ? "workspace" : "workspaces") + ".");
     const id = (slug(name) || "workspace") + "-" + rnd(), u = {};
-    const info = { name: name, created: TS(), createdBy: me.email, accessDays: Number(f.days.value) || 0 };
+    const pros = !!(f.prospect && f.prospect.checked);
+    const info = { name: name, created: TS(), createdBy: me.email, accessDays: Number(f.days.value) || (pros ? 14 : 0) };
+    if (pros) info.prospect = true;
     if (OWNER) { info.owner = MEK; info.ownerEmail = me.email; u["userWorkspaces/" + MEK + "/" + id] = { name: name, owner: true }; }
     u["workspaces/" + id + "/info"] = info;
     f.reset();
@@ -110,8 +112,14 @@
     const expires = days ? Date.now() + days * DAY : null;
     u["workspaces/" + wsId + "/members/" + k] = { email: email, name: name || email.split("@")[0], role: role, invitedAt: TS(), invitedBy: me.email, expires: expires };
     u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
+    const kind = f.mailType ? f.mailType.value : "welcome";
     f.reset();
-    update(u).then(function () { inviteAndTell([email], wsId); });
+    update(u).then(function () {
+      if (kind !== "prospect") return inviteAndTell([email], wsId);
+      // access is now real in the database → only then the prospecting e-mail (after explicit confirmation)
+      if (window.confirm(t("Access created. Send the sales prospecting e-mail now to") + " " + email + "?")) sendProspect(wsId, [email]);
+      else toast("Access created – the prospecting e-mail was not sent");
+    });
   }
   function extendMember(wsId, k, days) {
     const m = ws[wsId].members[k], u = {};
@@ -262,6 +270,24 @@
       if (j && j.ok) { toast(t("Welcome e-mail sent to") + " " + j.sent.length + " " + t("people")); load(); }
       else toast(t("Could not send the welcome e-mail") + (j && j.error ? " – " + j.error : ""));
     });
+  }
+  /* Commercial prospecting e-mail ("convite de teste para lideranças"), sent by the platform notifier
+     from the platform account. Only to people who already are members of the workspace. */
+  function sendProspect(wsId, emails) {
+    const url = window.CMCOLLAB_MAILER;
+    if (!url) return toast(t("The e-mail notifier is not configured yet."));
+    if (!wsId || !emails.length) return;
+    return window.firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken: tok, kind: "prospect", ws: wsId, to: emails, lang: "pt", brand: window.CMCOLLAB_BRAND || "" }) });
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) throw new Error(j.error || "notifier error");
+      const st = {}; (j.sent || []).forEach(function (em) { st["workspaces/" + wsId + "/members/" + A.key(em) + "/prospected"] = TS(); });
+      return (Object.keys(st).length ? db.ref().update(st) : Promise.resolve()).then(function () {
+        toast(j.sent.length ? t("Prospecting e-mail sent to") + " " + j.sent.join(", ") : t("Not sent – the person is not an active member of this workspace"));
+        load();
+        return j;
+      });
+    }).catch(function (e) { console.warn("prospect mail", e); toast(t("Could not send the prospecting e-mail") + " – " + String(e.message || e)); });
   }
   function inviteAndTell(emails, wsId) {
     let ok = 0;
@@ -443,6 +469,7 @@
           return '<span class="u-ws"><b class="no-i18n">' + esc(a.ws) + '</b><span class="muted">' + esc(t(a.m.role === "viewer" ? "Viewer" : "Editor")) + "</span>" + expiryBadge(a.m) +
             '<button class="link" data-ext="' + a.id + "|" + a.k + '|7">' + t("+7 days") + "</button>" +
             '<button class="link" data-welcome="' + a.id + "|" + a.k + '" title="' + esc(a.m.welcomed ? t("Welcome e-mail sent on") + " " + fmtDate(a.m.welcomed) : t("Welcome e-mail not sent yet")) + '">' + (a.m.welcomed ? "✓ " : "") + "✉</button>" +
+            '<button class="link" data-prospect="' + a.id + "|" + a.k + '" title="' + esc(a.m.prospected ? t("Prospecting e-mail sent on") + " " + fmtDate(a.m.prospected) : t("Prospecting e-mail not sent yet")) + '">' + (a.m.prospected ? "✓ " : "") + esc(t("Prospecting")) + "</button>" +
             '<button class="link danger-t" data-remove="' + a.id + "|" + a.k + '" title="' + esc(LL("Remove access", "Remover acesso")) + '">✕</button></span>';
         }).join("") + "</span></li>";
     }).join("");
@@ -464,7 +491,7 @@
     h += '<nav class="adm-tabs no-i18n" role="tablist"><button role="tab" data-atab="ws" class="' + (tab === "ws" ? "on" : "") + '">' + LL("Workspace administration", "Administração de workspaces") + ' <span class="count">' + ids.length + '</span></button><button role="tab" data-atab="users" class="' + (tab === "users" ? "on" : "") + '">' + LL("User administration", "Administração de usuários") + ' <span class="count">' + nPeople + "</span></button></nav>";
     h += '<div class="adm-pane" data-pane="ws"' + (tab === "ws" ? "" : " hidden") + ">";
     h += '<div class="admin-grid"><section class="card"><h2>New workspace</h2><p class="muted small">A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.</p>' +
-      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button></form>' +
+      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button><label class="consent"><input type="checkbox" name="prospect"><span>' + esc(t("Prospecting: one workspace per company (test access, 14 days by default)")) + "</span></label></form>" +
       '<p class="muted small">' + t("Access period: choose 7 days for beta testers – access closes automatically.") + "</p></section>" +
       '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div><a class=\"stat\" href=\"#signups\"><b>" + Object.keys(signups).length + "</b><span>Sign-ups</span></a><a class=\"stat\" href=\"#feedback\"><b>" + Object.keys(feedback).length + "</b><span>Feedback</span></a></div>" +
       '<p class="muted small">Only invited e-mails can open a workspace. Admins are managed in the Firebase console.</p></section></div>';
@@ -486,10 +513,11 @@
         const m = members[k];
         return '<li class="member"><span class="av sm no-i18n">' + esc((m.name || m.email)[0].toUpperCase()) + '</span><span class="m-who"><b class="no-i18n">' + esc(m.name || "") + '</b><span class="muted no-i18n">' + esc(m.email) + "</span></span>" +
           roleSelect("", m.role, 'data-role="' + id + "|" + k + '"') +
-          '<button class="btn sm" data-invite="' + id + "|" + k + '">Resend invite</button><button class="btn sm" data-welcome="' + id + "|" + k + '" title="' + esc(m.welcomed ? t("Welcome e-mail sent on") + " " + fmtDate(m.welcomed) : t("Welcome e-mail not sent yet")) + '">' + (m.welcomed ? "✓ " : "✉ ") + t("Welcome") + '</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
+          '<button class="btn sm" data-invite="' + id + "|" + k + '">Resend invite</button><button class="btn sm" data-welcome="' + id + "|" + k + '" title="' + esc(m.welcomed ? t("Welcome e-mail sent on") + " " + fmtDate(m.welcomed) : t("Welcome e-mail not sent yet")) + '">' + (m.welcomed ? "✓ " : "✉ ") + t("Welcome") + '</button><button class="btn sm" data-prospect="' + id + "|" + k + '" title="' + esc(m.prospected ? t("Prospecting e-mail sent on") + " " + fmtDate(m.prospected) : t("Prospecting e-mail not sent yet")) + '">' + (m.prospected ? "✓ " : "✉ ") + t("Prospecting") + '</button><button class="btn sm ghost danger-t" data-remove="' + id + "|" + k + '">Remove</button>' +
+          (m.prospected ? '<span class="xp prospected">' + esc(t("Prospecting sent")) + " · " + fmtDate(m.prospected) + "</span>" : "") +
           '<span class="m-exp">' + expiryBadge(m) + '<button class="link" data-ext="' + id + "|" + k + '|7">' + t("+7 days") + "</button>" + (m.expires ? '<button class="link" data-ext="' + id + "|" + k + '|0">' + t("Make full access") + "</button>" : "") + "</span></li>";
       }).join("");
-      return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2>" + (w.info.accessDays ? '<span class="xp">' + esc(t("Default access")) + ": " + w.info.accessDays + " " + esc(t("days")) + "</span>" : "") + "</div>" +
+      return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2>" + (w.info.accessDays ? '<span class="xp">' + esc(t("Default access")) + ": " + w.info.accessDays + " " + esc(t("days")) + "</span>" : "") + (w.info.prospect ? ' <span class="xp">' + esc(t("Prospecting workspace")) + "</span>" : "") + "</div>" +
         '<button class="btn sm ghost danger-t" data-delws="' + id + '">Delete workspace</button></div>' +
         '<div class="ws-cols"><div><h3>Boards <span class="count">' + bIds.length + "</span></h3>" +
         '<ul class="members">' + (bl || '<li class="muted small">No boards yet.</li>') + "</ul>" +
@@ -500,7 +528,9 @@
         '<div><h3>People with access <span class="count">' + mIds.length + "</span>" + (mIds.length ? ' <button class="btn sm" data-welcomeall="' + id + '">✉ ' + t("Send welcome to all") + "</button>" : "") + "</h3>" +
         '<ul class="members">' + (ml || '<li class="muted small">No one has access yet.</li>') + "</ul>" +
         '<form class="form-grid3" data-add="' + id + '"><input name="name" placeholder="' + esc(t("Name")) + '" autocomplete="off"><input name="email" type="email" required placeholder="name@email.com" autocomplete="off">' +
-        roleSelect("role", "editor") + daysSelect("days", w.info.accessDays) + '<button class="btn primary">Grant access</button></form></div></div></section>';
+        roleSelect("role", "editor") + daysSelect("days", w.info.accessDays || (w.info.prospect ? 14 : 0)) +
+        '<label class="mail-type">' + esc(t("E-mail type")) + ' <select name="mailType" aria-label="' + esc(t("E-mail type")) + '"><option value="welcome"' + (w.info.prospect ? "" : " selected") + ">" + esc(t("Welcome (beta)")) + '</option><option value="prospect"' + (w.info.prospect ? " selected" : "") + ">" + esc(t("Sales prospecting")) + "</option></select></label>" +
+        '<button class="btn primary">Grant access</button></form><p class="muted small">' + esc(t("Prospecting: access is created first, then the e-mail is sent from the platform account. Tip: one workspace per company, with a test period (14 days).")) + "</p></div></div></section>";
     }).join("");
 
     h += "</div>";
@@ -538,6 +568,15 @@
       const use = pend.length ? pend : list;
       if (!use.length) return toast("No one has access yet.");
       if (window.confirm(t("Send the welcome e-mail to") + " " + use.length + " " + t("people") + "?\n\n" + use.map(function (m) { return m.email; }).join("\n"))) sendWelcome(id, use.map(function (m) { return m.email; }));
+    }; });
+    el.querySelectorAll("[data-prospect]").forEach(function (b) { b.onclick = function () {
+      const p = pair(b.dataset.prospect), m = ((ws[p[0]] || {}).members || {})[p[1]]; if (!m) return;
+      if (m.expires && m.expires < Date.now()) return toast("This person's access has expired – extend it before sending");
+      const again = m.prospected ? "\n\n" + t("Already sent on") + " " + fmtDate(m.prospected) + "." : "";
+      if (window.confirm(t("Send the sales prospecting e-mail to") + " " + m.email + "?" + again)) sendProspect(p[0], [m.email]);
+    }; });
+    el.querySelectorAll("form[data-add] select[name=mailType]").forEach(function (s) { s.onchange = function () {
+      const d = s.form.days; if (s.value === "prospect" && d && Number(d.value) === 0) d.value = "14";
     }; });
     el.querySelectorAll("[data-remove]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.remove); removeMember(p[0], p[1]); }; });
     el.querySelectorAll("[data-delp]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delp); deletePlanningAdm(p[0], p[1]); }; });
