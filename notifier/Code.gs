@@ -144,43 +144,59 @@ function welcome(m, info, lang, brand) {
   return { subject: L.subject, html: html, text: text };
 }
 
-/* Commercial prospecting e-mail ("convite de teste para lideranças"), pt-BR only.
- * Variables come from the database, never from the request: member name/e-mail, workspace name, member.expires. */
+/* Commercial prospecting e-mail (direct sales pitch), pt-BR only.
+ * Variables come from the database, never from the request: member name/e-mail, workspace name/company, member.expires. */
+var PROSPECT_VIDEOS = {
+  full: "https://www.youtube.com/watch?v=9JWIf2etSHw",   // apresentação completa
+  short: "https://www.youtube.com/shorts/ok8iQregw2c"     // vídeo curto de divulgação
+};
+function prospectDays() { // next two business days, starting 2 days ahead (Brazil time)
+  var names = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"], out = [], d = new Date(Date.now() + 2 * 864e5);
+  while (out.length < 2) {
+    var wd = Number(Utilities.formatDate(d, "America/Sao_Paulo", "u")) % 7; // 1=Mon … 7=Sun
+    if (wd >= 1 && wd <= 5) out.push(names[wd] + " (" + Utilities.formatDate(d, "America/Sao_Paulo", "dd/MM") + ")");
+    d = new Date(d.getTime() + 864e5);
+  }
+  return out;
+}
 function prospect(m, info, brand, altSubject) {
   brand = brand || CFG.brand;
   var w0 = brand.split(/\s+/)[0], mark = (w0.length <= 3 ? w0 : brand.split(/\s+/).map(function (w) { return w[0]; }).join("").slice(0, 2)).toUpperCase();
   var first = String(m.name || "").split(" ")[0] || "";
   var hub = CFG.site + "workspaces/";
   var until = m.expires ? Utilities.formatDate(new Date(m.expires), "America/Sao_Paulo", "dd/MM/yyyy") : "";
-  var wsName = info.name || "";
+  var company = String(info.company || String(info.name || "").split(/\s+[–-]\s+/)[0] || "").trim();
+  var co = company ? "a " + company : "sua empresa", coDe = company ? "da " + company : "da sua empresa";
+  var days = prospectDays();
   var subject = altSubject
-    ? "Estratégia e execução no mesmo lugar, com IA. Seu acesso já está liberado"
-    : (first ? first + ", seu" : "Seu") + " acesso ao " + brand + " está ativo 🚀 (teste gratuito)";
+    ? "Estratégia e execução no mesmo lugar, com IA: proposta para " + (company || "sua empresa") + " (20 min)"
+    : (first ? first + ", proposta" : "Proposta") + " para " + (company ? "a " + company : "sua empresa") + ": menos reunião de status, mais entrega, com IA";
   var li = function (ic, t, d) { return '<li style="margin:0 0 10px">' + ic + " <b>" + t + "</b> " + d + "</li>"; };
+  var vbtn = function (href, label) { return '<a href="' + href + '" style="background:#0e1a33;color:#ffffff;text-decoration:none;font-weight:bold;padding:11px 18px;border-radius:10px;display:inline-block;margin:4px">' + label + "</a>"; };
   var html =
     '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">' +
     '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
     '<div style="background:#0e1a33;padding:22px 24px;color:#ffffff"><span style="display:inline-block;background:#2cc4b3;color:#0e1a33;font-weight:bold;border-radius:8px;padding:6px 8px;font-size:13px">' + esc(mark) + '</span>' +
     ' <span style="font-size:18px;font-weight:bold;vertical-align:middle">' + esc(brand) + '</span></div>' +
     '<div style="padding:24px;color:#1d2433;font-size:15px;line-height:1.55">' +
-    "<p>Olá" + (first ? ", " + esc(first) : "") + ",</p>" +
-    "<p>Seu acesso exclusivo ao workspace <b>“" + esc(wsName) + "”</b> no " + esc(brand) + " já está ativo. 🎉</p>" +
-    "<p>Toda liderança conhece o roteiro: a estratégia nasce num quadro, o plano vai para uma planilha, a execução corre no Jira, e o status chega na reunião de segunda já desatualizado. Cada passagem custa horas de retrabalho e decisões tomadas no escuro.</p>" +
-    "<p>O " + esc(brand) + " junta essas pontas. Por isso liberamos para você um teste completo" + (until ? ", <b>válido até " + until + "</b>" : "") + ".</p>" +
-    '<h3 style="margin:18px 0 6px;font-size:16px">Como entrar (leva 1 minuto)</h3><ol style="padding-left:20px;margin:0">' +
-    '<li>Acesse <a href="' + hub + '">' + hub.replace("https://", "") + "</a></li>" +
-    "<li>Entre com <b>este mesmo e-mail</b> (" + esc(m.email) + "), pelo botão Google ou pelo link de acesso.</li>" +
-    "<li>Abra o workspace e veja estratégia e execução no mesmo lugar.</li></ol>" +
-    '<p style="text-align:center;margin:22px 0"><a href="' + hub + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Abrir meus quadros →</a></p>' +
-    '<div style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px"><b>Por que líderes estão trocando reuniões de alinhamento por um único quadro:</b><ul style="padding-left:18px;margin:10px 0 0">' +
-    li("🤖", "IA que trabalha junto com o time.", "Você descreve o objetivo e ela monta o quadro completo, sugere a dinâmica certa com tempo cronometrado e, no fim, transforma as ideias em um plano de ação com responsáveis. A workshop que levava uma tarde de preparo fica pronta em minutos.") +
-    li("🔗", "Integração nativa com Jira, Azure DevOps e Kanbanize.", "O roadmap e os OKRs desenhados no quadro viram itens reais nas ferramentas que sua engenharia já usa, e o progresso volta sozinho. Sem copiar e colar, sem relatório paralelo.") +
-    li("🎯", "Planejamento mais intuitivo e assertivo do que o Miro.", "Roadmap, Scrum, Kanban ou Waterfall no mesmo lugar dos quadros, com OKR, iniciativa, épico e história conectados e alertas automáticos por e-mail antes de um marco atrasar. Menos post-it solto, mais plano que se cumpre.") +
-    "</ul></div>" +
-    "<p>Se fizer sentido, separo 20 minutos para mostrar como isso funcionaria na sua operação. É só responder este e-mail.</p>" +
+    "<p>Olá" + (first ? ", " + esc(first) : "") + "! Bom dia, boa tarde ou boa noite.</p>" +
+    "<p>Vou direto ao ponto: sou o Carlos Alexandre, CEO da " + CFG.company + ", e quero apresentar o <b>" + esc(brand) + "</b> para " + esc(co) + " como a ferramenta de planejamento e facilitação dos seus times.</p>" +
+    "<p><b>O problema que resolvemos:</b> a estratégia nasce no Miro, o plano vai para uma planilha, a execução corre no Jira, e o status chega desatualizado na reunião de segunda. Cada passagem custa horas de retrabalho e decisões tomadas no escuro.</p>" +
+    '<div style="background:#eef9f7;border:1px solid #bfe9e3;border-radius:12px;padding:16px;text-align:center;margin:18px 0">' +
+    '<div style="font-weight:bold;font-size:16px;margin-bottom:8px">▶ Veja o ' + esc(brand) + " em ação</div>" +
+    vbtn(PROSPECT_VIDEOS.short, "▶ Vídeo curto") + vbtn(PROSPECT_VIDEOS.full, "▶ Apresentação completa") + "</div>" +
+    "<p><b>O que entregamos:</b></p><ul style=\"padding-left:18px;margin:8px 0\">" +
+    li("🤖", "IA que trabalha junto com o time:", "monta o workshop completo, cronometra a dinâmica e transforma as ideias em um plano de ação com responsáveis.") +
+    li("🎯", "Planejamento mais intuitivo e assertivo do que o Miro:", "roadmap, Scrum, Kanban ou Waterfall, com OKR, iniciativa, épico e história conectados e alertas antes de um marco atrasar.") +
+    li("🔗", "Integração nativa com Jira, Azure DevOps e Kanbanize:", "o que é decidido no quadro vira item real nas ferramentas da engenharia, e o progresso volta sozinho.") +
+    "</ul>" +
+    "<p><b>O resultado:</b> menos reuniões de alinhamento, decisões com dado atualizado e workshops prontos em minutos, não em uma tarde.</p>" +
+    '<p style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px"><b>Minha proposta:</b> 20 minutos na ' + days[0] + " ou na " + days[1] + " para mostrar a ferramenta aplicada a um caso real " + esc(coDe) + ". É só responder este e-mail com o melhor horário.</p>" +
+    "<p>Para adiantar, já deixei um ambiente exclusivo " + esc(coDe) + (until ? ", válido até <b>" + until + "</b>" : "") + ". É só entrar com este e-mail (" + esc(m.email) + "):</p>" +
+    '<p style="text-align:center;margin:18px 0"><a href="' + hub + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Abrir o ambiente ' + esc(coDe) + " →</a></p>" +
     "<p>Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company + "</p></div>" +
     '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Você recebeu este convite porque atua com liderança em tecnologia e produto. Se preferir não receber mais mensagens, é só responder “remover”.</div></div></div>';
-  var text = html.replace(/<li[^>]*>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1)").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\n{3,}/g, "\n\n").trim();
+  var text = html.replace(/<li[^>]*>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1) ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\n{3,}/g, "\n\n").trim();
   return { subject: subject, html: html, text: text };
 }
 
