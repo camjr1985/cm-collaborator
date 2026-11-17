@@ -57,6 +57,7 @@ window.CMCOLLAB_AI = {
  * The badge shows for NEW_DAYS after launch and disappears for each person as soon as they use the feature. */
 window.CMCOLLAB_NEW_DAYS = 30;
 window.CMCOLLAB_NEW = {
+  game: "2026-11-17",          // Business Game (education add-on module)
   planning: "2026-11-06",      // Planning module (roadmap, Waterfall, Scrum, Kanban, OKRs, alerts)
   okr: "2026-11-06",           // OKRs inside Planning
   alerts: "2026-11-06",        // e-mail alerts for milestones and key activities

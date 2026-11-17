@@ -64,6 +64,27 @@
     return '<a class="board-card is-plan" href="../planning/?id=' + encodeURIComponent(id) + '" data-title="' + esc((p.title || "").toLowerCase()) + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(p.method) : "") + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("planning", 12) : "") + " Planning</span></span>" +
       '<span class="bc-t"><b class="no-i18n">' + esc(p.title || id) + '</b><span class="muted small no-i18n">' + esc(wsName ? wsName + " · " : "") + esc(m.name || "Planning") + "</span></span></a>";
   }
+  /* Business Game (add-on module) cards */
+  function gamePreview() {
+    return '<svg viewBox="0 0 160 100" aria-hidden="true"><rect width="160" height="100" fill="#0e1a33"/><g fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M16 78 L46 64 L76 70 L106 44 L144 30" stroke="#2cc4b3"/><path d="M16 84 L46 76 L76 58 L106 62 L144 52" stroke="#e8c468"/><path d="M16 88 L46 86 L76 80 L106 76 L144 70" stroke="#eb6834"/></g>' +
+      '<g fill="#c9d2e3"><rect x="16" y="14" width="40" height="6" rx="3"/><rect x="16" y="24" width="26" height="5" rx="2.5" opacity=".6"/></g><circle cx="144" cy="30" r="5" fill="#2cc4b3"/></svg>';
+  }
+  function gameCard(id, g, sub) {
+    return '<a class="board-card is-game" href="../game/?id=' + encodeURIComponent(id) + '" data-title="' + esc((g.title || "").toLowerCase()) + '"><span class="tpl-pv">' + gamePreview() + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("game", 12) : "") + " Business Game</span></span>" +
+      '<span class="bc-t"><b class="no-i18n">' + esc(g.title || id) + '</b><span class="muted small no-i18n">' + esc(sub || LL("Business simulation", "Simulação empresarial")) + "</span></span></a>";
+  }
+  function myGamesSlot(user, wss) {
+    const slot = document.getElementById("gameSlot"); if (!slot) return;
+    A.db().ref("userGames/" + A.key(user.email)).once("value").then(function (s) {
+      const g = s.val() || {}, inWs = {};
+      Object.keys(wss || {}).forEach(function (w) { Object.keys((wss[w] || {}).games || {}).forEach(function (k) { inWs[k] = 1; }); });
+      const ids = Object.keys(g).filter(function (k) { return !inWs[k]; });
+      if (!ids.length) return;
+      slot.innerHTML = '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2>' + (window.CMIcon ? window.CMIcon("game", 20) : "") + " " + esc(LL("My games", "Minhas partidas")) + " · Business Game</h2></div><div class=\"board-grid\">" +
+        ids.map(function (k) { const x = g[k] || {}; return gameCard(k, x, x.role === "prof" ? LL("Professor", "Professor") : LL("Student", "Aluno")); }).join("") + "</div></section>";
+    }, function () { /* ignore */ });
+  }
   function recentRows(allowed) {
     const r = recents().filter(function (x) { return !allowed || allowed[x.id]; }).slice(0, 6);
     if (!r.length) return "";
@@ -134,13 +155,15 @@
     const admin = adminAll || isOwner(id, w);
     const boards = w.boards || {}, pls = w.plannings || {};
     const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
-    const all = ids.map(function (b) { return { k: "b", id: b, c: boards[b].created || 0 }; }).concat(Object.keys(pls).map(function (pid) { return { k: "p", id: pid, c: pls[pid].created || 0 }; })).sort(function (a, b) { return b.c - a.c; });
+    const gms = w.games || {};
+    const all = ids.map(function (b) { return { k: "b", id: b, c: boards[b].created || 0 }; }).concat(Object.keys(pls).map(function (pid) { return { k: "p", id: pid, c: pls[pid].created || 0 }; })).concat(Object.keys(gms).map(function (gid) { return { k: "g", id: gid, c: gms[gid].created || 0 }; })).sort(function (a, b) { return b.c - a.c; });
+    const ng = Object.keys(gms).length;
     const np = Object.keys(pls).length;
     const name = (w.info || {}).name || id;
-    return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + (np ? " · " + np + " " + esc(LL(np === 1 ? "planning" : "plannings", np === 1 ? "planejamento" : "planejamentos")) : "") + "</span>" +
-      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
+    return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + (np ? " · " + np + " " + esc(LL(np === 1 ? "planning" : "plannings", np === 1 ? "planejamento" : "planejamentos")) : "") + (ng ? " · " + ng + " " + esc(LL(ng === 1 ? "game" : "games", ng === 1 ? "partida" : "partidas")) : "") + "</span>" +
+      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" data-newgame="' + id + '" href="../game/?new=1&ws=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("game", 14) : "") + " " + esc(LL("New game", "Nova partida")) + (window.CMNewBadge ? window.CMNewBadge("game") : "") + '</a><a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
       (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + ((w.info || {}).area && window.PLAN_AREAS && window.PLAN_AREAS[w.info.area] && w.info.area !== "general" ? '<span class="area-tag no-i18n">' + esc(window.PLAN_AREAS[w.info.area].name) + "</span>" : "") + "</div>" +
-      (all.length ? '<div class="board-grid">' + all.map(function (x) { return x.k === "b" ? boardCard(x.id, boards[x.id], tplName(boards[x.id].template)) : planCard(x.id, pls[x.id]); }).join("") + "</div>"
+      (all.length ? '<div class="board-grid">' + all.map(function (x) { return x.k === "b" ? boardCard(x.id, boards[x.id], tplName(boards[x.id].template)) : x.k === "g" ? gameCard(x.id, gms[x.id]) : planCard(x.id, pls[x.id]); }).join("") + "</div>"
         : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
   }
   function searchBar() {
@@ -333,7 +356,7 @@
           const bs = Object.keys(wss[firstBeta.id].boards || {}).sort();
           FIRST_BOARD = bs.filter(function (b) { return /comece|start|^1-/.test(b); })[0] || bs[0] || null;
         }
-        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + planStrip(Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }) || !entries.length) + recentRows(allowed) +
+        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + planStrip(Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }) || !entries.length) + recentRows(allowed) + '<div id="gameSlot"></div>' +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
             : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
         bindFeedback();
@@ -359,6 +382,12 @@
           };
         });
         bindSearch();
+        myGamesSlot(user, wss);
+        /* add-on module not licensed for that workspace: keep the button visible as a showcase ("Módulo adicional") */
+        el.querySelectorAll("[data-newgame]").forEach(function (b) {
+          if (!window.CMModules) return;
+          window.CMModules.has("game", b.dataset.newgame).then(function (ok) { if (!ok) { b.title = LL("Add-on module – request access", "Módulo adicional – solicitar acesso"); b.classList.add("addon"); } });
+        });
       });
     }).catch(function (e) { el.innerHTML = '<div class="notice">' + esc(e.message) + "</div>"; });
   }

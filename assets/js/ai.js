@@ -259,6 +259,7 @@
     open: function () {
       resolvePlan().then(function () { API().modal('<div id="aiRoot"></div>', function (m) { const md = document.getElementById("modal"); if (md) md.classList.add("wide"); render(m.querySelector("#aiRoot")); }); });
     },
+    generate: generate, // text/JSON generation for other modules (Business Game debriefing)
     _buildBoard: buildBoard, _buildAnalysis: buildAnalysis
   };
 })();

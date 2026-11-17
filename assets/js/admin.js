@@ -178,6 +178,36 @@
           '<button class="btn sm ghost danger-t" data-delp="' + wsId + "|" + pid + '">Delete</button></li>';
       }).join("") || '<li class="muted small">' + t("No plannings yet – create one in “My boards” → Planning.") + "</li>") + "</ul>";
   }
+  /* Business Game (add-on module "game"): same pattern as plannings – list, open, rename, delete */
+  function gameList(wsId, w) {
+    const gl = w.games || {}, ids = Object.keys(gl).sort(function (a, b) { return (gl[b].created || 0) - (gl[a].created || 0); });
+    if (!ids.length) return "";
+    const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 15) : ""; };
+    return '<h3 class="pl-adm-h">' + ic("game") + " Business Game" + ' <span class="count">' + ids.length + "</span>" + (window.CMNewBadge ? window.CMNewBadge("game") : "") + "</h3>" +
+      '<ul class="members">' + ids.map(function (gid) {
+        const g = gl[gid];
+        return '<li class="brow"><span class="b-ic plan" aria-hidden="true">' + ic("game") + '</span><span class="m-who"><b class="no-i18n">' + esc(g.title || gid) + '</b><span class="muted">' + esc(LL("Business simulation", "Simulação empresarial")) + ' · <span class="no-i18n">' + esc(gid) + "</span></span></span>" +
+          '<a class="btn sm primary" href="../game/?id=' + encodeURIComponent(gid) + '">Open</a>' +
+          '<button class="btn sm ghost" data-reng="' + wsId + "|" + gid + '">Rename</button>' +
+          '<button class="btn sm ghost danger-t" data-delg="' + wsId + "|" + gid + '">Delete</button></li>';
+      }).join("") + "</ul>";
+  }
+  function renameGame(wsId, id) {
+    const cur = ((ws[wsId] || {}).games || {})[id] || {};
+    const v = window.prompt(LL("New name for the game", "Novo nome da partida"), cur.title || "");
+    if (!v || !v.trim()) return;
+    const u = {}; u["game/" + id + "/info/title"] = v.trim(); u["workspaces/" + wsId + "/games/" + id + "/title"] = v.trim();
+    update(u, LL("Game renamed", "Partida renomeada"));
+  }
+  function deleteGameAdm(wsId, id) {
+    const typed = window.prompt(LL("This permanently deletes the game, its decisions and results. Type the game id to confirm:", "Isto apaga a partida, as decisões e os resultados. Digite o id da partida para confirmar:") + " " + id);
+    if (typed !== id) return;
+    db.ref("game/" + id + "/people").once("value").then(function (s) {
+      const u = {}; Object.keys(s.val() || {}).forEach(function (k) { u["userGames/" + k + "/" + id] = null; });
+      u["game/" + id] = null; u["workspaces/" + wsId + "/games/" + id] = null;
+      update(u, LL("Game deleted", "Partida excluída"));
+    }, fail);
+  }
   function renamePlanning(wsId, id) {
     const cur = ((ws[wsId] || {}).plannings || {})[id] || {};
     const v = window.prompt(t("New name for the planning"), cur.title || "");
@@ -198,6 +228,7 @@
     const u = {};
     Object.keys(w.boards || {}).forEach(function (id) { u["boards/" + id] = null; });
     Object.keys(w.plannings || {}).forEach(function (id) { u["planning/" + id] = null; });
+    Object.keys(w.games || {}).forEach(function (id) { u["game/" + id] = null; });
     Object.keys(w.members || {}).forEach(function (k) { u["userWorkspaces/" + k + "/" + wsId] = null; });
     if (OWNER) u["userWorkspaces/" + MEK + "/" + wsId] = null;
     u["workspaces/" + wsId] = null;
@@ -486,7 +517,7 @@
         '<form class="form-grid3" data-newboard="' + id + '"><input name="title" required placeholder="' + esc(t("Board name, e.g. Project kickoff")) + '" autocomplete="off">' +
         '<select name="template" aria-label="Template">' + templateOptions() + '</select>' +
         '<input name="bid" placeholder="' + esc(t("Link id (optional)")) + '" autocomplete="off" pattern="[a-z0-9-]{2,60}">' +
-        '<button class="btn primary">New board</button></form>' + planList(id, w) + "</div>" +
+        '<button class="btn primary">New board</button></form>' + planList(id, w) + gameList(id, w) + "</div>" +
         '<div><h3>People with access <span class="count">' + mIds.length + "</span>" + (mIds.length ? ' <button class="btn sm" data-welcomeall="' + id + '">✉ ' + t("Send welcome to all") + "</button>" : "") + "</h3>" +
         '<ul class="members">' + (ml || '<li class="muted small">No one has access yet.</li>') + "</ul>" +
         '<form class="form-grid3" data-add="' + id + '"><input name="name" placeholder="' + esc(t("Name")) + '" autocomplete="off"><input name="email" type="email" required placeholder="name@email.com" autocomplete="off">' +
@@ -589,7 +620,7 @@
         const m = mm[k]; if (!m) return;
         const u = map[k] || (map[k] = { k: k, name: "", email: m.email || k.replace(/,/g, "."), acc: [] });
         if (m.name && !u.name) u.name = m.name;
-        u.acc.push({ id: id, k: k, ws: (w.info || {}).name || id, m: m, st: accSt(m), boards: Object.keys(w.boards || {}).length, plans: Object.keys(w.plannings || {}).length });
+        u.acc.push({ id: id, k: k, ws: (w.info || {}).name || id, m: m, st: accSt(m), boards: Object.keys(w.boards || {}).length, plans: Object.keys(w.plannings || {}).length, games: Object.keys(w.games || {}).length });
       });
     });
     Object.keys(map).forEach(function (k) {
@@ -601,6 +632,7 @@
       u.off = u.acc.length - act.length;
       u.boards = u.acc.reduce(function (s, a) { return s + a.boards; }, 0);
       u.plans = u.acc.reduce(function (s, a) { return s + a.plans; }, 0);
+      u.games = u.acc.reduce(function (s, a) { return s + (a.games || 0); }, 0);
       u.noRenew = u.acc.some(function (a) { return a.m.noRenew; });
       const roles = {}; u.acc.forEach(function (a) { roles[a.m.role === "viewer" ? "viewer" : "editor"] = 1; });
       u.role = Object.keys(roles).length > 1 ? "mixed" : Object.keys(roles)[0];
@@ -691,7 +723,7 @@
         return '<tr data-row="' + esc(u.k) + '"' + (SEL[u.k] ? ' class="sel"' : "") + '><td class="ck"><input type="checkbox" data-sel="' + esc(u.k) + '"' + (SEL[u.k] ? " checked" : "") + ' aria-label="' + esc(u.email) + '"></td>' +
           '<td data-l="' + esc(LL("Person", "Pessoa")) + '"><button class="lnk-u" data-user="' + esc(u.k) + '"><span class="av sm no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><span><b class="no-i18n">' + esc(u.name || "—") + '</b><span class="muted no-i18n">' + esc(u.email) + "</span></span></button></td>" +
           '<td data-l="Workspaces" class="no-i18n wsn" title="' + esc(wsn.join(" · ")) + '">' + esc(wsn[0]) + (wsn.length > 1 ? "<small>+ " + esc(wsn.slice(1, 3).join(", ")) + (wsn.length > 3 ? " +" + (wsn.length - 3) : "") + "</small>" : "") + "</td>" +
-          '<td data-l="' + esc(LL("Access", "Acessos")) + '">' + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + "</td>" +
+          '<td data-l="' + esc(LL("Access", "Acessos")) + '">' + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + (u.games ? " · " + plural(u.games, LL("game", "partida"), LL("games", "partidas")) : "") + "</td>" +
           '<td data-l="' + esc(LL("Role", "Papel")) + '">' + roleLabel(u.role) + "</td>" +
           '<td data-l="' + esc(LL("Valid until", "Validade")) + '" class="tnum">' + (u.st === "none" ? "—" : fmtShort(u.next)) + (u.off && u.st !== "off" ? '<span class="muted small"> · ' + plural(u.off, LL("expired", "expirado"), LL("expired", "expirados")) + "</span>" : "") + "</td>" +
           '<td data-l="' + esc(LL("Status", "Situação")) + '">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + "</td>" +
@@ -705,7 +737,7 @@
     if (!u) return "";
     const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 14) : ""; };
     return '<div class="adm-drawer-bg" data-dclose></div><aside class="adm-drawer" role="dialog" aria-label="' + esc(u.name || u.email) + '"><header><span class="av no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><div><h2 class="no-i18n">' + esc(u.name || u.email) + '</h2><span class="muted no-i18n">' + esc(u.email) + '</span></div><button class="btn sm ghost" data-dclose aria-label="' + esc(LL("Close", "Fechar")) + '">✕</button></header>' +
-      '<div class="d-sum">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + '<span class="muted small">' + plural(u.acc.length, "workspace", "workspaces") + " · " + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + "</span></div>" +
+      '<div class="d-sum">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + '<span class="muted small">' + plural(u.acc.length, "workspace", "workspaces") + " · " + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + (u.games ? " · " + plural(u.games, LL("game", "partida"), LL("games", "partidas")) : "") + "</span></div>" +
       (OWNER ? "" : (function () { const em = effMods(u); return '<section class="d-acc d-mods"><div class="d-acc-h"><b>' + LL("Add-on modules", "Módulos adicionais") + "</b>" + periodSel('data-uper="' + esc(u.k) + '"') + "</div>" + MODS().map(function (m) { const g = userMods(u.k)[m.id], via = (em[m.id] || []).filter(function (x) { return x !== LL("individual", "individual"); }); return '<label class="mtog"><input type="checkbox" data-umod2="' + esc(u.k) + "|" + m.id + '"' + (gActive(g) ? " checked" : "") + "> <b>" + esc(m.name) + "</b> <span>" + esc(LL("individual: ", "individual: ") + grantTxt(g)) + (via.length ? " · " + esc(LL("company package: ", "pacote da empresa: ") + via.join(", ")) : "") + "</span></label>"; }).join("") + '<p class="muted small">' + LL("Company packages are set in Modules & packages.", "Pacotes de empresa ficam em Módulos e pacotes.") + "</p></section>"; })()) +
       u.acc.map(function (a) {
         const w = ws[a.id], ref = a.id + "|" + a.k, bl = w.boards || {}, pl = w.plannings || {};
@@ -838,6 +870,8 @@
     el.querySelectorAll("[data-remove]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.remove); removeMember(p[0], p[1]); }; });
     el.querySelectorAll("[data-delp]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delp); deletePlanningAdm(p[0], p[1]); }; });
     el.querySelectorAll("[data-renp]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.renp); renamePlanning(p[0], p[1]); }; });
+    el.querySelectorAll("[data-reng]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.reng); renameGame(p[0], p[1]); }; });
+    el.querySelectorAll("[data-delg]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delg); deleteGameAdm(p[0], p[1]); }; });
     el.querySelectorAll("[data-copyp]").forEach(function (b) { b.onclick = function () { const u = abs("../planning/?id=" + encodeURIComponent(b.dataset.copyp)); (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { toast("Link copied"); }, function () { window.prompt("Link", u); }); }; });
     el.querySelectorAll("[data-delb]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delb); deleteBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });

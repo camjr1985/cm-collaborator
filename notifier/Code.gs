@@ -38,6 +38,7 @@ function doPost(e) {
     if (/^jira-/.test(String(req.kind || ""))) return json(jiraHandle(req, who));
     if (/^azure-/.test(String(req.kind || ""))) return json(azureHandle(req, who));
     if (/^kanbanize-/.test(String(req.kind || ""))) return json(kbHandle(req, who));
+    if (/^game-/.test(String(req.kind || ""))) return json(gameNotify(req, who, brand));
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
     var info = get("workspaces/" + wsId + "/info", req.idToken) || {};
@@ -299,6 +300,62 @@ function planNotify(req, who, brand) {
     });
   }
   return { ok: true, sent: sent, quota: MailApp.getRemainingDailyQuota() };
+}
+
+/* ---------------- Business Game (add-on module) ----------------
+ * kinds: game-invite (to: [e-mails]), game-round (round), game-results (round). Only the game's professors can call it:
+ * the whole game node is readable only by professors/admins under the database rules, so reading it with the caller's token
+ * is the permission check. Recipients are always people of the game (never free addresses). Languages: pt, pt-pt, en, es. */
+function gameNotify(req, who, brand) {
+  var tok = req.idToken, gid = String(req.game || "");
+  if (!/^[A-Za-z0-9_-]{1,90}$/.test(gid)) throw new Error("bad game");
+  var g = get("game/" + gid, tok);
+  if (!g || !g.info) throw new Error("not allowed");
+  var people = g.people || {}, teams = g.teams || {}, cfg = g.config || {}, info = g.info;
+  var lang = { pt: "pt", "pt-pt": "pt-pt", en: "en", es: "es" }[String(req.lang || cfg.lang || "pt")] || "pt";
+  var T = function (pt, en, es, pp) { return lang === "en" ? en : lang === "es" ? es : lang === "pt-pt" ? (pp || pt) : pt; };
+  var tz = /^[A-Za-z_]+\/[A-Za-z_\/-]+$/.test(String(req.tz || "")) ? req.tz : "America/Sao_Paulo";
+  var link = CFG.site + "game/?id=" + encodeURIComponent(gid), inst = (cfg.brand && cfg.brand.name) || "";
+  var round = Math.max(0, Math.min(99, parseInt(req.round, 10) || 0)), r = (g.rounds || {})[round] || {};
+  var pub = ((g.results || {})[round] || {}).public || {}, rk = pub.ranking || {};
+  var order = Object.keys(rk).sort(function (a, b) { return rk[b].score - rk[a].score; });
+  var students = Object.keys(people).filter(function (k) { return people[k] && people[k].role === "student" && people[k].email; });
+  var only = req.to ? [].concat(req.to).map(function (x) { return key(String(x)); }) : null;
+  var EV = { crise: T("Crise econômica", "Economic crisis", "Crisis económica", "Crise económica"), boom: T("Aquecimento da economia", "Economic boom", "Auge económico"), concorrente: T("Novo concorrente", "New competitor", "Nuevo competidor"),
+    insumos: T("Alta de insumos", "Input costs rise", "Suben los insumos", "Subida das matérias-primas"), juros: T("Alta de juros", "Interest rates rise", "Suben las tasas de interés", "Subida das taxas de juro"), greve: T("Greve", "Strike", "Huelga") };
+  var sent = [], skipped = [];
+  students.forEach(function (k) {
+    if (sent.length >= CFG.maxPerCall) return;
+    if (only && only.indexOf(k) < 0) return;
+    var p = people[k], team = teams[p.team] || {}, first = esc(String(p.name || p.email.split("@")[0]).split(" ")[0]);
+    var subject, body;
+    if (req.kind === "game-invite") {
+      subject = T("Convite: Business Game “", "Invitation: Business Game “", "Invitación: Business Game “") + info.title + "”";
+      body = "<p>" + T("Você foi convidado(a) para a partida <b>“", "You have been invited to the game <b>“", "Has sido invitado(a) a la partida <b>“") + esc(info.title) + "”</b>" + (inst ? " – " + esc(inst) : "") + T(", na equipe <b>", ", in team <b>", ", en el equipo <b>", ", na equipa <b>") + esc(team.name || p.team || "") + "</b>.</p>" +
+        "<p>" + T("Cada equipe dirige uma empresa: a cada rodada vocês decidem preço, produção, marketing, P&D, pessoas, investimentos e financiamento, e o mercado reage às decisões de todas as equipes.", "Each team runs a company: every round you decide price, production, marketing, R&D, people, investment and financing, and the market reacts to every team's decisions.", "Cada equipo dirige una empresa: en cada ronda deciden precio, producción, marketing, I+D, personas, inversión y financiación.", "Cada equipa gere uma empresa: em cada ronda decidem preço, produção, marketing, I&D, pessoas, investimento e financiamento.") + "</p>" +
+        "<p>" + T("Entre com este e-mail (", "Sign in with this e-mail (", "Inicia sesión con este e-mail (", "Entre com este e-mail (") + esc(p.email) + ").</p>";
+    } else if (req.kind === "game-round") {
+      if (!r || r.status !== "open") { skipped.push(p.email); return; }
+      subject = T("Rodada ", "Round ", "Ronda ", "Ronda ") + round + T(" aberta – ", " is open – ", " abierta – ", " aberta – ") + info.title;
+      body = "<p>" + T("A rodada <b>", "Round <b>", "La ronda <b>", "A ronda <b>") + round + "</b>" + T(" está aberta para as decisões da sua equipe", " is open for your team's decisions", " está abierta para las decisiones de tu equipo", " está aberta para as decisões da sua equipa") + " (<b>" + esc(team.name || "") + "</b>)." +
+        (r.deadline ? " " + T("Prazo: ", "Deadline: ", "Plazo: ") + "<b>" + Utilities.formatDate(new Date(r.deadline), tz, "dd/MM HH:mm") + "</b> (" + esc(tz) + ")." : "") + "</p>" +
+        ((r.events || []).length ? "<p>" + T("Eventos desta rodada: ", "Events this round: ", "Eventos de esta ronda: ") + (r.events || []).map(function (e) { return "<b>" + esc(EV[e.type] || e.type) + "</b>"; }).join(", ") + ".</p>" : "");
+    } else if (req.kind === "game-results") {
+      if (!rk[p.team]) { skipped.push(p.email); return; }
+      subject = T("Resultados da rodada ", "Results of round ", "Resultados de la ronda ", "Resultados da ronda ") + round + " – " + info.title;
+      body = "<p>" + T("Os resultados da rodada <b>", "The results of round <b>", "Los resultados de la ronda <b>", "Os resultados da ronda <b>") + round + "</b>" + T(" estão disponíveis.", " are available.", " están disponibles.") + "</p>" +
+        "<p>" + T("Sua equipe", "Your team", "Tu equipo", "A sua equipa") + " (<b>" + esc(team.name || "") + "</b>) " + T("está em ", "is in ", "está en ") + "<b>" + (order.indexOf(p.team) + 1) + "º</b> " + T("lugar, com ", "place, with ", "lugar, con ") + "<b>" + (Math.round(rk[p.team].score * 10) / 10) + "</b> " + T("pontos.", "points.", "puntos.") + "</p>";
+    } else throw new Error("unknown e-mail type");
+    var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:620px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
+      '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + " · Business Game" + (inst ? '<div style="font-size:13px;font-weight:normal;color:#c9d2e3">' + esc(inst) + "</div>" : "") + "</div>" +
+      '<div style="padding:22px 24px;color:#1d2433;font-size:15px;line-height:1.55"><p>' + T("Olá ", "Hi ", "Hola ") + first + ",</p>" + body +
+      '<p style="text-align:center;margin:22px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + T("Abrir a partida", "Open the game", "Abrir la partida") + "</a></p></div>" +
+      brandSig(brand, lang === "pt" || lang === "pt-pt") + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + T("Notificação automática do ", "Automatic notification from ", "Notificación automática de ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
+    var text = html.replace(/<\/p>|<br>|<\/div>/g, "\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim() + "\n\n" + link;
+    var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+    MailApp.sendEmail(p.email, subject, text, opt); sent.push(p.email);
+  });
+  return { ok: true, sent: sent, skipped: skipped, quota: MailApp.getRemainingDailyQuota() };
 }
 
 /* ---------------- Jira Cloud integration ----------------
