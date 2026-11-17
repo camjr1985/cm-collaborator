@@ -39,7 +39,7 @@
     if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
     return { b: b, a: a };
   }
-  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Board", "Quadro"), backlog: "Backlog", list: L("List", "Lista"), okr: "OKRs" };
+  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Kanban board", "Quadro Kanban"), backlog: "Backlog", list: L("List", "Lista"), okr: "OKRs" };
 
   let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
   const pushT = {};
@@ -356,6 +356,7 @@
         '<span class="ti" style="color:' + T.color + '" title="' + esc(T.name) + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="tt">' + (it.prio ? '<span class="star" title="' + L("Key activity", "Atividade principal") + '">★</span>' : "") + esc(it.title) + "</span>" +
         (ru ? '<span class="rp" title="' + ru.d + "/" + ru.n + L(" done", " concluídos") + '"><i style="width:' + ru.done + '%"></i></span>' : '<span class="sd" style="background:' + stColor(s) + '" title="' + esc(s.name) + '"></span>') +
         (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") +
+        (isContainer(it) && !MOB ? '<button class="addc kbo" data-kbo="' + it.id + '" title="' + L("Open its cards on the board", "Abrir os cartões no quadro") + '">' + IC("kanban", 14) + "</button>" : "") +
         (canEdit && isContainer(it) ? '<button class="addc" data-addc="' + it.id + '" title="' + L("Add child item", "Adicionar item filho") + '">' + IC("plus", 14) + "</button>" : "") + "</div>";
       if (sp) {
         const bx = x(sp.s), bw = Math.max(Math.max(R.px, 6), x(sp.e + DAY) - bx), col = isContainer(it) ? T.color : stColor(s), late = overdue(it);
@@ -405,6 +406,7 @@
       tlAnchor = at; tlAnchorX = e.clientX - rect.left; zoom = { unit: u, k: npx / ZBASE[u] }; lsSet("cmcollab:plzoom", JSON.stringify(zoom)); clearTimeout(timeline._zt); timeline._zt = setTimeout(shell, 60);
     }, { passive: false });
     v.querySelectorAll("[data-tw]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); collapsed[b.dataset.tw] = !collapsed[b.dataset.tw]; renderView(); }; });
+    v.querySelectorAll("[data-kbo]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); const o = kbOpt(); o.epic = b.dataset.kbo; kbSave(o); if (method().views.indexOf("board") < 0) return; view = "board"; shell(); }; });
     v.querySelectorAll("[data-addc]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); const p = data.items[b.dataset.addc]; collapsed[b.dataset.addc] = false; const ct = childType(p); createItem({ type: ct, parent: b.dataset.addc, title: TYPES[ct].name }).then(function (id) { if (id) openDrawer(id, true); }); }; });
     v.querySelectorAll(".tl-row").forEach(function (r) { r.onclick = function () { openDrawer(r.dataset.open); }; });
     v.querySelectorAll(".mk-ms").forEach(function (m) { m.onclick = function () { openDrawer(m.dataset.open); }; });
@@ -489,26 +491,86 @@
       pool = pool.filter(function (i) { return i.sprint === sp; });
       headNote = '<div class="sp-head"><b>' + esc(S.name) + "</b> · " + fmt(S.start) + " → " + fmt(S.end) + (S.goal ? " · " + esc(S.goal) : "") + (canEdit ? ' <button class="pl-btn sm" id="endSp">' + L("Complete sprint", "Concluir sprint") + "</button>" : "") + "</div>";
     }
+    /* Jira-style board options: swimlanes (none / epic / assignee) and an epic filter – the board is the
+       roadmap's workflow: moving a card here moves the progress of its epic and initiative on the roadmap */
+    const kb = kbOpt();
+    const conts = items().filter(function (i) { return i.type === "epic" || i.type === "phase" || i.type === "initiative"; }).sort(byOrder);
+    if (kb.epic && !data.items[kb.epic]) kb.epic = "";
+    if (kb.epic) pool = pool.filter(function (i) { return underOf(i, kb.epic); });
+    const bar = '<div class="kb-bar">' +
+      '<label>' + L("Swimlanes", "Raias") + '<select id="kbSwim"><option value="">' + L("None", "Nenhuma") + '</option><option value="epic"' + (kb.swim === "epic" ? " selected" : "") + ">" + L("By epic / phase", "Por épico / fase") + '</option><option value="who"' + (kb.swim === "who" ? " selected" : "") + ">" + L("By assignee", "Por responsável") + "</option></select></label>" +
+      (conts.length ? '<label>' + L("Epic / initiative", "Épico / iniciativa") + '<select id="kbEpic"><option value="">' + L("All", "Todos") + "</option>" + conts.map(function (c) { return '<option value="' + c.id + '"' + (kb.epic === c.id ? " selected" : "") + ">" + esc((TYPES[c.type] || TYPES.epic).name + " · " + (c.key ? c.key + " " : "") + c.title) + "</option>"; }).join("") + "</select></label>" : "") +
+      '<span class="muted small">' + pool.length + " " + (pool.length === 1 ? L("card", "cartão") : L("cards", "cartões")) + "</span><span class=\"sp\"></span>" +
+      (canEdit ? '<button class="pl-btn sm" id="kbFlow">' + IC("settings", 14) + " " + L("Workflow", "Fluxo") + "</button>" : "") +
+      '<button class="pl-btn sm ghost" id="kbRoad">' + IC("roadmap", 14) + " " + L("See on the roadmap", "Ver no roadmap") + "</button></div>";
     const staged = ss.some(function (s) { return s.stage; });
-    let lastStage = null;
-    v.innerHTML = headNote + '<div class="kb' + (staged ? " staged" : "") + '">' + ss.map(function (s, si) {
-      let pre = "";
-      if (staged && (s.stage || "") !== lastStage) { pre = (lastStage !== null ? "</div></div>" : "") + '<div class="kb-stage st-' + (s.stage || "none") + '"><div class="kb-stage-h">' + (s.stage === "up" ? L("Upstream · discovery", "Upstream · descoberta") : s.stage === "down" ? L("Downstream · delivery", "Downstream · entrega") : "") + '</div><div class="kb-stage-cols">'; lastStage = s.stage || ""; }
-      const col = pool.filter(function (i) { return (statusOf(i).id) === s.id; }).sort(byOrder);
-      const over = s.wip && col.length > s.wip;
-      return pre + '<section class="kb-col' + (over ? " over" : "") + '" data-col="' + s.id + '"><header><span class="dot" style="background:' + stColor(s) + '"></span><b>' + esc(s.name) + '</b><span class="cnt">' + col.length + (s.wip ? " / " + s.wip : "") + "</span></header>" +
-        '<div class="kb-list">' + col.map(card).join("") + "</div>" + (canEdit && si === 0 ? '<button class="kb-add" data-add="' + s.id + '">+ ' + L("Create", "Criar") + "</button>" : "") + "</section>";
-    }).join("") + (staged ? "</div></div>" : "") + "</div>";
+    function cols(list, lane, withHead) {
+      let lastStage = null, out = "";
+      ss.forEach(function (s, si) {
+        if (staged && !kb.swim && (s.stage || "") !== lastStage) { out += (lastStage !== null ? "</div></div>" : "") + '<div class="kb-stage st-' + (s.stage || "none") + '"><div class="kb-stage-h">' + (s.stage === "up" ? L("Upstream · discovery", "Upstream · descoberta") : s.stage === "down" ? L("Downstream · delivery", "Downstream · entrega") : "") + '</div><div class="kb-stage-cols">'; lastStage = s.stage || ""; }
+        const col = list.filter(function (i) { return statusOf(i).id === s.id; }).sort(byOrder);
+        const all = pool.filter(function (i) { return statusOf(i).id === s.id; }).length, over = s.wip && all > s.wip;
+        out += '<section class="kb-col' + (over ? " over" : "") + (s.stage ? " stg-" + s.stage : "") + '" data-col="' + s.id + '"' + (lane != null ? ' data-lane="' + esc(lane) + '"' : "") + ">" +
+          (withHead ? '<header><span class="dot" style="background:' + stColor(s) + '"></span><b>' + esc(s.name) + "</b>" + (staged && kb.swim && s.stage ? '<span class="stg">' + (s.stage === "up" ? "UP" : "DOWN") + "</span>" : "") + '<span class="cnt">' + all + (s.wip ? " / " + s.wip : "") + "</span></header>" : "") +
+          '<div class="kb-list">' + col.map(card).join("") + "</div>" + (canEdit && si === 0 && (withHead || lane != null) ? '<button class="kb-add" data-add="' + s.id + '"' + (lane != null ? ' data-lane="' + esc(lane) + '"' : "") + ">+ " + L("Create", "Criar") + "</button>" : "") + "</section>";
+      });
+      return out + (staged && !kb.swim ? "</div></div>" : "");
+    }
+    let html;
+    if (!kb.swim) html = '<div class="kb' + (staged ? " staged" : "") + '">' + cols(pool, null, true) + "</div>";
+    else {
+      const lanes = [];
+      if (kb.swim === "epic") {
+        conts.filter(function (c) { return c.type !== "initiative" || !conts.some(function (e) { return e.parent === c.id; }); }).forEach(function (c) { lanes.push({ k: c.id, name: (c.key ? c.key + " · " : "") + c.title, color: (TYPES[c.type] || TYPES.epic).color, list: pool.filter(function (i) { return laneOf(i) === c.id; }) }); });
+        lanes.push({ k: "", name: L("No epic", "Sem épico"), color: "#8a94a6", list: pool.filter(function (i) { return !laneOf(i); }) });
+      } else {
+        const who = {}; pool.forEach(function (i) { who[i.assignee || ""] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = who[members[k].email] || 0; });
+        Object.keys(who).filter(function (e) { return e; }).sort(function (a, b) { return memberName(a).localeCompare(memberName(b)); }).forEach(function (e) { lanes.push({ k: e, name: memberName(e), color: "#2CC4B3", list: pool.filter(function (i) { return i.assignee === e; }) }); });
+        lanes.push({ k: "", name: L("Unassigned", "Sem responsável"), color: "#8a94a6", list: pool.filter(function (i) { return !i.assignee; }) });
+      }
+      html = '<div class="kb lanes"><div class="kb-row kb-heads">' + cols([], null, true).replace(/<div class="kb-list"><\/div>(<button[^>]*>[^<]*<\/button>)?/g, "") + "</div>" +
+        lanes.filter(function (l) { return l.list.length || kb.swim === "epic" && l.k; }).map(function (l) {
+          const closed = kb.closed && kb.closed[l.k || "_"];
+          return '<div class="kb-lane' + (closed ? " closed" : "") + '"><button class="kb-lane-h" data-lanet="' + esc(l.k || "_") + '" style="--c:' + l.color + '"><span class="tw">' + (closed ? "▸" : "▾") + "</span><b>" + esc(l.name) + '</b><span class="cnt">' + l.list.length + "</span></button>" + (closed ? "" : '<div class="kb-row">' + cols(l.list, l.k, false) + "</div>") + "</div>";
+        }).join("") + "</div>";
+    }
+    v.innerHTML = headNote + bar + html;
     v.querySelectorAll(".kb-card").forEach(function (c) { c.onclick = function () { openDrawer(c.dataset.id); }; });
-    v.querySelectorAll("[data-add]").forEach(function (b) { b.onclick = function () { inlineAdd(b, { status: b.dataset.add, sprint: scrum ? sp : undefined }); }; });
+    v.querySelectorAll("[data-add]").forEach(function (b) {
+      b.onclick = function () {
+        const base = { status: b.dataset.add, sprint: scrum ? sp : undefined };
+        if (b.dataset.lane != null) { if (kb.swim === "epic") base.parent = b.dataset.lane || undefined; else if (kb.swim === "who") base.assignee = b.dataset.lane || undefined; }
+        else if (kb.epic) base.parent = kb.epic;
+        inlineAdd(b, base);
+      };
+    });
+    v.querySelectorAll("[data-lanet]").forEach(function (b) { b.onclick = function () { const k = b.dataset.lanet; kb.closed = kb.closed || {}; kb.closed[k] = !kb.closed[k]; kbSave(kb); renderView(); }; });
+    const sw = document.getElementById("kbSwim"); if (sw) sw.onchange = function () { kb.swim = sw.value; kbSave(kb); renderView(); };
+    const ep = document.getElementById("kbEpic"); if (ep) ep.onchange = function () { kb.epic = ep.value; kbSave(kb); renderView(); };
+    const fl = document.getElementById("kbFlow"); if (fl) fl.onclick = workflowDialog;
+    document.getElementById("kbRoad").onclick = function () { view = "timeline"; if (kb.epic) collapsed[kb.epic] = false; shell(); };
     const es = document.getElementById("endSp"); if (es) es.onclick = function () { completeSprint(sp); };
     if (canEdit) dnd(v, ".kb-card", ".kb-col", function (id, col, beforeId) {
       const list = items().filter(function (i) { return statusOf(i).id === col.dataset.col && i.id !== id; }).sort(byOrder);
       const o = { status: col.dataset.col, order: orderAt(list, beforeId) };
       const st = statuses().find(function (s) { return s.id === col.dataset.col; });
       if (st && st.cat === "done") o.progress = 100;
+      const it = data.items[id] || {};
+      if (col.dataset.lane != null) {
+        if (kb.swim === "epic" && col.dataset.lane !== (laneOf(Object.assign({ id: id }, it)) || "")) o.parent = col.dataset.lane || null;
+        if (kb.swim === "who" && col.dataset.lane !== (it.assignee || "")) o.assignee = col.dataset.lane || null;
+      }
       patch(id, o);
     });
+  }
+  /* board options per planning (kept in this browser) */
+  function kbOpt() { try { return JSON.parse(localStorage.getItem("cmcollab:kb:" + ID) || "{}"); } catch (e) { return {}; } }
+  function kbSave(o) { try { localStorage.setItem("cmcollab:kb:" + ID, JSON.stringify(o)); } catch (e) { /* ignore */ } }
+  function underOf(it, cid) { let p = it.parent, g = 0; while (p && g++ < 12) { if (p === cid) return true; p = (data.items[p] || {}).parent; } return false; }
+  function laneOf(it) { /* nearest epic/phase above the card (or its initiative when there is no epic) */
+    let p = it.parent, g = 0, ini = "";
+    while (p && g++ < 12) { const x = data.items[p] || {}; if (x.type === "epic" || x.type === "phase") return p; if (x.type === "initiative" && !ini) ini = p; p = x.parent; }
+    return ini;
   }
   function orderAt(list, beforeId) {
     const i = beforeId ? list.findIndex(function (x) { return x.id === beforeId; }) : -1;
@@ -896,18 +958,7 @@
     });
   }
   /* ready-made workflows (Jira / Azure DevOps / Kanbanize style), incl. upstream (discovery) and downstream (delivery) */
-  function wfPresets() {
-    const st = function (id, en, pt, c, extra) { return Object.assign({ id: id, name: L(en, pt), cat: c }, extra || {}); };
-    return {
-      simple: { name: L("Simple", "Simples"), ss: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("done", "Done", "Concluído", "done")] },
-      scrum: { name: "Scrum", ss: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")] },
-      waterfall: { name: L("Waterfall / project", "Waterfall / projeto"), ss: [st("todo", "Not started", "Não iniciado", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("late", "At risk", "Em risco", "doing"), st("blocked", "Blocked", "Bloqueado", "doing"), st("done", "Done", "Concluído", "done")] },
-      down: { name: L("Kanban – downstream (delivery)", "Kanban – downstream (entrega)"), ss: [st("todo", "Ready to start", "Pronto para iniciar", "todo", { stage: "down" }), st("doing", "In development", "Em desenvolvimento", "doing", { stage: "down", wip: 3 }), st("review", "Code review", "Code review", "doing", { stage: "down", wip: 2 }), st("test", "Testing / QA", "Teste / QA", "doing", { stage: "down", wip: 2 }), st("deploy", "Ready to deploy", "Pronto para deploy", "doing", { stage: "down" }), st("done", "Delivered", "Entregue", "done", { stage: "down" })] },
-      up: { name: L("Kanban – upstream (discovery)", "Kanban – upstream (descoberta)"), ss: [st("idea", "Ideas", "Ideias", "todo", { stage: "up" }), st("analysis", "In analysis", "Em análise", "doing", { stage: "up", wip: 4 }), st("validate", "Validation / experiment", "Validação / experimento", "doing", { stage: "up", wip: 3 }), st("ready", "Ready for development", "Pronto para desenvolver", "done", { stage: "up" })] },
-      updown: { name: L("Upstream + downstream (Kanbanize style)", "Upstream + downstream (estilo Kanbanize)"), ss: [st("idea", "Ideas / requests", "Ideias / demandas", "todo", { stage: "up" }), st("analysis", "Analysis", "Análise", "doing", { stage: "up", wip: 4 }), st("ready", "Ready to commit", "Pronto para compromisso", "todo", { stage: "up" }), st("todo", "Committed", "Comprometido", "todo", { stage: "down" }), st("doing", "In progress", "Em andamento", "doing", { stage: "down", wip: 3 }), st("review", "Review / test", "Revisão / teste", "doing", { stage: "down", wip: 2 }), st("done", "Delivered", "Entregue", "done", { stage: "down" })] },
-      itsm: { name: L("Service desk (ITSM)", "Atendimento (ITSM)"), ss: [st("new", "New", "Novo", "todo"), st("doing", "In progress", "Em atendimento", "doing"), st("waiting", "Waiting for customer", "Aguardando cliente", "doing"), st("resolved", "Resolved", "Resolvido", "done"), st("closed", "Closed", "Fechado", "done")] }
-    };
-  }
+  function wfPresets() { return window.PLAN_WORKFLOWS(); }
   function workflowDialog() {
     let ss = JSON.parse(JSON.stringify(statuses()));
     const P = wfPresets();

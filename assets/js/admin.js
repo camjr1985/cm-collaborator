@@ -72,6 +72,12 @@
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { if (okMsg) toast(okMsg); return load(); }).catch(fail);
   }
+  /* area of work (healthcare, retail, consulting, education, service management…) – drives the ready-made plannings */
+  function areaSelect(name, cur, attrs) {
+    const AR = window.PLAN_AREAS || {}, AO = window.PLAN_AREA_ORDER || [];
+    if (!AO.length) return "";
+    return '<select ' + (name ? 'name="' + name + '" ' : "") + (attrs || "") + ' class="no-i18n" title="' + esc(window.MB_LANG === "pt" ? "Área de atuação" : "Area of work") + '"><option value="">' + esc(window.MB_LANG === "pt" ? "Área de atuação…" : "Area of work…") + "</option>" + AO.map(function (k) { return '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" + esc(AR[k].name) + "</option>"; }).join("") + "</select>";
+  }
   function createWorkspace(f) {
     const name = f.wsname.value.trim();
     if (!name) return toast("Give the workspace a name");
@@ -80,6 +86,7 @@
     const pros = !!(f.prospect && f.prospect.checked);
     const info = { name: name, created: TS(), createdBy: me.email, accessDays: Number(f.days.value) || (pros ? 14 : 0) };
     if (pros) info.prospect = true;
+    if (f.area && f.area.value) info.area = f.area.value;
     if (OWNER) { info.owner = MEK; info.ownerEmail = me.email; u["userWorkspaces/" + MEK + "/" + id] = { name: name, owner: true }; }
     u["workspaces/" + id + "/info"] = info;
     f.reset();
@@ -491,7 +498,7 @@
     h += '<nav class="adm-tabs no-i18n" role="tablist"><button role="tab" data-atab="ws" class="' + (tab === "ws" ? "on" : "") + '">' + LL("Workspace administration", "Administração de workspaces") + ' <span class="count">' + ids.length + '</span></button><button role="tab" data-atab="users" class="' + (tab === "users" ? "on" : "") + '">' + LL("User administration", "Administração de usuários") + ' <span class="count">' + nPeople + "</span></button></nav>";
     h += '<div class="adm-pane" data-pane="ws"' + (tab === "ws" ? "" : " hidden") + ">";
     h += '<div class="admin-grid"><section class="card"><h2>New workspace</h2><p class="muted small">A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.</p>' +
-      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button><label class="consent"><input type="checkbox" name="prospect"><span>' + esc(t("Prospecting: one workspace per company (test access, 14 days by default)")) + "</span></label></form>" +
+      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + areaSelect("area", "") + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button><label class="consent"><input type="checkbox" name="prospect"><span>' + esc(t("Prospecting: one workspace per company (test access, 14 days by default)")) + "</span></label></form>" +
       '<p class="muted small">' + t("Access period: choose 7 days for beta testers – access closes automatically.") + "</p></section>" +
       '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div><a class=\"stat\" href=\"#signups\"><b>" + Object.keys(signups).length + "</b><span>Sign-ups</span></a><a class=\"stat\" href=\"#feedback\"><b>" + Object.keys(feedback).length + "</b><span>Feedback</span></a></div>" +
       '<p class="muted small">Only invited e-mails can open a workspace. Admins are managed in the Firebase console.</p></section></div>';
@@ -518,6 +525,7 @@
           '<span class="m-exp">' + expiryBadge(m) + '<button class="link" data-ext="' + id + "|" + k + '|7">' + t("+7 days") + "</button>" + (m.expires ? '<button class="link" data-ext="' + id + "|" + k + '|0">' + t("Make full access") + "</button>" : "") + "</span></li>";
       }).join("");
       return '<section class="card ws-card" id="ws-' + id + '"><div class="br-head"><div><span class="eyebrow sm">Workspace</span><h2 class="no-i18n">' + esc(w.info.name) + "</h2>" + (w.info.accessDays ? '<span class="xp">' + esc(t("Default access")) + ": " + w.info.accessDays + " " + esc(t("days")) + "</span>" : "") + (w.info.prospect ? ' <span class="xp">' + esc(t("Prospecting workspace")) + "</span>" : "") + "</div>" +
+        areaSelect("", w.info.area || "", 'data-wsarea="' + id + '"') +
         '<button class="btn sm ghost danger-t" data-delws="' + id + '">Delete workspace</button></div>' +
         '<div class="ws-cols"><div><h3>Boards <span class="count">' + bIds.length + "</span></h3>" +
         '<ul class="members">' + (bl || '<li class="muted small">No boards yet.</li>') + "</ul>" +
@@ -584,6 +592,7 @@
     el.querySelectorAll("[data-copyp]").forEach(function (b) { b.onclick = function () { const u = abs("../planning/?id=" + encodeURIComponent(b.dataset.copyp)); (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { toast("Link copied"); }, function () { window.prompt("Link", u); }); }; });
     el.querySelectorAll("[data-delb]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delb); deleteBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });
+    el.querySelectorAll("[data-wsarea]").forEach(function (sel) { sel.onchange = function () { db.ref("workspaces/" + sel.dataset.wsarea + "/info/area").set(sel.value || null).then(function () { toast(window.MB_LANG === "pt" ? "Área atualizada" : "Area updated"); }, fail); }; });
     el.querySelectorAll("[data-delws]").forEach(function (b) { b.onclick = function () { deleteWorkspace(b.dataset.delws); }; });
     el.querySelectorAll("[data-ext]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ext); extendMember(p[0], p[1], Number(p[2])); }; });
     const suWs = document.getElementById("suWs"); if (suWs) suWs.onchange = function () { signupWs = suWs.value; signupDays = null; render(); };

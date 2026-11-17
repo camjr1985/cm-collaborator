@@ -84,24 +84,46 @@
   function planDialog(wss, presetWs, presetMethod) {
     const canIn = function (id) { return PLAN === "admin" || isOwner(id, wss[id]); };
     const wsIds = Object.keys(wss || {}).filter(canIn);
-    const M = window.PLAN_METHODS, order = window.PLAN_ORDER;
-    document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="planDlg"><div class="card plan-new"><h2>' + esc(LL("New planning", "Novo planejamento")) + '</h2><p class="muted small">' + esc(LL("Choose how you want to plan. You can change columns and workflow later.", "Escolha como quer planejar. Você pode mudar colunas e fluxo depois.")) + '</p><form id="planForm">' +
-      '<div class="pm-grid">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="method" value="' + k + '"' + ((presetMethod ? k === presetMethod : i === 0) ? " checked" : "") + '><span class="pm-ic">' + (window.CMIcon ? window.CMIcon(m.icon, 22) : "") + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div>" +
-      '<label class="lbl-f">' + esc(LL("Name", "Nome")) + '<input name="title" required autocomplete="off" placeholder="' + esc(LL("e.g. Product roadmap 2027", "ex.: Roadmap do produto 2027")) + '"></label>' +
-      '<label class="lbl-f">Workspace<select name="ws">' + wsIds.map(function (id) { return '<option value="' + id + '"' + (id === presetWs ? " selected" : "") + ">" + esc(wss[id].info.name) + "</option>"; }).join("") + "</select></label>" +
+    const M = window.PLAN_METHODS, order = window.PLAN_ORDER, AR = window.PLAN_AREAS || {}, AO = window.PLAN_AREA_ORDER || [], AP = window.PLAN_AREA_PLANS || [], W = window.PLAN_WORKFLOWS ? window.PLAN_WORKFLOWS() : {};
+    const ic = function (n, z) { return window.CMIcon ? window.CMIcon(n, z || 22) : ""; };
+    const wsArea = function (id) { return ((wss[id] || {}).info || {}).area || "general"; };
+    let area = wsArea(presetWs || wsIds[0]);
+    document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="planDlg"><div class="card plan-new"><h2>' + esc(LL("New planning", "Novo planejamento")) + '</h2><p class="muted small">' + esc(LL("Choose your area and a ready-made model – or a free method. Columns and workflow can be changed later.", "Escolha a sua área e um modelo pronto – ou um método livre. Colunas e fluxo podem mudar depois.")) + '</p><form id="planForm">' +
+      '<div class="pa-chips no-i18n" role="radiogroup" aria-label="' + esc(LL("Area", "Área")) + '">' + AO.map(function (k) { return '<button type="button" data-area="' + k + '">' + esc(AR[k].name) + "</button>"; }).join("") + "</div>" +
+      '<div id="paTpl"></div>' +
+      '<h3 class="pm-h no-i18n">' + esc(LL("Or start from a method", "Ou comece por um método")) + "</h3>" +
+      '<div class="pm-grid">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="start" value="m:' + k + '"' + ((presetMethod ? k === presetMethod : i === 0) ? " checked" : "") + '><span class="pm-ic">' + ic(m.icon) + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div>" +
+      '<div class="pl-2"><label class="lbl-f">' + esc(LL("Name", "Nome")) + '<input name="title" required autocomplete="off" placeholder="' + esc(LL("e.g. Product roadmap 2027", "ex.: Roadmap do produto 2027")) + '"></label>' +
+      '<label class="lbl-f">Workspace<select name="ws">' + wsIds.map(function (id) { return '<option value="' + id + '"' + (id === presetWs ? " selected" : "") + ">" + esc(wss[id].info.name) + "</option>"; }).join("") + "</select></label></div>" +
+      '<label class="lbl-f">' + esc(LL("Kanban board workflow", "Fluxo do quadro Kanban")) + '<select name="wf"><option value="">' + esc(LL("Model default", "Padrão do modelo")) + "</option>" + Object.keys(W).map(function (k) { return '<option value="' + k + '">' + esc(W[k].name) + "</option>"; }).join("") + "</select></label>" +
       '<div class="row-end"><button type="button" class="btn" id="planX">' + esc(LL("Cancel", "Cancelar")) + '</button><button class="btn primary">' + esc(LL("Create planning", "Criar planejamento")) + "</button></div></form></div></div>");
     const d = document.getElementById("planDlg"), f = document.getElementById("planForm");
     function close() { d.remove(); }
+    function drawArea() {
+      d.querySelectorAll("[data-area]").forEach(function (b) { b.classList.toggle("on", b.dataset.area === area); });
+      const list = AP.filter(function (p) { return p.area === area; });
+      d.querySelector("#paTpl").innerHTML = list.length ? '<h3 class="pm-h no-i18n">' + esc(LL("Ready-made models for ", "Modelos prontos para ") + AR[area].name) + '</h3><div class="pm-grid pa-grid">' + list.map(function (p) {
+        const m = M[p.method] || {}; return '<label class="pm-opt pa-opt"><input type="radio" name="start" value="t:' + p.id + '"><span class="pm-ic">' + ic(m.icon) + '</span><b class="no-i18n">' + esc(p.name) + '</b><span class="muted small no-i18n">' + esc(p.desc) + '</span><span class="pa-tag no-i18n">' + esc(m.name || "") + (W[p.workflow] ? " · " + esc(W[p.workflow].name) : "") + "</span></label>";
+      }).join("") + "</div>" : "";
+      if (!f.querySelector('[name=start]:checked')) { const fst = f.querySelector('[name=start]'); if (fst) fst.checked = true; }
+    }
+    d.querySelectorAll("[data-area]").forEach(function (b) { b.onclick = function () { area = b.dataset.area; drawArea(); const t = d.querySelector('#paTpl input'); if (t) t.checked = true; }; });
+    f.ws.onchange = function () { area = wsArea(f.ws.value); drawArea(); };
+    drawArea();
+    if (!presetMethod) { const t = d.querySelector("#paTpl input"); if (t && area !== "general") t.checked = true; }
     document.getElementById("planX").onclick = close; d.onclick = function (e) { if (e.target === d) close(); };
     setTimeout(function () { f.title.focus(); }, 30);
     f.onsubmit = function (e) {
       e.preventDefault();
-      const title = f.title.value.trim(), ws = f.ws.value, method = f.method.value; if (!title || !ws) return;
+      const title = f.title.value.trim(), ws = f.ws.value, st = (f.querySelector("[name=start]:checked") || {}).value || "m:hybrid"; if (!title || !ws) return;
+      const tpl = st.indexOf("t:") === 0 ? AP.find(function (p) { return p.id === st.slice(2); }) : null, method = tpl ? tpl.method : st.slice(2);
       const lim = PLAN && PLAN !== "admin" ? PLAN : null;
       if (lim && Object.keys((wss[ws] || {}).boards || {}).length + Object.keys((wss[ws] || {}).plannings || {}).length >= lim.boards) return planLimit(t("Your plan allows") + " " + lim.boards + " " + t("boards per workspace") + ".");
       const id = (slug(title) || "planning") + "-" + rnd(), TS = window.firebase.database.ServerValue.TIMESTAMP, me = A.user(), u = {};
-      u["planning/" + id + "/info"] = { title: title, ws: ws, method: method, created: TS, createdBy: me.email };
-      u["planning/" + id + "/data"] = window.PLAN_INITIAL(method, title);
+      const inf = { title: title, ws: ws, method: method, created: TS, createdBy: me.email, area: area };
+      if (tpl) inf.tpl = tpl.id;
+      u["planning/" + id + "/info"] = inf;
+      u["planning/" + id + "/data"] = window.PLAN_INITIAL(method, title, { tpl: tpl && tpl.id, workflow: f.wf.value || undefined });
       u["workspaces/" + ws + "/plannings/" + id] = { title: title, method: method, created: TS };
       f.querySelector(".btn.primary").disabled = true;
       A.db().ref().update(u).then(function () { location.href = "../planning/?id=" + encodeURIComponent(id); }, function (err) { f.querySelector(".btn.primary").disabled = false; toast(err.message); });
@@ -117,7 +139,7 @@
     const name = (w.info || {}).name || id;
     return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + (np ? " · " + np + " " + esc(LL(np === 1 ? "planning" : "plannings", np === 1 ? "planejamento" : "planejamentos")) : "") + "</span>" +
       (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
-      (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + "</div>" +
+      (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + ((w.info || {}).area && window.PLAN_AREAS && window.PLAN_AREAS[w.info.area] && w.info.area !== "general" ? '<span class="area-tag no-i18n">' + esc(window.PLAN_AREAS[w.info.area].name) + "</span>" : "") + "</div>" +
       (all.length ? '<div class="board-grid">' + all.map(function (x) { return x.k === "b" ? boardCard(x.id, boards[x.id], tplName(boards[x.id].template)) : planCard(x.id, pls[x.id]); }).join("") + "</div>"
         : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
   }

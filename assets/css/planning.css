@@ -464,3 +464,23 @@ button, select, input, textarea { font: inherit; color: inherit; }
 .kb-stage-cols { display: flex; gap: 12px; align-items: flex-start; }
 .kb-card { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .kb-ghost { position: fixed; z-index: 90; pointer-events: none; box-shadow: 0 18px 40px rgba(14,26,51,.28); opacity: .95; margin: 0; }
+/* ===== v7: Jira-style Kanban board linked to the roadmap ===== */
+.kb-bar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 10px 16px 0; }
+.kb-bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink2); }
+.kb-bar select { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font: 13px Inter, sans-serif; background: #fff; max-width: 260px; }
+.kb-bar .sp { flex: 1; }
+.kb.lanes { flex-direction: column; align-items: stretch; gap: 10px; overflow-x: auto; }
+.kb-row { display: flex; gap: 12px; align-items: stretch; width: max-content; }
+.kb-heads { position: sticky; top: 0; z-index: 3; }
+.kb-heads .kb-col { padding-bottom: 0; background: #e6eaf2; max-height: none; }
+.kb-heads .kb-col header { margin-bottom: 4px; }
+.kb.lanes .kb-col { max-height: none; min-height: 70px; }
+.kb-col .stg { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 1px 5px; border-radius: 5px; background: #FBF3DA; color: #6b5300; }
+.kb-col.stg-down .stg { background: #E3F6F3; color: #0b6b5c; }
+.kb-lane { display: flex; flex-direction: column; gap: 6px; }
+.kb-lane-h { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 4px; font: 600 13px Inter, sans-serif; color: var(--ink); cursor: pointer; text-align: left; position: sticky; left: 0; width: fit-content; }
+.kb-lane-h b { border-left: 4px solid var(--c); padding-left: 8px; }
+.kb-lane-h .cnt { font-size: 11px; color: var(--ink2); background: #eef1f6; border-radius: 99px; padding: 1px 7px; }
+.kb-lane-h .tw { width: 14px; color: var(--ink2); }
+.tl-row .kbo { color: #0b8f73; }
+@media (max-width: 760px) { .kb-bar select { max-width: 160px; } .kb-bar .muted { display: none; } }
