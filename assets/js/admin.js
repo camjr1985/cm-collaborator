@@ -6,7 +6,7 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, ws = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null;
+  let db, me, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
@@ -66,8 +66,10 @@
       db.ref("plans").once("value").catch(function () { return { val: function () { return {}; } }; }),
       db.ref("workspaces").once("value"),
       db.ref("feedback").once("value").catch(function () { return { val: function () { return {}; } }; }),
-      db.ref("signups").once("value").catch(function () { return { val: function () { return {}; } }; })
-    ]).then(function (r) { announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; render(); });
+      db.ref("signups").once("value").catch(function () { return { val: function () { return {}; } }; }),
+      db.ref("entitlements").once("value").catch(function () { return { val: function () { return null; } }; }),
+      db.ref("moduleRequests").once("value").catch(function () { return { val: function () { return null; } }; })
+    ]).then(function (r) { announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
   }
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { if (okMsg) toast(okMsg); return load(); }).catch(fail);
@@ -493,6 +495,84 @@
         '<button class="btn primary">Grant access</button></form><p class="muted small">' + esc(t("Prospecting: access is created first, then the e-mail is sent from the platform account. Tip: one workspace per company, with a test period (14 days).")) + "</p></div></div></section>";
   }
 
+  /* ---------- add-on modules (ITSM, Business Game): licences per company/workspace or per person ---------- */
+  function MODS() { return (window.CMModules && window.CMModules.LIST) || []; }
+  function PKGS() { return (window.CMModules && window.CMModules.PACKAGES) || []; }
+  function gActive(g) { return !!(g && g.on && (!g.until || g.until > Date.now())); }
+  function wsMods(id) { return (ent.ws || {})[id] || {}; }
+  function userMods(k) { return (ent.users || {})[k] || {}; }
+  function effMods(u) { // what a person can use, and why
+    const out = {};
+    MODS().forEach(function (m) {
+      const via = [];
+      if (gActive(userMods(u.k)[m.id])) via.push(LL("individual", "individual"));
+      u.acc.forEach(function (a) { if (a.st !== "off" && gActive(wsMods(a.id)[m.id])) via.push(a.ws); });
+      if (via.length) out[m.id] = via;
+    });
+    return out;
+  }
+  function pkgOf(id) { const on = MODS().filter(function (m) { return gActive(wsMods(id)[m.id]); }).map(function (m) { return m.id; }).sort().join(","); const p = PKGS().find(function (x) { return x.mods.slice().sort().join(",") === on; }); return p ? p.id : "custom"; }
+  function grantTxt(g) { if (!g || !g.on) return LL("Off", "Desligado"); if (!gActive(g)) return LL("Expired ", "Expirou em ") + fmtShort(g.until); return (g.plan === "beta" ? "Beta" : g.plan === "trial" ? LL("Trial", "Teste") : LL("Paid", "Contratado")) + (g.until ? LL(" · until ", " · até ") + fmtShort(g.until) : LL(" · no limit", " · sem prazo")); }
+  function periodSel(attr) { return '<select ' + attr + ' aria-label="' + esc(LL("Period", "Período")) + '"><option value="30|beta">Beta · 30 ' + LL("days", "dias") + '</option><option value="14|trial">' + LL("Trial · 14 days", "Teste · 14 dias") + '</option><option value="90|beta">Beta · 90 ' + LL("days", "dias") + '</option><option value="365|paid">' + LL("Paid · 12 months", "Contratado · 12 meses") + '</option><option value="0|paid">' + LL("Paid · no limit", "Contratado · sem prazo") + "</option></select>"; }
+  function grantObj(per) { const p = String(per || "30|beta").split("|"), d = Number(p[0]) || 0; return { on: true, until: d ? Date.now() + d * DAY : null, plan: p[1] || "beta", by: me.email, at: TS() }; }
+  function modChip(id, g) { const m = MODS().find(function (x) { return x.id === id; }) || { name: id }; return '<span class="lic ' + (gActive(g) ? "ok" : g && g.on ? "off" : "none") + '" title="' + esc(grantTxt(g)) + '">' + esc(m.name) + "</span>"; }
+  function modulesPane(ids) {
+    const reqs = Object.keys(modReq || {}).map(function (k) { return Object.assign({ k: k }, modReq[k]); }).sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Modules & packages", "Módulos e pacotes") + '</h2><p class="muted small">' + LL("Boards and Planning are always included. ITSM and Business Game are add-on licences: grant them to a whole company (workspace package) or to one person. Use Beta to let a company try them.", "Quadros e Planning estão sempre incluídos. ITSM e Business Game são licenças adicionais: conceda para uma empresa inteira (pacote do workspace) ou para uma pessoa. Use Beta para deixar uma empresa experimentar.") + "</p></div></div>";
+    h += '<div class="pk-legend">' + PKGS().map(function (p) { return '<span><b>' + esc(p.name) + "</b> " + esc(p.desc) + "</span>"; }).join("") + "</div>";
+    if (reqs.length) h += "<h3>" + LL("Access requests", "Pedidos de acesso") + ' <span class="count warn">' + reqs.length + '</span></h3><div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>' + LL("Person", "Pessoa") + "</th><th>" + LL("Module", "Módulo") + "</th><th>Workspace</th><th>" + LL("Date", "Data") + "</th><th></th></tr></thead><tbody>" + reqs.map(function (r) {
+      const wn = r.ws && ws[r.ws] ? ws[r.ws].info.name : "—";
+      return '<tr><td class="no-i18n"><b>' + esc(r.name || r.email) + '</b> <span class="muted">' + esc(r.email) + "</span></td><td>" + modChip(r.mod, null) + '</td><td class="no-i18n">' + esc(wn) + '</td><td class="tnum">' + (r.t ? fmtShort(r.t) : "") + '</td><td class="acts">' + periodSel('data-rqper="' + r.k + '"') + '<button class="btn sm" data-rqu="' + r.k + '">' + LL("Grant to person", "Conceder à pessoa") + "</button>" + (r.ws && ws[r.ws] ? '<button class="btn sm" data-rqw="' + r.k + '">' + LL("Grant to workspace", "Conceder ao workspace") + "</button>" : "") + '<button class="link" data-rqx="' + r.k + '">' + LL("dismiss", "descartar") + "</button></td></tr>";
+    }).join("") + "</tbody></table></div>";
+    h += "<h3>" + LL("Companies / workspaces", "Empresas / workspaces") + '</h3><div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>Workspace</th><th>' + LL("Package", "Pacote") + "</th>" + MODS().map(function (m) { return "<th>" + esc(m.name) + "</th>"; }).join("") + "<th>" + LL("Period for new grants", "Período ao conceder") + "</th></tr></thead><tbody>" +
+      ids.map(function (id) {
+        const pk = pkgOf(id);
+        return '<tr><td class="no-i18n"><b>' + esc(ws[id].info.name) + '</b><span class="muted small"> · ' + plural(Object.keys(ws[id].members || {}).length, LL("person", "pessoa"), LL("people", "pessoas")) + '</span></td><td><select data-pkg="' + id + '">' + PKGS().map(function (p) { return '<option value="' + p.id + '"' + (p.id === pk ? " selected" : "") + ">" + esc(p.name) + "</option>"; }).join("") + (pk === "custom" ? '<option value="custom" selected>' + LL("Custom", "Personalizado") + "</option>" : "") + "</select></td>" +
+          MODS().map(function (m) { const g = wsMods(id)[m.id]; return '<td><label class="mtog"><input type="checkbox" data-wmod="' + id + "|" + m.id + '"' + (gActive(g) ? " checked" : "") + "> <span>" + esc(grantTxt(g)) + "</span></label></td>"; }).join("") +
+          "<td>" + periodSel('data-wper="' + id + '"') + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+    const uk = Object.keys(ent.users || {}).filter(function (k) { return Object.keys(ent.users[k] || {}).length; });
+    h += "<h3>" + LL("Individual licences", "Licenças individuais") + ' <span class="count">' + uk.length + "</span></h3>" +
+      (uk.length ? '<div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>' + LL("Person", "Pessoa") + "</th>" + MODS().map(function (m) { return "<th>" + esc(m.name) + "</th>"; }).join("") + "</tr></thead><tbody>" + uk.map(function (k) {
+        return '<tr><td class="no-i18n"><b>' + esc(k.replace(/,/g, ".")) + "</b></td>" + MODS().map(function (m) { const g = userMods(k)[m.id]; return '<td><label class="mtog"><input type="checkbox" data-umod="' + esc(k) + "|" + m.id + '"' + (gActive(g) ? " checked" : "") + "> <span>" + esc(grantTxt(g)) + "</span></label></td>"; }).join("") + "</tr>";
+      }).join("") + "</tbody></table></div>" : '<p class="muted small">' + LL("None yet – grant from here or from a person's panel in Users & licences.", "Nenhuma ainda – conceda aqui ou no painel da pessoa em Usuários e licenças.") + "</p>") +
+      '<form id="umForm" class="fbar f2 um-form"><input name="email" type="email" required placeholder="' + esc(LL("Person's e-mail", "E-mail da pessoa")) + '"><select name="mod">' + MODS().map(function (m) { return '<option value="' + m.id + '">' + esc(m.name) + "</option>"; }).join("") + "</select>" + periodSel('name="per"') + '<button class="btn sm primary">' + LL("Grant module", "Conceder módulo") + "</button></form>";
+    return h + "</section>";
+  }
+  function bindModules() {
+    const ref = function (path, val, msg) { const u = {}; u[path] = val; update(u, msg); };
+    el.querySelectorAll("[data-pkg]").forEach(function (sel) { sel.onchange = function () {
+      const id = sel.dataset.pkg, p = PKGS().find(function (x) { return x.id === sel.value; }); if (!p) return;
+      const per = (el.querySelector('[data-wper="' + id + '"]') || {}).value, u = {};
+      MODS().forEach(function (m) { const cur = wsMods(id)[m.id], want = p.mods.indexOf(m.id) >= 0; if (want && !gActive(cur)) u["entitlements/ws/" + id + "/" + m.id] = Object.assign(grantObj(per), { pkg: p.id }); else if (!want && cur) u["entitlements/ws/" + id + "/" + m.id] = null; else if (want && cur) u["entitlements/ws/" + id + "/" + m.id + "/pkg"] = p.id; });
+      if (Object.keys(u).some(function (k) { return u[k] === null; }) && !window.confirm(LL("Remove modules from this company? People lose access to them.", "Remover módulos desta empresa? As pessoas perdem o acesso a eles."))) { sel.value = pkgOf(id); return; }
+      update(u, LL("Package updated", "Pacote atualizado"));
+    }; });
+    el.querySelectorAll("[data-wmod]").forEach(function (c) { c.onchange = function () {
+      const q = c.dataset.wmod.split("|"), per = (el.querySelector('[data-wper="' + q[0] + '"]') || {}).value;
+      if (!c.checked && !window.confirm(LL("Turn this module off for the whole company?", "Desligar este módulo para a empresa inteira?"))) { c.checked = true; return; }
+      ref("entitlements/ws/" + q[0] + "/" + q[1], c.checked ? grantObj(per) : null, c.checked ? LL("Module granted", "Módulo concedido") : LL("Module turned off", "Módulo desligado"));
+    }; });
+    el.querySelectorAll("[data-umod]").forEach(function (c) { c.onchange = function () {
+      const q = c.dataset.umod.split("|"); ref("entitlements/users/" + q[0] + "/" + q[1], c.checked ? grantObj("30|beta") : null, c.checked ? LL("Module granted", "Módulo concedido") : LL("Module turned off", "Módulo desligado"));
+    }; });
+    el.querySelectorAll("[data-umod2]").forEach(function (c) { c.onchange = function () {
+      const q = c.dataset.umod2.split("|"), per = (el.querySelector('[data-uper="' + q[0] + '"]') || {}).value;
+      ref("entitlements/users/" + q[0] + "/" + q[1], c.checked ? grantObj(per) : null, c.checked ? LL("Module granted", "Módulo concedido") : LL("Module turned off", "Módulo desligado"));
+    }; });
+    const uf = document.getElementById("umForm"); if (uf) uf.onsubmit = function (e) {
+      e.preventDefault(); const em = uf.email.value.trim().toLowerCase(); if (!validEmail(em)) return toast(LL("Enter a valid e-mail", "Informe um e-mail válido"));
+      ref("entitlements/users/" + A.key(em) + "/" + uf.mod.value, grantObj(uf.per.value), LL("Module granted", "Módulo concedido"));
+    };
+    el.querySelectorAll("[data-rqu],[data-rqw]").forEach(function (b) { b.onclick = function () {
+      const k = b.dataset.rqu || b.dataset.rqw, r = modReq[k]; if (!r) return;
+      const per = (el.querySelector('[data-rqper="' + k + '"]') || {}).value, u = {};
+      if (b.dataset.rqu) u["entitlements/users/" + A.key(r.email) + "/" + r.mod] = grantObj(per); else u["entitlements/ws/" + r.ws + "/" + r.mod] = grantObj(per);
+      u["moduleRequests/" + k] = null; update(u, LL("Module granted", "Módulo concedido"));
+    }; });
+    el.querySelectorAll("[data-rqx]").forEach(function (b) { b.onclick = function () { const u = {}; u["moduleRequests/" + b.dataset.rqx] = null; update(u); }; });
+  }
+
   /* ---------- administration shell (Jira-like side menu) ---------- */
   const LL = function (en, pt) { return window.MB_LANG === "pt" ? pt : en; };
   const SEL = {}; let drawerK = null;
@@ -604,8 +684,9 @@
       '<span class="bl">' + LL("Extend", "Prorrogar") + '</span><button class="btn sm" data-bulk="add|7">+7</button><button class="btn sm" data-bulk="add|14">+14</button><button class="btn sm" data-bulk="add|30">+30</button><input type="date" id="bDate" aria-label="' + esc(LL("Until date", "Até a data")) + '"><button class="btn sm" data-bulk="date">' + LL("Set date", "Definir data") + '</button>' +
       '<button class="btn sm ghost" data-bulk="norenew|1">' + LL("Don't renew", "Não renovar") + '</button><button class="btn sm ghost danger-t" data-bulk="end">' + LL("End now", "Encerrar agora") + '</button><button class="btn sm ghost" data-bulk="welcome">✉ ' + LL("Welcome", "Boas-vindas") + '</button><button class="link" data-bulk="clear">' + LL("Clear", "Limpar") + "</button></div>";
     if (!all.length) return h + '<p class="muted small">' + t("No one has access yet.") + "</p></section>";
-    h += '<div class="tbl-wrap"><table class="adm-tbl utbl"><thead><tr><th class="ck"><input type="checkbox" id="uAll" aria-label="' + esc(LL("Select all", "Selecionar todos")) + '"' + (list.length && list.every(function (u) { return SEL[u.k]; }) ? " checked" : "") + "></th><th>" + LL("Person", "Pessoa") + "</th><th>Workspaces</th><th>" + LL("Access", "Acessos") + "</th><th>" + LL("Role", "Papel") + "</th><th>" + LL("Valid until", "Validade") + "</th><th>" + LL("Status", "Situação") + "</th><th>E-mails</th><th></th></tr></thead><tbody>" +
+    h += '<div class="tbl-wrap"><table class="adm-tbl utbl"><thead><tr><th class="ck"><input type="checkbox" id="uAll" aria-label="' + esc(LL("Select all", "Selecionar todos")) + '"' + (list.length && list.every(function (u) { return SEL[u.k]; }) ? " checked" : "") + "></th><th>" + LL("Person", "Pessoa") + "</th><th>Workspaces</th><th>" + LL("Access", "Acessos") + "</th><th>" + LL("Role", "Papel") + "</th><th>" + LL("Valid until", "Validade") + "</th><th>" + LL("Status", "Situação") + "</th>" + (OWNER ? "" : "<th>" + LL("Modules", "Módulos") + "</th>") + "<th>E-mails</th><th></th></tr></thead><tbody>" +
       list.map(function (u) {
+        const em = effMods(u);
         const wsn = u.acc.map(function (a) { return a.ws; });
         return '<tr data-row="' + esc(u.k) + '"' + (SEL[u.k] ? ' class="sel"' : "") + '><td class="ck"><input type="checkbox" data-sel="' + esc(u.k) + '"' + (SEL[u.k] ? " checked" : "") + ' aria-label="' + esc(u.email) + '"></td>' +
           '<td data-l="' + esc(LL("Person", "Pessoa")) + '"><button class="lnk-u" data-user="' + esc(u.k) + '"><span class="av sm no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><span><b class="no-i18n">' + esc(u.name || "—") + '</b><span class="muted no-i18n">' + esc(u.email) + "</span></span></button></td>" +
@@ -614,6 +695,7 @@
           '<td data-l="' + esc(LL("Role", "Papel")) + '">' + roleLabel(u.role) + "</td>" +
           '<td data-l="' + esc(LL("Valid until", "Validade")) + '" class="tnum">' + (u.st === "none" ? "—" : fmtShort(u.next)) + (u.off && u.st !== "off" ? '<span class="muted small"> · ' + plural(u.off, LL("expired", "expirado"), LL("expired", "expirados")) + "</span>" : "") + "</td>" +
           '<td data-l="' + esc(LL("Status", "Situação")) + '">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + "</td>" +
+          (OWNER ? "" : '<td data-l="' + esc(LL("Modules", "Módulos")) + '">' + (Object.keys(em).length ? Object.keys(em).map(function (id) { return '<span class="lic ok" title="' + esc(LL("Via: ", "Por: ") + em[id].join(", ")) + '">' + esc((MODS().find(function (m) { return m.id === id; }) || {}).name || id) + "</span>"; }).join(" ") : '<span class="muted small">' + LL("Core", "Base") + "</span>") + "</td>") +
           '<td data-l="E-mails" class="mails">' + (u.acc.some(function (a) { return a.m.welcomed; }) ? '<span title="' + esc(LL("Welcome sent", "Boas-vindas enviado")) + '">✓ ✉</span>' : '<span class="muted" title="' + esc(LL("Welcome not sent", "Boas-vindas não enviado")) + '">✉</span>') + (u.acc.some(function (a) { return a.m.prospected; }) ? ' <span class="xp prospected">' + LL("Prosp.", "Prosp.") + "</span>" : "") + "</td>" +
           '<td class="go"><button class="btn sm" data-user="' + esc(u.k) + '">' + LL("Manage", "Gerenciar") + " ›</button></td></tr>";
       }).join("") + "</tbody></table></div>" + (list.length ? "" : '<p class="muted small">' + LL("No one matches the filters.", "Ninguém corresponde aos filtros.") + "</p>");
@@ -624,6 +706,7 @@
     const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 14) : ""; };
     return '<div class="adm-drawer-bg" data-dclose></div><aside class="adm-drawer" role="dialog" aria-label="' + esc(u.name || u.email) + '"><header><span class="av no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><div><h2 class="no-i18n">' + esc(u.name || u.email) + '</h2><span class="muted no-i18n">' + esc(u.email) + '</span></div><button class="btn sm ghost" data-dclose aria-label="' + esc(LL("Close", "Fechar")) + '">✕</button></header>' +
       '<div class="d-sum">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + '<span class="muted small">' + plural(u.acc.length, "workspace", "workspaces") + " · " + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + "</span></div>" +
+      (OWNER ? "" : (function () { const em = effMods(u); return '<section class="d-acc d-mods"><div class="d-acc-h"><b>' + LL("Add-on modules", "Módulos adicionais") + "</b>" + periodSel('data-uper="' + esc(u.k) + '"') + "</div>" + MODS().map(function (m) { const g = userMods(u.k)[m.id], via = (em[m.id] || []).filter(function (x) { return x !== LL("individual", "individual"); }); return '<label class="mtog"><input type="checkbox" data-umod2="' + esc(u.k) + "|" + m.id + '"' + (gActive(g) ? " checked" : "") + "> <b>" + esc(m.name) + "</b> <span>" + esc(LL("individual: ", "individual: ") + grantTxt(g)) + (via.length ? " · " + esc(LL("company package: ", "pacote da empresa: ") + via.join(", ")) : "") + "</span></label>"; }).join("") + '<p class="muted small">' + LL("Company packages are set in Modules & packages.", "Pacotes de empresa ficam em Módulos e pacotes.") + "</p></section>"; })()) +
       u.acc.map(function (a) {
         const w = ws[a.id], ref = a.id + "|" + a.k, bl = w.boards || {}, pl = w.plannings || {};
         return '<section class="d-acc"><div class="d-acc-h"><b class="no-i18n">' + esc(a.ws) + "</b>" + roleSelect("", a.m.role, 'data-role="' + ref + '"') + "</div>" +
@@ -655,7 +738,7 @@
     let h = OWNER ? '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(me.email) + '</b></span><span class="plan-badge">' + esc(t("Plan")) + ": <b>" + esc(PLAN.name) + "</b> · " + PLAN.seats + " " + esc(t("seats")) + '</span><a class="btn sm primary" href="../pricing/">' + esc(t("Upgrade")) + '</a><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>'
       : '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
     const SECS = [["overview", LL("Overview", "Visão geral"), "visao-geral", "", "chart"], ["users", LL("Users & licences", "Usuários e licenças"), "usuarios", users.filter(function (u) { return u.st === "soon"; }).length || users.length, "users"], ["ws", "Workspaces", "workspaces", ids.length, "folder"]]
-      .concat(OWNER ? [] : [["signups", LL("Beta sign-ups", "Inscrições no beta"), "inscricoes", Object.keys(signups).length, "inbox"], ["plans", LL("Plans", "Planos"), "planos", Object.keys(plans).length, "card"], ["comms", LL("Announcement", "Comunicação"), "comunicacao", "", "bell"], ["feedback", "Feedback", "feedback", Object.keys(feedback).length, "chat"]]);
+      .concat(OWNER ? [] : [["modules", LL("Modules & packages", "Módulos e pacotes"), "modulos", Object.keys(modReq || {}).length || "", "grid"], ["signups", LL("Beta sign-ups", "Inscrições no beta"), "inscricoes", Object.keys(signups).length, "inbox"], ["plans", LL("Plans", "Planos"), "planos", Object.keys(plans).length, "card"], ["comms", LL("Announcement", "Comunicação"), "comunicacao", "", "bell"], ["feedback", "Feedback", "feedback", Object.keys(feedback).length, "chat"]]);
     const hash = (location.hash || "").slice(1);
     let sec = (SECS.find(function (s) { return s[2] === hash || s[0] === hash; }) || [])[0];
     if (!sec) { try { sec = localStorage.getItem("cmcollab:admsec"); } catch (e) { /* ignore */ } }
@@ -667,7 +750,7 @@
     }).join("") + '</nav><div class="adm-main no-i18n-wrap">';
     const pane = function (k, html) { return '<div class="adm-pane" data-pane="' + k + '"' + (k === sec ? "" : " hidden") + ">" + html + "</div>"; };
     h += pane("overview", overviewPane(ids, map)) + pane("users", usersPane(ids, map)) + pane("ws", wsPane(ids));
-    if (!OWNER) h += pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
+    if (!OWNER) h += pane("modules", modulesPane(ids)) + pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
     h += "</div></div>" + '<div id="admDrawer">' + (drawerK && map[drawerK] ? drawerHtml(map[drawerK]) : "") + "</div>";
     h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">' + t("The sign-in link was e-mailed automatically. If you like, also send this personal message (e.g. by WhatsApp).") + '</p>' +
       '<textarea rows="10" readonly></textarea><div class="row-end"><button class="btn" id="dlgClose">Close</button><button class="btn" id="copyInv">Copy message</button><a class="btn primary" id="mailBtn" href="#">Open in e-mail</a></div></div></div>';
@@ -715,6 +798,7 @@
     el.querySelectorAll("[data-dclose]").forEach(function (b) { b.onclick = function () { drawerK = null; const d = document.getElementById("admDrawer"); if (d) d.innerHTML = ""; }; });
     if (drawerK) document.onkeydown = function (e) { if (e.key === "Escape" && drawerK) { drawerK = null; const d = document.getElementById("admDrawer"); if (d) d.innerHTML = ""; } };
     el.querySelectorAll(".ws-det").forEach(function (d) { d.ontoggle = function () { if (d.open) { UF.open = d.id.slice(4); saveUF(); } else if (UF.open === d.id.slice(4)) { UF.open = ""; saveUF(); } }; });
+    if (!OWNER) bindModules();
     const uCsv = document.getElementById("uCsv"); if (uCsv) uCsv.onclick = function () {
       const q = function (v) { v = v == null ? "" : String(v); return '"' + v.replace(/"/g, '""') + '"'; };
       const rows = []; usersFiltered(map).forEach(function (u) { u.acc.forEach(function (a) { rows.push([u.name, u.email, a.ws, a.m.role || "editor", a.m.expires ? new Date(a.m.expires).toISOString().slice(0, 10) : "", a.st === "none" ? "sem prazo" : a.st === "off" ? "expirado" : a.st === "soon" ? "vence em 7 dias" : "ativo", a.m.noRenew ? "sim" : "", a.boards, a.plans, a.m.welcomed ? new Date(a.m.welcomed).toISOString().slice(0, 10) : "", a.m.prospected ? new Date(a.m.prospected).toISOString().slice(0, 10) : ""].map(q).join(",")); }); });

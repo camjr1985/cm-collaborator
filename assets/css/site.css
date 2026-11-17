@@ -615,3 +615,16 @@ body.mkt h1, body.mkt h2, body.mkt h3 { font-weight: 700; }
 .adm-tbl td.wsn { min-width: 150px; } .adm-tbl td.wsn small { display: block; color: var(--ink-3); font-size: var(--fs-12); }
 .adm-tbl .tnum { white-space: nowrap; }
 .bulk .link { background: none; border: 0; color: var(--teal); font: var(--fw-semibold) var(--fs-13) var(--font); padding: 4px 6px; }
+/* add-on modules (licensing) */
+.pk-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--fs-12); color: var(--ink-3); margin: 4px 0 8px; }
+.pk-legend b { color: var(--ink-2); }
+.mtog { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-12); color: var(--ink-2); cursor: pointer; }
+.mtog input { accent-color: var(--teal); }
+.d-mods .mtog { display: flex; flex-wrap: wrap; }
+.um-form { margin-top: 10px; }
+.adm-tbl td select { padding: 5px 8px; font-size: var(--fs-13); border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--ink); color-scheme: dark; }
+.mod-gate { min-height: 70vh; display: grid; place-items: center; padding: 24px 16px; }
+.mod-gate-card { max-width: 560px; background: var(--card, #15264a); border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
+.mod-gate-card h1 { font-size: var(--fs-24); margin: 10px 0 8px; }
+.mod-gate-tag { display: inline-block; font: var(--fw-semibold) var(--fs-11)/1 var(--font); text-transform: uppercase; letter-spacing: .06em; padding: 5px 9px; border-radius: 999px; background: rgba(232,196,104,.18); color: var(--gold, #e8c468); }
+.mod-gate-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
