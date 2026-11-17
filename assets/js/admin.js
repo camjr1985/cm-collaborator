@@ -192,6 +192,37 @@
           '<button class="btn sm ghost danger-t" data-delg="' + wsId + "|" + gid + '">Delete</button></li>';
       }).join("") + "</ul>";
   }
+  /* ITSM (add-on module "itsm"): service centres – same pattern as plannings/games (list, open, rename, delete) */
+  function itsmList(wsId, w) {
+    const it = w.itsm || {}, ids = Object.keys(it).sort(function (a, b) { return (it[b].created || 0) - (it[a].created || 0); });
+    if (!ids.length) return "";
+    const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 15) : ""; };
+    return '<h3 class="pl-adm-h">' + ic("itsm") + " " + esc(LL("Service centres (ITSM)", "Centrais de serviços (ITSM)")) + ' <span class="count">' + ids.length + "</span>" + (window.CMNewBadge ? window.CMNewBadge("itsm") : "") + "</h3>" +
+      '<ul class="members">' + ids.map(function (x) {
+        const c = it[x];
+        return '<li class="brow"><span class="b-ic plan" aria-hidden="true">' + ic("itsm") + '</span><span class="m-who"><b class="no-i18n">' + esc(c.title || x) + '</b><span class="muted">' + esc(c.home === false ? LL("connected service centre", "central conectada") : LL("Service centre · ITIL 4 and 5", "Central de serviços · ITIL 4 e 5")) + ' · <span class="no-i18n">' + esc(x) + "</span></span></span>" +
+          '<a class="btn sm primary" href="../itsm/?id=' + encodeURIComponent(x) + '">Open</a>' +
+          (c.home === false ? "" : '<button class="btn sm ghost" data-reni="' + wsId + "|" + x + '">Rename</button><button class="btn sm ghost danger-t" data-deli="' + wsId + "|" + x + '">Delete</button>') + "</li>";
+      }).join("") + "</ul>";
+  }
+  function renameItsm(wsId, id) {
+    const cur = ((ws[wsId] || {}).itsm || {})[id] || {};
+    const v = window.prompt(LL("New name for the service centre", "Novo nome da central de serviços"), cur.title || "");
+    if (!v || !v.trim()) return;
+    const u = {}; u["itsm/" + id + "/info/title"] = v.trim(); u["workspaces/" + wsId + "/itsm/" + id + "/title"] = v.trim();
+    update(u, LL("Service centre renamed", "Central renomeada"));
+  }
+  function deleteItsmAdm(wsId, id) {
+    const typed = window.prompt(LL("This permanently deletes the service centre and all its records. Type the id to confirm:", "Isto exclui a central de serviços e todos os registros. Digite o id para confirmar:") + " " + id);
+    if (typed !== id) return;
+    db.ref("itsm/" + id + "/info").once("value").then(function (s) {
+      const inf = s.val() || {}, u = {};
+      Object.keys(inf.members || {}).forEach(function (k) { u["userItsm/" + k + "/" + id] = null; });
+      Object.keys(inf.workspaces || {}).forEach(function (w) { u["workspaces/" + w + "/itsm/" + id] = null; });
+      u["itsm/" + id] = null; u["workspaces/" + wsId + "/itsm/" + id] = null;
+      update(u, LL("Service centre deleted", "Central excluída"));
+    }, fail);
+  }
   function renameGame(wsId, id) {
     const cur = ((ws[wsId] || {}).games || {})[id] || {};
     const v = window.prompt(LL("New name for the game", "Novo nome da partida"), cur.title || "");
@@ -229,6 +260,7 @@
     Object.keys(w.boards || {}).forEach(function (id) { u["boards/" + id] = null; });
     Object.keys(w.plannings || {}).forEach(function (id) { u["planning/" + id] = null; });
     Object.keys(w.games || {}).forEach(function (id) { u["game/" + id] = null; });
+    Object.keys(w.itsm || {}).forEach(function (id) { if (w.itsm[id].home !== false) u["itsm/" + id] = null; });
     Object.keys(w.members || {}).forEach(function (k) { u["userWorkspaces/" + k + "/" + wsId] = null; });
     if (OWNER) u["userWorkspaces/" + MEK + "/" + wsId] = null;
     u["workspaces/" + wsId] = null;
@@ -517,7 +549,7 @@
         '<form class="form-grid3" data-newboard="' + id + '"><input name="title" required placeholder="' + esc(t("Board name, e.g. Project kickoff")) + '" autocomplete="off">' +
         '<select name="template" aria-label="Template">' + templateOptions() + '</select>' +
         '<input name="bid" placeholder="' + esc(t("Link id (optional)")) + '" autocomplete="off" pattern="[a-z0-9-]{2,60}">' +
-        '<button class="btn primary">New board</button></form>' + planList(id, w) + gameList(id, w) + "</div>" +
+        '<button class="btn primary">New board</button></form>' + planList(id, w) + gameList(id, w) + itsmList(id, w) + "</div>" +
         '<div><h3>People with access <span class="count">' + mIds.length + "</span>" + (mIds.length ? ' <button class="btn sm" data-welcomeall="' + id + '">✉ ' + t("Send welcome to all") + "</button>" : "") + "</h3>" +
         '<ul class="members">' + (ml || '<li class="muted small">No one has access yet.</li>') + "</ul>" +
         '<form class="form-grid3" data-add="' + id + '"><input name="name" placeholder="' + esc(t("Name")) + '" autocomplete="off"><input name="email" type="email" required placeholder="name@email.com" autocomplete="off">' +
@@ -620,7 +652,7 @@
         const m = mm[k]; if (!m) return;
         const u = map[k] || (map[k] = { k: k, name: "", email: m.email || k.replace(/,/g, "."), acc: [] });
         if (m.name && !u.name) u.name = m.name;
-        u.acc.push({ id: id, k: k, ws: (w.info || {}).name || id, m: m, st: accSt(m), boards: Object.keys(w.boards || {}).length, plans: Object.keys(w.plannings || {}).length, games: Object.keys(w.games || {}).length });
+        u.acc.push({ id: id, k: k, ws: (w.info || {}).name || id, m: m, st: accSt(m), boards: Object.keys(w.boards || {}).length, plans: Object.keys(w.plannings || {}).length, games: Object.keys(w.games || {}).length, itsm: Object.keys(w.itsm || {}).length });
       });
     });
     Object.keys(map).forEach(function (k) {
@@ -633,6 +665,7 @@
       u.boards = u.acc.reduce(function (s, a) { return s + a.boards; }, 0);
       u.plans = u.acc.reduce(function (s, a) { return s + a.plans; }, 0);
       u.games = u.acc.reduce(function (s, a) { return s + (a.games || 0); }, 0);
+      u.itsm = u.acc.reduce(function (s, a) { return s + (a.itsm || 0); }, 0);
       u.noRenew = u.acc.some(function (a) { return a.m.noRenew; });
       const roles = {}; u.acc.forEach(function (a) { roles[a.m.role === "viewer" ? "viewer" : "editor"] = 1; });
       u.role = Object.keys(roles).length > 1 ? "mixed" : Object.keys(roles)[0];
@@ -723,7 +756,7 @@
         return '<tr data-row="' + esc(u.k) + '"' + (SEL[u.k] ? ' class="sel"' : "") + '><td class="ck"><input type="checkbox" data-sel="' + esc(u.k) + '"' + (SEL[u.k] ? " checked" : "") + ' aria-label="' + esc(u.email) + '"></td>' +
           '<td data-l="' + esc(LL("Person", "Pessoa")) + '"><button class="lnk-u" data-user="' + esc(u.k) + '"><span class="av sm no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><span><b class="no-i18n">' + esc(u.name || "—") + '</b><span class="muted no-i18n">' + esc(u.email) + "</span></span></button></td>" +
           '<td data-l="Workspaces" class="no-i18n wsn" title="' + esc(wsn.join(" · ")) + '">' + esc(wsn[0]) + (wsn.length > 1 ? "<small>+ " + esc(wsn.slice(1, 3).join(", ")) + (wsn.length > 3 ? " +" + (wsn.length - 3) : "") + "</small>" : "") + "</td>" +
-          '<td data-l="' + esc(LL("Access", "Acessos")) + '">' + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + (u.games ? " · " + plural(u.games, LL("game", "partida"), LL("games", "partidas")) : "") + "</td>" +
+          '<td data-l="' + esc(LL("Access", "Acessos")) + '">' + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + (u.games ? " · " + plural(u.games, LL("game", "partida"), LL("games", "partidas")) : "") + (u.itsm ? " · " + plural(u.itsm, LL("service centre", "central ITSM"), LL("service centres", "centrais ITSM")) : "") + "</td>" +
           '<td data-l="' + esc(LL("Role", "Papel")) + '">' + roleLabel(u.role) + "</td>" +
           '<td data-l="' + esc(LL("Valid until", "Validade")) + '" class="tnum">' + (u.st === "none" ? "—" : fmtShort(u.next)) + (u.off && u.st !== "off" ? '<span class="muted small"> · ' + plural(u.off, LL("expired", "expirado"), LL("expired", "expirados")) + "</span>" : "") + "</td>" +
           '<td data-l="' + esc(LL("Status", "Situação")) + '">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + "</td>" +
@@ -747,6 +780,7 @@
           '<div class="d-acts">' + (a.m.expires ? '<button class="btn sm ghost" data-aexp="' + ref + '|full|0">' + LL("No time limit", "Sem prazo") + "</button>" : "") + '<button class="btn sm ghost" data-aexp="' + ref + "|norenew|" + (a.m.noRenew ? 0 : 1) + '">' + (a.m.noRenew ? LL("Renew", "Renovar") : LL("Don't renew", "Não renovar")) + "</button>" + (a.st !== "off" ? '<button class="btn sm ghost danger-t" data-aexp="' + ref + '|end|0">' + LL("End now", "Encerrar agora") + "</button>" : "") + '<button class="btn sm ghost danger-t" data-remove="' + ref + '">' + LL("Remove", "Remover") + "</button></div>" +
           '<details class="d-list"><summary>' + plural(Object.keys(bl).length, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(Object.keys(pl).length, LL("planning (with dashboards)", "planejamento (com painéis)"), LL("plannings (with dashboards)", "planejamentos (com painéis)")) + "</summary><ul>" +
           Object.keys(bl).map(function (b) { return '<li>' + ic("board") + ' <a class="no-i18n" href="../board/?id=' + encodeURIComponent(b) + '">' + esc(bl[b].title || b) + "</a></li>"; }).join("") +
+          Object.keys(w.itsm || {}).map(function (x) { return '<li>' + ic("itsm") + ' <a class="no-i18n" href="../itsm/?id=' + encodeURIComponent(x) + '">' + esc(w.itsm[x].title || x) + '</a> <span class="muted small">ITSM</span></li>'; }).join("") +
           Object.keys(pl).map(function (p) { return '<li>' + ic("planning") + ' <a class="no-i18n" href="../planning/?id=' + encodeURIComponent(p) + '">' + esc(pl[p].title || p) + '</a> <a class="muted small" href="../planning/?id=' + encodeURIComponent(p) + '#reports">' + LL("dashboard", "painel") + "</a></li>"; }).join("") + "</ul></details>" +
           '<div class="d-mail"><button class="link" data-welcome="' + ref + '">' + (a.m.welcomed ? "✓ " + LL("Welcome sent ", "Boas-vindas enviado em ") + fmtDate(a.m.welcomed) : "✉ " + LL("Send welcome", "Enviar boas-vindas")) + '</button><button class="link" data-prospect="' + ref + '">' + (a.m.prospected ? "✓ " + LL("Prospecting sent ", "Prospecção enviada em ") + fmtDate(a.m.prospected) : "✉ " + LL("Send prospecting", "Enviar prospecção")) + "</button></div></section>";
       }).join("") + "</aside>";
@@ -872,6 +906,8 @@
     el.querySelectorAll("[data-renp]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.renp); renamePlanning(p[0], p[1]); }; });
     el.querySelectorAll("[data-reng]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.reng); renameGame(p[0], p[1]); }; });
     el.querySelectorAll("[data-delg]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delg); deleteGameAdm(p[0], p[1]); }; });
+    el.querySelectorAll("[data-reni]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.reni); renameItsm(p[0], p[1]); }; });
+    el.querySelectorAll("[data-deli]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.deli); deleteItsmAdm(p[0], p[1]); }; });
     el.querySelectorAll("[data-copyp]").forEach(function (b) { b.onclick = function () { const u = abs("../planning/?id=" + encodeURIComponent(b.dataset.copyp)); (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { toast("Link copied"); }, function () { window.prompt("Link", u); }); }; });
     el.querySelectorAll("[data-delb]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.delb); deleteBoard(p[0], p[1]); }; });
     el.querySelectorAll("[data-ren]").forEach(function (b) { b.onclick = function () { const p = pair(b.dataset.ren); renameBoard(p[0], p[1]); }; });

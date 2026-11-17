@@ -33,6 +33,7 @@ function doPost(e) {
     var brand = String(req.brand || "").replace(/[^\w À-ÿ&.·-]/g, "").trim().slice(0, 40) || CFG.brand;
     var who = verify(req.idToken);
     if (req.kind === "assign" || req.kind === "due" || req.kind === "watch") return json(planNotify(req, who, brand));
+    if (/^itsm-/.test(String(req.kind || ""))) return json(itsmNotify(req, who, brand));
     if (req.kind === "digest") return json(digestManual(req, who, brand));
     if (req.kind === "digest-status") return json({ ok: true, daily: ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "dailyDigest"; }) });
     if (/^jira-/.test(String(req.kind || ""))) return json(jiraHandle(req, who));
@@ -794,3 +795,150 @@ function installDaily() {
 }
 
 function testRead() { var p = adminGet("planning") || {}; Logger.log("planning ok: " + Object.keys(p).length); return Object.keys(p).length; }
+
+
+/* ---------------- ITSM module (ITIL 4 and ITIL 5): service-centre e-mails ----------------
+ * Kinds sent by the site: itsm-opened, itsm-assigned, itsm-comment, itsm-resolved, itsm-escalated, itsm-major, itsm-change-approval.
+ * SLA at risk / breached: time trigger itsmSlaCheck (every 15 min) – install once with installItsmSla().
+ * Security: the caller's own token must be able to read the record (agent of the central, or the requester of that ticket);
+ * recipients are always people of the central (home workspace, invited members or connected workspaces); content is built here.
+ * Daily cap per central (settings.mailCap, default 40) protects the ~100/day account quota. Every e-mail ends with brandSig(). */
+var ITSM_KINDS = { "itsm-opened": 1, "itsm-assigned": 1, "itsm-comment": 1, "itsm-resolved": 1, "itsm-escalated": 1, "itsm-major": 1, "itsm-change-approval": 1 };
+var ITSM_ST = {
+  incident: { "new": "Novo", doing: "Em atendimento", waiting: "Aguardando cliente", resolved: "Resolvido", closed: "Fechado", cancelled: "Cancelado" },
+  request: { "new": "Nova", approval: "Aguardando aprovação", doing: "Em cumprimento", waiting: "Aguardando cliente", resolved: "Concluída", closed: "Fechada", rejected: "Rejeitada", cancelled: "Cancelada" },
+  change: { draft: "Rascunho", assess: "Em avaliação", approved: "Aprovada", scheduled: "Agendada", implemented: "Implementada", failed: "Falhou / retornada", reviewed: "Revisada", closed: "Fechada", rejected: "Rejeitada", cancelled: "Cancelada" },
+  problem: { "new": "Novo", analysis: "Em análise", known: "Erro conhecido", resolved: "Resolvido", closed: "Fechado", cancelled: "Cancelado" },
+  task: { todo: "A fazer", doing: "Em andamento", done: "Concluída" },
+  improvement: { identified: "Identificada", assessed: "Avaliada", approved: "Aprovada", doing: "Em execução", done: "Concluída", discarded: "Descartada" }
+};
+function itsmPeople(info, ws) {
+  var out = {}, now = Date.now(), wm = (ws && ws.members) || {}, im = info.members || {}, own = ws && ws.info && ws.info.owner;
+  Object.keys(wm).forEach(function (k) { var m = wm[k]; if (m && m.email && (!m.expires || m.expires > now)) out[k] = { email: m.email, name: m.name || m.email.split("@")[0], agent: m.role === "editor", mgr: false }; });
+  if (own) out[own] = Object.assign(out[own] || { email: (ws.info.ownerEmail || own.replace(/,/g, ".")), name: (ws.info.ownerName || own.replace(/,/g, ".").split("@")[0]) }, { agent: true, mgr: true });
+  Object.keys(im).forEach(function (k) { var m = im[k]; if (!m || !m.email || (m.expires && m.expires < now)) return; var p = out[k] || (out[k] = { email: m.email, name: m.name || m.email.split("@")[0] }); if (m.role === "agent" || m.role === "manager") p.agent = true; if (m.role === "manager") p.mgr = true; });
+  if (info.owner && out[info.owner]) { out[info.owner].agent = true; out[info.owner].mgr = true; }
+  return out;
+}
+function itsmCap(id, settings, n) {
+  var P = PropertiesService.getScriptProperties(), k = "itsmcap:" + id + ":" + dayStr(new Date()), used = Number(P.getProperty(k) || 0), cap = Number((settings || {}).mailCap) || 40;
+  if (used + n > cap) return false; P.setProperty(k, String(used + n)); return true;
+}
+function itsmMail(brand, to, subject, title, introHtml, rec, link, extraHtml) {
+  var st = (ITSM_ST[rec.kind] || {})[rec.status] || rec.status || "";
+  var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:620px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
+    '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + ' · ' + esc(title) + '</div><div style="padding:22px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
+    "<p>Olá, " + esc(String(to.name || to.email).split(" ")[0]) + "!</p><p>" + introHtml + "</p>" +
+    '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:12px 0;background:#f7f8fb;border-radius:10px"><tr><td style="padding:10px 12px"><b>' + esc(rec.key || "") + "</b> " + esc(rec.title || "") +
+    '<br><span style="color:#5b6478">Status: ' + esc(st) + (rec.priority ? " · Prioridade " + esc(rec.priority) : "") + "</span></td></tr></table>" + (extraHtml || "") +
+    '<p style="text-align:center;margin:20px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">Abrir o chamado</a></p></div>' +
+    brandSig(brand, true) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Notificação automática da central de serviços · ' + esc(brand) + " · " + CFG.company + "</div></div></div>";
+  var text = html.replace(/<\/tr>|<\/p>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+  MailApp.sendEmail(to.email, subject, text, opt);
+}
+function itsmNotify(req, who, brand) {
+  var tok = req.idToken, id = String(req.itsm || ""), rid = String(req.rec || "");
+  if (!ITSM_KINDS[req.kind]) throw new Error("unknown e-mail type");
+  if (!/^[A-Za-z0-9_-]{1,90}$/.test(id) || !/^[A-Za-z0-9_-]{1,40}$/.test(rid)) throw new Error("bad record");
+  var rec = get("itsm/" + id + "/data/records/" + rid, tok); // proves the caller may see this record
+  if (!rec) throw new Error("not allowed");
+  var info = adminGet("itsm/" + id + "/info") || {}, settings = adminGet("itsm/" + id + "/data/settings") || {};
+  if (settings.emails === false) return { ok: true, sent: [], off: true };
+  var ws = adminGet("workspaces/" + info.ws) || {}, ppl = itsmPeople(info, ws), meK = key(who.email);
+  var caller = ppl[meK] || { name: who.displayName || String(who.email).split("@")[0] };
+  if (!ppl[meK] && !(get("admins/" + meK, tok) === true)) throw new Error("not allowed");
+  var link = CFG.site + "itsm/?id=" + encodeURIComponent(id) + "&rec=" + encodeURIComponent(rid);
+  var reqK = rec.requester && rec.requester.k, group = ((settings.groups || {})[rec.group]) || {};
+  var to = {}, add = function (k) { if (k && ppl[k] && k !== meK) to[k] = ppl[k]; };
+  var groupAgents = function () { var g = Object.keys(group.members || {}).filter(function (k) { return ppl[k] && ppl[k].agent; }); if (!g.length) g = Object.keys(ppl).filter(function (k) { return ppl[k].mgr; }); return g; };
+  var managers = function () { return Object.keys(ppl).filter(function (k) { return ppl[k].mgr; }); };
+  var subject = "", intro = "", extra = "", title = "Central de serviços";
+  var lastComment = function () { var c = adminGet("itsm/" + id + "/data/comments/" + rid) || {}; var ks = Object.keys(c).sort(function (a, b) { return (c[a].t || 0) - (c[b].t || 0); }); return ks.length ? c[ks[ks.length - 1]] : null; };
+  if (req.kind === "itsm-opened") {
+    add(reqK); groupAgents().forEach(add);
+    subject = "Chamado registrado: " + rec.key + " · " + rec.title;
+    intro = "O chamado <b>" + esc(rec.key) + "</b> foi registrado na central <b>“" + esc(info.title) + "”</b>.";
+  } else if (req.kind === "itsm-assigned") {
+    var ak = key(rec.assignee || ""); if (key(req.to || "") !== ak) throw new Error("not the assignee");
+    add(ak); subject = "Atribuído a você: " + rec.key + " · " + rec.title;
+    intro = esc(caller.name) + " atribuiu a você um registro da central <b>“" + esc(info.title) + "”</b>.";
+  } else if (req.kind === "itsm-comment") {
+    var c = lastComment();
+    if (meK === reqK) { if (rec.assignee) add(key(rec.assignee)); else groupAgents().forEach(add); } else add(reqK);
+    subject = "Nova mensagem em " + rec.key + " · " + rec.title;
+    intro = esc(caller.name) + " escreveu no chamado:";
+    if (c) extra = '<blockquote style="margin:8px 0;padding:8px 12px;border-left:3px solid #2cc4b3;background:#f7fcfb">' + esc(String(c.text || "").slice(0, 1500)).replace(/\n/g, "<br>") + "</blockquote>";
+  } else if (req.kind === "itsm-resolved") {
+    add(reqK); subject = "Resolvido: " + rec.key + " · " + rec.title;
+    intro = "Seu chamado foi resolvido. Confira a solução e confirme no link abaixo (ou reabra se ainda não funcionar).";
+    if (rec.resolution) extra = '<p style="background:#e8f6ee;border-radius:10px;padding:10px 12px"><b>Solução:</b> ' + esc(rec.resolution) + "</p>";
+  } else if (req.kind === "itsm-escalated") {
+    if (group.lead) add(key(group.lead)); managers().forEach(add);
+    subject = "Escalonamento " + (req.mode === "functional" ? "funcional" : "hierárquico") + ": " + rec.key + " · " + rec.title;
+    intro = esc(caller.name) + " escalonou este registro" + (rec.escalated && rec.escalated.why ? ": “" + esc(rec.escalated.why) + "”" : ".");
+  } else if (req.kind === "itsm-major") {
+    managers().forEach(add); groupAgents().forEach(add); if (req.update) add(reqK);
+    var cm = rec.comms || {}, ck = Object.keys(cm).sort(function (a, b) { return (cm[a].t || 0) - (cm[b].t || 0); }), last = ck.length ? cm[ck[ck.length - 1]] : null;
+    subject = (req.update ? "Atualização – incidente grave: " : "Incidente grave: ") + rec.key + " · " + rec.title; title = "Incidente grave";
+    intro = req.update ? "Nova atualização do incidente grave:" : esc(caller.name) + " declarou um <b>incidente grave</b>.";
+    if (req.update && last) extra = '<p style="background:#fff4f4;border-radius:10px;padding:10px 12px">' + esc(String(last.text || "").slice(0, 2000)).replace(/\n/g, "<br>") + "</p>";
+  } else if (req.kind === "itsm-change-approval") {
+    Object.keys(rec.approvers || {}).forEach(function (k) { if (!(rec.approvals || {})[k]) add(k); });
+    subject = "Aprovação pendente: " + rec.key + " · " + rec.title; title = rec.kind === "change" ? "Habilitação de mudança" : "Aprovação";
+    intro = "Sua aprovação é necessária para " + (rec.kind === "change" ? "a mudança" : "a requisição") + " abaixo." + (rec.risk && rec.risk.level ? " Risco: <b>" + ({ low: "baixo", medium: "médio", high: "alto" }[rec.risk.level] || "") + "</b>." : "") + (rec.window && rec.window.start ? " Janela: " + Utilities.formatDate(new Date(rec.window.start), "America/Sao_Paulo", "dd/MM HH:mm") + "." : "");
+  }
+  var list = Object.keys(to).slice(0, CFG.maxPerCall);
+  if (!list.length) return { ok: true, sent: [] };
+  if (!itsmCap(id, settings, list.length)) return { ok: false, error: "limite diário de e-mails desta central atingido" };
+  list.forEach(function (k) { itsmMail(brand, to[k], subject, title, intro, rec, link, extra); });
+  return { ok: true, sent: list.map(function (k) { return to[k].email; }), quota: MailApp.getRemainingDailyQuota() };
+}
+/* SLA clock (same rules as assets/js/itsm-core.js: business hours, pause in "waiting") */
+function itsmBiz(a, b, c) {
+  c = c || {}; if (!(b > a)) return 0; if (c.mode !== "business") return (b - a) / 60000;
+  var off = (c.tz == null ? -180 : c.tz) * 60000, hm = function (x) { var p = String(x || "0:0").split(":"); return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0); };
+  var s = hm(c.start || "08:00"), e = hm(c.end || "18:00"), days = c.days || [1, 2, 3, 4, 5], total = 0;
+  for (var day = Math.floor((a + off) / 864e5) * 864e5, g = 0; day < b + off && g < 4000; day += 864e5, g++) {
+    if (days.indexOf(new Date(day).getUTCDay()) < 0) continue;
+    var x0 = Math.max(day + s * 60000, a + off), x1 = Math.min(day + e * 60000, b + off); if (x1 > x0) total += (x1 - x0) / 60000;
+  }
+  return total;
+}
+function itsmSlaCheck() {
+  var all = adminGet("itsm") || {}, now = Date.now(), P = PropertiesService.getScriptProperties(), total = 0;
+  Object.keys(all).forEach(function (id) {
+    var C = all[id] || {}, info = C.info || {}, D = C.data || {}, settings = D.settings || {};
+    if (settings.emails === false || !D.records) return;
+    var ws = null, ppl = null, cal = settings.calendar || {};
+    Object.keys(D.records).forEach(function (rid) {
+      var r = D.records[rid], s = r && r.sla;
+      if (!s || !s.start || !s.res || s.stopAt || (r.kind !== "incident" && r.kind !== "request")) return;
+      var paused = (Number(s.pausedMs) || 0) + (s.pausedAt ? itsmBiz(s.pausedAt, now, cal) : 0);
+      if (s.pausedAt) return; // clock stopped while waiting for the customer
+      var pct = (itsmBiz(s.start, now, cal) - paused) / s.res, level = pct >= 1 ? "breach" : pct >= 0.75 ? "risk" : "";
+      if (!level) return;
+      var pk = "itsmsla:" + id + ":" + rid + ":" + level; if (P.getProperty(pk)) return;
+      if (!ws) { ws = adminGet("workspaces/" + info.ws) || {}; ppl = itsmPeople(info, ws); }
+      var group = (settings.groups || {})[r.group] || {}, to = {};
+      var add = function (k) { if (k && ppl[k]) to[k] = ppl[k]; };
+      if (r.assignee) add(key(r.assignee)); else Object.keys(group.members || {}).forEach(add);
+      if (level === "breach") { if (group.lead) add(key(group.lead)); Object.keys(ppl).forEach(function (k) { if (ppl[k].mgr) add(k); }); }
+      var list = Object.keys(to).slice(0, 10); if (!list.length) return;
+      if (MailApp.getRemainingDailyQuota() <= list.length + 5 || !itsmCap(id, settings, list.length)) return;
+      var link = CFG.site + "itsm/?id=" + encodeURIComponent(id) + "&rec=" + encodeURIComponent(rid);
+      list.forEach(function (k) {
+        itsmMail(CFG.brand, to[k], (level === "breach" ? "SLA violado: " : "SLA em risco: ") + r.key + " · " + r.title, "Nível de serviço",
+          level === "breach" ? "O prazo de resolução deste chamado foi <b>ultrapassado</b>. Verifique o atendimento e, se preciso, escalone." : "Este chamado já consumiu <b>" + Math.round(pct * 100) + "%</b> do prazo de resolução.", r, link, "");
+      });
+      P.setProperty(pk, String(now)); total += list.length;
+    });
+  });
+  console.log("itsm sla: " + total + " e-mails");
+  return total;
+}
+function installItsmSla() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === "itsmSlaCheck") ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger("itsmSlaCheck").timeBased().everyMinutes(15).create();
+  return itsmSlaCheck();
+}

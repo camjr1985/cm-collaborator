@@ -814,9 +814,15 @@
     const prev = i > 0 ? (list[i - 1].order || 0) : (list[i].order || 0) - 2000;
     return (prev + (list[i].order || 0)) / 2;
   }
+  /* ITSM link: item created from a problem / change / improvement of a service centre (module /itsm/) */
+  function itsmBadge(it, link) {
+    const x = it.src; if (!x || !x.itsm) return "";
+    const inner = IC("itsm", 13) + " " + esc(x.key || "ITSM") + (x.status ? " · " + esc(x.status) : "");
+    return link ? '<a class="pl-itsm" href="../itsm/?id=' + encodeURIComponent(x.itsm) + "&rec=" + encodeURIComponent(x.rec || "") + '" title="' + esc(L("Open in ITSM", "Abrir no ITSM") + (x.title ? " · " + x.title : "")) + '">' + inner + " ↗</a>" : '<span class="pl-itsm" title="' + esc(L("From ITSM", "Origem: ITSM") + (x.title ? " · " + x.title : "")) + '">' + inner + "</span>";
+  }
   function card(it) {
     const T = TYPES[it.type] || TYPES.task, par = it.parent && data.items[it.parent];
-    return '<article class="kb-card' + (overdue(it) ? " late" : "") + '" draggable="' + canEdit + '" data-id="' + it.id + '"><div class="kt">' + esc(it.title) + "</div>" +
+    return '<article class="kb-card' + (overdue(it) ? " late" : "") + '" draggable="' + canEdit + '" data-id="' + it.id + '"><div class="kt">' + esc(it.title) + "</div>" + itsmBadge(it, false) +
       (par ? '<span class="ep" style="--c:' + (TYPES[par.type] || TYPES.epic).color + '">' + esc(par.title) + "</span>" : "") +
       '<div class="km"><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + "</span>" + (it.points ? '<span class="pts">' + esc(it.points) + "</span>" : "") +
       (it.end ? '<span class="due">' + fmt(it.end) + "</span>" : "") + (it.watch && Object.keys(it.watch).length ? '<span class="kw" title="' + esc(L("Alerts on: ", "Alertas ativos: ") + Object.keys(it.watch).map(function (k) { return memberName(it.watch[k].email); }).join(", ")) + '">' + IC("bell", 13) + "</span>" : "") + '<span class="sp"></span>' + (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") + "</div></article>";
@@ -1058,6 +1064,7 @@
       '<label class="chk prio"><input type="checkbox" name="prio"' + (it.prio ? " checked" : "") + dis + "> ★ " + L("Key activity – include in the e-mail alerts", "Atividade principal – incluir nos alertas por e-mail") + "</label>" +
       watchBlock(it) +
       (allKrs().length ? "<label>" + L("Contributes to (OKR)", "Contribui para (OKR)") + '<select name="krs" multiple size="' + Math.min(5, allKrs().length) + '"' + dis + ">" + allKrs().map(function (k) { return '<option value="' + k.ref + '"' + ((it.krs || {})[k.ref] ? " selected" : "") + ">" + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
+      itsmBadge(it, true) +
       (it.src && it.src.board ? '<a class="pl-src" href="../board/?id=' + encodeURIComponent(it.src.board) + '">' + IC("board", 15) + " " + L("Open the source board (process step)", "Abrir o quadro de origem (passo do processo)") + "</a>" : "") +
       (it.src && it.src.game ? '<a class="pl-src" href="../game/?id=' + encodeURIComponent(it.src.game) + '">' + IC("game", 15) + " Business Game" + (it.src.round ? " · " + L("round ", "rodada ") + esc(it.src.round) : "") + " – " + L("open the game", "abrir a partida") + "</a>" : "") +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +

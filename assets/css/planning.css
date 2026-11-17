@@ -587,3 +587,7 @@ button, select, input, textarea { font: inherit; color: inherit; }
 .d-watch .dw-a { display: flex; gap: 6px; flex-wrap: wrap; }
 .kb-card .kw { display: inline-flex; color: #8a6100; }
 .w-ppl { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+
+/* item linked to an ITSM record (problem, change, improvement) */
+.pl-itsm { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin: 2px 0 4px; padding: 2px 8px; border-radius: 99px; background: #e3f6f3; color: #0f6b62; font-size: var(--fs-11); font-weight: 600; text-decoration: none; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+a.pl-itsm:hover { background: #cdeee9; }

@@ -122,6 +122,15 @@
     return '<a class="board-card is-game" href="../game/?id=' + encodeURIComponent(id) + '" data-title="' + esc((g.title || "").toLowerCase()) + '"><span class="tpl-pv">' + gamePreview() + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("game", 12) : "") + " Business Game</span></span>" +
       '<span class="bc-t"><b class="no-i18n">' + esc(g.title || id) + '</b><span class="muted small no-i18n">' + esc(sub || LL("Business simulation", "Simulação empresarial")) + "</span></span></a>";
   }
+  /* ITSM (add-on module) – service-centre cards */
+  function itsmPreview() {
+    return '<svg viewBox="0 0 160 100" aria-hidden="true"><rect width="160" height="100" fill="#0e1a33"/><g fill="#16325c"><rect x="14" y="16" width="40" height="70" rx="6"/><rect x="60" y="16" width="40" height="70" rx="6"/><rect x="106" y="16" width="40" height="70" rx="6"/></g>' +
+      '<rect x="19" y="24" width="30" height="14" rx="3" fill="#e5484d"/><rect x="19" y="42" width="30" height="14" rx="3" fill="#c9d2e3"/><rect x="65" y="24" width="30" height="14" rx="3" fill="#2cc4b3"/><rect x="111" y="24" width="30" height="14" rx="3" fill="#e8c468"/><rect x="111" y="42" width="30" height="14" rx="3" fill="#2cc4b3"/></svg>';
+  }
+  function itsmCard(id, x) {
+    return '<a class="board-card is-itsm" href="../itsm/?id=' + encodeURIComponent(id) + '" data-title="' + esc((x.title || "").toLowerCase()) + '"><span class="tpl-pv">' + itsmPreview() + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("itsm", 12) : "") + " ITSM</span></span>" +
+      '<span class="bc-t"><b class="no-i18n">' + esc(x.title || id) + '</b><span class="muted small no-i18n">' + esc(LL("Service centre", "Central de serviços")) + (x.home === false ? " · " + esc(LL("connected", "conectada")) : "") + "</span></span></a>";
+  }
   function myGamesSlot(user, wss) {
     const slot = document.getElementById("gameSlot"); if (!slot) return;
     A.db().ref("userGames/" + A.key(user.email)).once("value").then(function (s) {
@@ -138,6 +147,9 @@
     if (!r.length) return "";
     return '<section class="hub-sec"><div class="hub-sec-head"><h2>Jump back to recents</h2></div><div class="recent-list">' + r.map(function (x) {
       const info = allowed ? allowed[x.id] : x;
+      if (x.kind === "itsm" || (info && info.kind === "itsm")) {
+        return '<a class="recent-row" href="../itsm/?id=' + encodeURIComponent(x.id) + '"><span class="rr-pv">' + itsmPreview() + '</span><span class="rr-t"><b class="no-i18n">' + esc((info && info.title) || x.title) + '</b><span class="muted small no-i18n">ITSM · ' + esc((info && info.ws) || "") + '</span></span><span class="muted small">' + ago(x.t) + "</span></a>";
+      }
       if (x.kind === "planning" || (info && info.kind === "planning")) {
         const m = (window.PLAN_METHODS || {})[(info && info.method) || x.method] || {};
         return '<a class="recent-row" href="../planning/?id=' + encodeURIComponent(x.id) + '"><span class="rr-pv">' + (window.CMPlanPreview ? window.CMPlanPreview((info && info.method) || x.method) : "") + '</span><span class="rr-t"><b class="no-i18n">' + esc((info && info.title) || x.title) + '</b><span class="muted small no-i18n">Planning · ' + esc((info && info.ws) || m.name || "") + '</span></span><span class="muted small">' + ago(x.t) + "</span></a>";
@@ -203,15 +215,15 @@
     const admin = adminAll || isOwner(id, w);
     const boards = w.boards || {}, pls = w.plannings || {};
     const ids = Object.keys(boards).sort(function (a, b) { return (boards[b].created || 0) - (boards[a].created || 0); });
-    const gms = w.games || {};
-    const all = ids.map(function (b) { return { k: "b", id: b, c: boards[b].created || 0 }; }).concat(Object.keys(pls).map(function (pid) { return { k: "p", id: pid, c: pls[pid].created || 0 }; })).concat(Object.keys(gms).map(function (gid) { return { k: "g", id: gid, c: gms[gid].created || 0 }; })).sort(function (a, b) { return b.c - a.c; });
+    const gms = w.games || {}, its = w.itsm || {};
+    const all = ids.map(function (b) { return { k: "b", id: b, c: boards[b].created || 0 }; }).concat(Object.keys(pls).map(function (pid) { return { k: "p", id: pid, c: pls[pid].created || 0 }; })).concat(Object.keys(gms).map(function (gid) { return { k: "g", id: gid, c: gms[gid].created || 0 }; })).concat(Object.keys(its).map(function (x) { return { k: "i", id: x, c: its[x].created || 0 }; })).sort(function (a, b) { return b.c - a.c; });
     const ng = Object.keys(gms).length;
     const np = Object.keys(pls).length;
     const name = (w.info || {}).name || id;
     return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + (np ? " · " + np + " " + esc(LL(np === 1 ? "planning" : "plannings", np === 1 ? "planejamento" : "planejamentos")) : "") + (ng ? " · " + ng + " " + esc(LL(ng === 1 ? "game" : "games", ng === 1 ? "partida" : "partidas")) : "") + "</span>" +
-      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" data-newgame="' + id + '" href="../game/?new=1&ws=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("game", 14) : "") + " " + esc(LL("New game", "Nova partida")) + (window.CMNewBadge ? window.CMNewBadge("game") : "") + '</a><a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
+      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button><a class="btn sm ghost" data-newgame="' + id + '" href="../game/?new=1&ws=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("game", 14) : "") + " " + esc(LL("New game", "Nova partida")) + (window.CMNewBadge ? window.CMNewBadge("game") : "") + '</a><a class="btn sm ghost" data-newitsm="' + id + '" href="../itsm/?new=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("itsm", 14) : "") + " " + esc(LL("New service centre", "Nova central ITSM")) + (window.CMNewBadge ? window.CMNewBadge("itsm") : "") + '</a><a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
       (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + ((w.info || {}).area && window.PLAN_AREAS && window.PLAN_AREAS[w.info.area] && w.info.area !== "general" ? '<span class="area-tag no-i18n">' + esc(window.PLAN_AREAS[w.info.area].name) + "</span>" : "") + "</div>" +
-      (all.length ? '<div class="board-grid">' + all.map(function (x) { return x.k === "b" ? boardCard(x.id, boards[x.id], tplName(boards[x.id].template)) : x.k === "g" ? gameCard(x.id, gms[x.id]) : planCard(x.id, pls[x.id]); }).join("") + "</div>"
+      (all.length ? '<div class="board-grid">' + all.map(function (x) { return x.k === "b" ? boardCard(x.id, boards[x.id], tplName(boards[x.id].template)) : x.k === "g" ? gameCard(x.id, gms[x.id]) : x.k === "i" ? itsmCard(x.id, its[x.id]) : planCard(x.id, pls[x.id]); }).join("") + "</div>"
         : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
   }
   function searchBar() {
@@ -397,7 +409,7 @@
       return p.then(function (wss) {
         const ids = Object.keys(wss).sort(function (a, b) { return ((wss[a].info || {}).name || "").localeCompare((wss[b].info || {}).name || ""); });
         const allowed = {};
-        ids.forEach(function (w) { const bs = wss[w].boards || {}; Object.keys(bs).forEach(function (b) { allowed[b] = { title: bs[b].title, template: bs[b].template, ws: (wss[w].info || {}).name }; }); const ps = wss[w].plannings || {}; Object.keys(ps).forEach(function (pid) { allowed[pid] = { title: ps[pid].title, method: ps[pid].method, kind: "planning", ws: (wss[w].info || {}).name }; }); });
+        ids.forEach(function (w) { const bs = wss[w].boards || {}; Object.keys(bs).forEach(function (b) { allowed[b] = { title: bs[b].title, template: bs[b].template, ws: (wss[w].info || {}).name }; }); const ps = wss[w].plannings || {}; Object.keys(ps).forEach(function (pid) { allowed[pid] = { title: ps[pid].title, method: ps[pid].method, kind: "planning", ws: (wss[w].info || {}).name }; }); const is = wss[w].itsm || {}; Object.keys(is).forEach(function (x) { allowed[x] = { title: is[x].title, kind: "itsm", ws: (wss[w].info || {}).name }; }); });
         const firstBeta = entries.filter(function (e) { return e.expires && e.expires > Date.now(); })[0];
         WELCOME_ENTRY = firstBeta || null;
         if (firstBeta && wss[firstBeta.id]) {
@@ -433,6 +445,10 @@
         bindSearch();
         myGamesSlot(user, wss);
         /* add-on module not licensed for that workspace: keep the button visible as a showcase ("Módulo adicional") */
+        el.querySelectorAll("[data-newitsm]").forEach(function (b) {
+          if (!window.CMModules) return;
+          window.CMModules.has("itsm", b.dataset.newitsm).then(function (ok) { if (!ok) { b.title = LL("Add-on module – request access", "Módulo adicional – solicitar acesso"); b.classList.add("addon"); } });
+        });
         el.querySelectorAll("[data-newgame]").forEach(function (b) {
           if (!window.CMModules) return;
           window.CMModules.has("game", b.dataset.newgame).then(function (ok) { if (!ok) { b.title = LL("Add-on module – request access", "Módulo adicional – solicitar acesso"); b.classList.add("addon"); } });

@@ -2,7 +2,7 @@
  *
  * Core (always included): whiteboards + Planning.
  * Add-on modules (sold separately, granted by the platform admin in Administração → Módulos e pacotes):
- *   itsm  – ITSM (ITIL 4)      page /itsm/?id=
+ *   itsm  – ITSM (ITIL 4 and 5) page /itsm/ (list) and /itsm/?id=
  *   game  – Business Game       page /game/?id=
  *
  * Data (only platform admins write – see database.rules.json):
@@ -26,7 +26,7 @@
   const PT = function () { return window.MB_LANG !== "en"; };
   const L = function (en, pt) { return window.MBL ? window.MBL(en, pt) : (PT() ? pt : en); };
   const LIST = [
-    { id: "itsm", name: "ITSM", full: L("ITSM – service management (ITIL 4)", "ITSM – gestão de serviços (ITIL 4)"), icon: "itsm", path: "itsm/", area: "service",
+    { id: "itsm", name: "ITSM", full: L("ITSM – service management (ITIL 4 and ITIL 5)", "ITSM – gestão de serviços (ITIL 4 e ITIL 5)"), icon: "itsm", path: "itsm/", area: "service",
       desc: L("Service desk, incidents, requests, problems, changes, SLAs and CMDB – connectable to Planning.", "Central de serviço, incidentes, requisições, problemas, mudanças, SLAs e CMDB – conectável ao Planning.") },
     { id: "game", name: "Business Game", full: L("Business Game – business simulation for education", "Business Game – simulação empresarial para educação"), icon: "game", path: "game/", area: "education",
       desc: L("Round-based business simulation for classes, customizable per institution – connectable to Planning.", "Simulação empresarial por rodadas para turmas, customizável por instituição – conectável ao Planning.") }

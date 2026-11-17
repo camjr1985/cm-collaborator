@@ -256,6 +256,18 @@
   }
 
   window.CMAI = {
+    /* generic JSON generation for other modules (ITSM…): same provider, same daily limit per plan */
+    generate: function (kind, prompt) {
+      const A = window.CMAuth;
+      const pp = planId ? Promise.resolve() : (A && A.enabled && A.user() ? A.isAdmin().then(function (adm) {
+        if (adm) { planId = "admin"; return; }
+        return A.db().ref("plans/" + A.key(A.user().email)).once("value").then(function (s) { planId = window.CMPlan ? window.CMPlan(s.val()).id : "free"; }, function () { planId = "free"; });
+      }) : Promise.resolve(planId = "free"));
+      return pp.then(function () {
+        if (usedToday() >= limit()) throw new Error(L("Daily AI limit reached for your plan.", "Limite diário de IA do seu plano atingido."));
+        return generate(kind, prompt).then(function (r) { countUse(); return r; });
+      });
+    },
     open: function () {
       resolvePlan().then(function () { API().modal('<div id="aiRoot"></div>', function (m) { const md = document.getElementById("modal"); if (md) md.classList.add("wide"); render(m.querySelector("#aiRoot")); }); });
     },

@@ -1249,6 +1249,8 @@
       h += '<div class="pp-note no-i18n">' + LL("Only the workspace owner or an administrator can create a planning. You can add existing plannings of this workspace to the board below.", "Somente o dono do workspace ou o administrador pode criar planejamentos. Abaixo você pode adicionar ao quadro os planejamentos que já existem neste workspace.") + "</div>";
     }
     h += '<h3 class="tpl-cat no-i18n">' + LL("Plannings in this workspace", "Planejamentos deste workspace") + '</h3><div id="ppList" class="pp-list no-i18n"><span class="muted small">' + LL("Loading…", "Carregando…") + "</span></div>";
+    /* ITSM add-on module: create a service centre for this workspace (the /itsm/ page checks the licence) */
+    if (CFG.ws) h += '<h3 class="tpl-cat no-i18n">' + LL("Service management", "Gestão de serviços") + (window.CMNewBadge ? " " + window.CMNewBadge("itsm") : "") + '</h3><div class="pp-list no-i18n"><div class="pp-item"><span class="pp-ic">' + (window.CMIcon ? window.CMIcon("itsm", 18) : "") + '</span><span class="pp-t"><b>' + LL("Service centre (ITSM) – ITIL 4 and ITIL 5", "Central de serviços (ITSM) – ITIL 4 e ITIL 5") + '</b><small class="muted">' + LL("Add-on module · incidents, requests, problems, changes, SLAs", "Módulo adicional · incidentes, requisições, problemas, mudanças, SLAs") + '</small></span><a class="btn sm" target="_blank" rel="noopener" href="' + ROOT + "itsm/?new=" + encodeURIComponent(CFG.ws) + '">' + LL("Create", "Criar") + "</a></div></div>";
     return h;
   }
   function bindPlanPane(root) {

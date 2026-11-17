@@ -62,7 +62,8 @@ window.CMCOLLAB_NEW = {
   okr: "2026-11-06",           // OKRs inside Planning
   alerts: "2026-11-06",        // e-mail alerts for milestones and key activities
   integrations: "2026-11-06",  // Jira, Azure DevOps and Kanbanize integrations
-  ai: "2026-11-05"             // ✨ AI assistant on boards
+  ai: "2026-11-05",            // ✨ AI assistant on boards
+  itsm: "2026-11-17"           // ITSM module (ITIL 4 and ITIL 5) – add-on
 };
 (function () {
   function seenKey(id) { return "cmcollab:seen:" + id; }
