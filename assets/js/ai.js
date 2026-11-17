@@ -137,7 +137,7 @@
     const themes = (a.themes || []).slice(0, 6);
     const tw = 330, gap = 20;
     const W = Math.max(1100, 40 + themes.length * (tw + gap) + 20);
-    const date = new Date().toLocaleDateString(PT ? "pt-PT" : "en-GB");
+    const date = new Date().toLocaleDateString(PT ? "pt-BR" : "en-GB");
     const tH = 70 + 2 * 125 + 30;
     const yT = 150, yP = yT + tH + 40, pH = 300, yA = yP + pH + 40;
     const actions = (a.actions || []).slice(0, 8), aH = 70 + (actions.length + 1) * 48;

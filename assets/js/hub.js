@@ -222,7 +222,7 @@
       '<button class="btn" data-feedback>💬 <span>Give feedback</span></button>' +
       (admin ? '<a class="btn" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';
   }
-  function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LANG === "pt" ? "pt-PT" : "en-GB", { day: "2-digit", month: "short" }); }
+  function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LANG === "pt" ? "pt-BR" : "en-GB", { day: "2-digit", month: "short" }); }
   function accessBanner(entries) {
     const now = Date.now();
     const active = entries.filter(function (e) { return e.expires && e.expires > now; });

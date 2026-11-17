@@ -21,11 +21,29 @@
   };
   Object.keys(TYPES).forEach(function (k) { TYPES[k].icon = IC(TYPES[k].ic); });
   const CATC = { todo: "#8a94a6", doing: "#2f80ed", done: "#36b37e" };
+  /* each status has its own colour: custom (workflow dialog) or derived – "at risk / blocked" turns red, "review / test" purple */
+  function stColor(s) {
+    if (!s) return CATC.todo;
+    if (s.color) return s.color;
+    const n = String((s.id || "") + " " + (s.name || "")).toLowerCase();
+    if (/late|risk|risco|bloq|block|imped|atras/.test(n)) return "#e5484d";
+    if (s.cat === "doing" && /review|revis|test|qa|valid|homolog/.test(n)) return "#8e4ec6";
+    if (s.cat === "doing" && /aguard|wait|espera|pend/.test(n)) return "#e8a400";
+    return CATC[s.cat] || CATC.todo;
+  }
+  /* money (budget vs actual) */
+  function cur() { return (data.settings && data.settings.currency) || (PT ? "BRL" : "EUR"); }
+  function money(v) { try { return new Intl.NumberFormat(PT ? "pt-BR" : "en-GB", { style: "currency", currency: cur(), maximumFractionDigits: 0 }).format(v || 0); } catch (e) { return String(Math.round(v || 0)); } }
+  function moneyOf(it) { /* own + all descendants */
+    let b = Number(it.budget) || 0, a = Number(it.actual) || 0;
+    if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
+    return { b: b, a: a };
+  }
   const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Board", "Quadro"), backlog: "Backlog", list: L("List", "Lista"), okr: "OKRs" };
 
   let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
   const pushT = {};
-  let view = null, scale = "month", collapsed = {}, filter = { q: "", who: "" }, dragging = false, pending = false, openItem = null;
+  let view = null, scale = "month", collapsed = {}, filter = { q: "", who: "" }, dragging = false, pending = false, openItem = null, drawerDirty = false;
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function TS() { return window.firebase.database.ServerValue.TIMESTAMP; }
@@ -39,7 +57,7 @@
   function d2n(s) { return s ? Date.parse(s + "T00:00:00Z") : NaN; }
   function n2d(n) { return new Date(n).toISOString().slice(0, 10); }
   function today() { const d = new Date(); return n2d(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
-  function fmt(s) { if (!s) return ""; const d = new Date(d2n(s)); return d.toLocaleDateString(PT ? "pt-PT" : "en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
+  function fmt(s) { if (!s) return ""; const d = new Date(d2n(s)); return d.toLocaleDateString(PT ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
   function method() { return (window.PLAN_METHODS || {})[info.method] || window.PLAN_METHODS.hybrid; }
   function statuses() { return (data.settings && data.settings.statuses) || method().statuses; }
   function statusOf(it) { const ss = statuses(); return ss.find(function (s) { return s.id === it.status; }) || ss[0]; }
@@ -169,7 +187,8 @@
     const all = items();
     const done = all.filter(function (i) { return i.type !== "milestone" && cat(i) === "done"; }).length, tot = all.filter(function (i) { return i.type !== "milestone"; }).length;
     const late = all.filter(overdue).length;
-    document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "");
+    let mb = 0, ma = 0; all.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
+    document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "") + (mb || ma ? ' · <span class="money" title="' + L("Budget vs actual", "Orçado x realizado") + '">' + L("Budget ", "Orçado ") + money(mb) + " · " + L("Actual ", "Realizado ") + '<b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></span>" : "");
     if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
     if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else list(v);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
@@ -335,11 +354,11 @@
       left += '<div class="tl-row' + (openItem === it.id ? " sel" : "") + (isContainer(it) ? " cont lv" + lvl(it.type) : "") + '" style="height:' + RH + 'px" data-open="' + it.id + '"><span class="ind" style="width:' + r.depth * (MOB ? 10 : 18) + 'px"></span>' +
         (r.kids ? '<button class="tw" data-tw="' + it.id + '">' + (collapsed[it.id] ? "▸" : "▾") + "</button>" : '<span class="tw"></span>') +
         '<span class="ti" style="color:' + T.color + '" title="' + esc(T.name) + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="tt">' + (it.prio ? '<span class="star" title="' + L("Key activity", "Atividade principal") + '">★</span>' : "") + esc(it.title) + "</span>" +
-        (ru ? '<span class="rp" title="' + ru.d + "/" + ru.n + L(" done", " concluídos") + '"><i style="width:' + ru.done + '%"></i></span>' : '<span class="sd" style="background:' + CATC[s.cat] + '" title="' + esc(s.name) + '"></span>') +
+        (ru ? '<span class="rp" title="' + ru.d + "/" + ru.n + L(" done", " concluídos") + '"><i style="width:' + ru.done + '%"></i></span>' : '<span class="sd" style="background:' + stColor(s) + '" title="' + esc(s.name) + '"></span>') +
         (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") +
         (canEdit && isContainer(it) ? '<button class="addc" data-addc="' + it.id + '" title="' + L("Add child item", "Adicionar item filho") + '">' + IC("plus", 14) + "</button>" : "") + "</div>";
       if (sp) {
-        const bx = x(sp.s), bw = Math.max(Math.max(R.px, 6), x(sp.e + DAY) - bx), col = isContainer(it) ? T.color : CATC[s.cat], late = overdue(it);
+        const bx = x(sp.s), bw = Math.max(Math.max(R.px, 6), x(sp.e + DAY) - bx), col = isContainer(it) ? T.color : stColor(s), late = overdue(it);
         const lateDays = late ? Math.round((d2n(today()) - d2n(it.end)) / DAY) : 0;
         const tipTxt = it.title + "\n" + T.name + " · " + s.name + "\n" + fmt(n2d(sp.s)) + " → " + fmt(n2d(sp.e)) + " (" + (Math.round((sp.e - sp.s) / DAY) + 1) + L(" days)", " dias)") + (ru ? "\n" + Math.round(ru.done) + "% " + L("done", "concluído") + " (" + ru.d + "/" + ru.n + ")" : "") + (it.assignee ? "\n" + memberName(it.assignee) : "") + (late ? "\n⚠ " + lateDays + L(" day(s) late", " dia(s) de atraso") : "");
         if (it.type === "milestone") {
@@ -470,12 +489,16 @@
       pool = pool.filter(function (i) { return i.sprint === sp; });
       headNote = '<div class="sp-head"><b>' + esc(S.name) + "</b> · " + fmt(S.start) + " → " + fmt(S.end) + (S.goal ? " · " + esc(S.goal) : "") + (canEdit ? ' <button class="pl-btn sm" id="endSp">' + L("Complete sprint", "Concluir sprint") + "</button>" : "") + "</div>";
     }
-    v.innerHTML = headNote + '<div class="kb">' + ss.map(function (s, si) {
+    const staged = ss.some(function (s) { return s.stage; });
+    let lastStage = null;
+    v.innerHTML = headNote + '<div class="kb' + (staged ? " staged" : "") + '">' + ss.map(function (s, si) {
+      let pre = "";
+      if (staged && (s.stage || "") !== lastStage) { pre = (lastStage !== null ? "</div></div>" : "") + '<div class="kb-stage st-' + (s.stage || "none") + '"><div class="kb-stage-h">' + (s.stage === "up" ? L("Upstream · discovery", "Upstream · descoberta") : s.stage === "down" ? L("Downstream · delivery", "Downstream · entrega") : "") + '</div><div class="kb-stage-cols">'; lastStage = s.stage || ""; }
       const col = pool.filter(function (i) { return (statusOf(i).id) === s.id; }).sort(byOrder);
       const over = s.wip && col.length > s.wip;
-      return '<section class="kb-col' + (over ? " over" : "") + '" data-col="' + s.id + '"><header><span class="dot" style="background:' + CATC[s.cat] + '"></span><b>' + esc(s.name) + '</b><span class="cnt">' + col.length + (s.wip ? " / " + s.wip : "") + "</span></header>" +
+      return pre + '<section class="kb-col' + (over ? " over" : "") + '" data-col="' + s.id + '"><header><span class="dot" style="background:' + stColor(s) + '"></span><b>' + esc(s.name) + '</b><span class="cnt">' + col.length + (s.wip ? " / " + s.wip : "") + "</span></header>" +
         '<div class="kb-list">' + col.map(card).join("") + "</div>" + (canEdit && si === 0 ? '<button class="kb-add" data-add="' + s.id + '">+ ' + L("Create", "Criar") + "</button>" : "") + "</section>";
-    }).join("") + "</div>";
+    }).join("") + (staged ? "</div></div>" : "") + "</div>";
     v.querySelectorAll(".kb-card").forEach(function (c) { c.onclick = function () { openDrawer(c.dataset.id); }; });
     v.querySelectorAll("[data-add]").forEach(function (b) { b.onclick = function () { inlineAdd(b, { status: b.dataset.add, sprint: scrum ? sp : undefined }); }; });
     const es = document.getElementById("endSp"); if (es) es.onclick = function () { completeSprint(sp); };
@@ -504,7 +527,41 @@
     let dragId = null;
     root.querySelectorAll(itemSel).forEach(function (c) {
       c.addEventListener("dragstart", function (e) { dragId = c.dataset.id; dragging = true; c.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", dragId); } catch (x) { /* ignore */ } });
-      c.addEventListener("dragend", function () { c.classList.remove("dragging"); dragging = false; root.querySelectorAll(".drop").forEach(function (z) { z.classList.remove("drop"); }); if (pending) { pending = false; renderView(); } });
+      c.addEventListener("dragend", function () { c.classList.remove("dragging"); dragging = false; root.querySelectorAll(".drop").forEach(function (z) { z.classList.remove("drop"); }); if (pending) { pending = false; renderView(); } });      /* touch (Android / iOS): long-press, then drag the card to another column */
+      c.addEventListener("pointerdown", function (e) {
+        if (e.pointerType !== "touch") return;
+        const sx = e.clientX, sy = e.clientY; let started = false, ghost = null, zone = null, last = e;
+        const timer = setTimeout(function () {
+          started = true; dragging = true; c.classList.add("dragging");
+          const r = c.getBoundingClientRect();
+          ghost = c.cloneNode(true); ghost.classList.add("kb-ghost"); ghost.style.width = r.width + "px"; ghost.style.left = r.left + "px"; ghost.style.top = r.top + "px"; document.body.appendChild(ghost);
+          if (navigator.vibrate) navigator.vibrate(12);
+        }, 280);
+        function at(ev) { const el = document.elementFromPoint(ev.clientX, ev.clientY); return el && el.closest(zoneSel); }
+        function mv(ev) {
+          last = ev;
+          if (!started) { if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 10) end(false); return; }
+          ghost.style.transform = "translate(" + (ev.clientX - sx) + "px," + (ev.clientY - sy) + "px) rotate(2deg)";
+          const z = at(ev); if (z !== zone) { if (zone) zone.classList.remove("drop"); zone = z; if (zone) zone.classList.add("drop"); }
+          const sc = c.closest(".kb"); if (sc) { const rr = sc.getBoundingClientRect(); if (ev.clientX > rr.right - 40) sc.scrollLeft += 12; else if (ev.clientX < rr.left + 40) sc.scrollLeft -= 12; }
+        }
+        function tm(ev) { if (started) ev.preventDefault(); }
+        function end(drop) {
+          clearTimeout(timer);
+          document.removeEventListener("pointermove", mv); document.removeEventListener("pointerup", upH); document.removeEventListener("pointercancel", cancelH); document.removeEventListener("touchmove", tm);
+          if (!started) return;
+          if (ghost) ghost.remove(); c.classList.remove("dragging"); dragging = false; if (zone) zone.classList.remove("drop");
+          c.addEventListener("click", function stop(ev) { ev.stopPropagation(); ev.preventDefault(); c.removeEventListener("click", stop, true); }, true);
+          if (drop && zone) {
+            const ev = last, after = Array.prototype.slice.call(zone.querySelectorAll(itemSel)).filter(function (x) { return x !== c; }).find(function (x) { const r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+            pending = false; onDrop(c.dataset.id, zone, after ? after.dataset.id : null);
+          } else if (pending) { pending = false; renderView(); }
+        }
+        function upH() { end(true); }
+        function cancelH() { end(false); }
+        document.addEventListener("pointermove", mv); document.addEventListener("pointerup", upH); document.addEventListener("pointercancel", cancelH);
+        document.addEventListener("touchmove", tm, { passive: false });
+      });
     });
     root.querySelectorAll(zoneSel).forEach(function (z) {
       z.addEventListener("dragover", function (e) { e.preventDefault(); z.classList.add("drop"); });
@@ -629,6 +686,8 @@
 
   /* ---------------- item drawer ---------------- */
   function openDrawer(id, focusTitle) {
+    if (drawerDirty && id !== openItem) { return confirmDiscard(function () { drawerDirty = false; openDrawer(id, focusTitle); }); }
+    drawerDirty = false;
     const it0 = data.items[id]; if (!it0) { openItem = null; closeDrawer(); return; }
     openItem = id;
     const it = Object.assign({ id: id }, it0), T = TYPES[it.type] || TYPES.task, dis = canEdit ? "" : " disabled";
@@ -638,13 +697,15 @@
     const sps = Object.keys(data.sprints || {}).filter(function (k) { return data.sprints[k].state !== "closed"; });
     let d = document.getElementById("drawer");
     if (!d) { d = document.createElement("aside"); d.id = "drawer"; d.className = "pl-drawer"; document.body.appendChild(d); }
-    d.innerHTML = '<header><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="sp"></span>' + (canEdit ? '<button class="pl-btn sm ghost danger" id="dDel">' + L("Delete", "Excluir") + "</button>" : "") + '<button class="pl-btn icon" id="dX">' + IC("close", 16) + "</button></header>" +
+    d.innerHTML = '<header><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + '</span><span class="sp"></span>' + (canEdit ? '<button class="pl-btn icon" id="dUp" title="' + L("Move up (before the previous one)", "Mover para cima (antes do anterior)") + '">↑</button><button class="pl-btn icon" id="dDn" title="' + L("Move down (after the next one)", "Mover para baixo (depois do próximo)") + '">↓</button>' : "") + (canEdit ? '<button class="pl-btn sm ghost danger" id="dDel">' + L("Delete", "Excluir") + "</button>" : "") + '<button class="pl-btn icon" id="dX">' + IC("close", 16) + "</button></header>" +
       '<form class="pl-form" id="dF"><textarea name="title" class="d-title" rows="2"' + dis + ">" + esc(it.title) + "</textarea>" +
       '<div class="g2"><label>' + L("Type", "Tipo") + '<select name="type"' + dis + ">" + Object.keys(TYPES).filter(function (t) { return method().types.indexOf(t) >= 0 || t === it.type; }).map(function (t) { return '<option value="' + t + '"' + (t === it.type ? " selected" : "") + ">" + TYPES[t].name + "</option>"; }).join("") + "</select></label>" +
       "<label>" + L("Status", "Status") + '<select name="status"' + dis + ">" + statuses().map(function (s) { return '<option value="' + s.id + '"' + (statusOf(it).id === s.id ? " selected" : "") + ">" + esc(s.name) + "</option>"; }).join("") + "</select></label></div>" +
       "<label>" + L("Assignee", "Responsável") + '<select name="assignee"' + dis + '><option value="">' + L("Unassigned", "Sem responsável") + "</option>" + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + (m.email === it.assignee ? " selected" : "") + ">" + esc(m.name || m.email) + " · " + esc(m.email) + "</option>"; }).join("") + "</select></label>" +
       '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start" value="' + esc(it.start || "") + '"' + dis + "></label><label>" + L("Due / end", "Prazo / fim") + '<input type="date" name="end" value="' + esc(it.end || "") + '"' + dis + "></label></div>" +
       '<div class="g2"><label>' + L("Progress %", "Progresso %") + '<input type="number" min="0" max="100" step="5" name="progress" value="' + esc(it.progress == null ? "" : it.progress) + '"' + dis + "></label><label>" + L("Story points", "Story points") + '<input type="number" min="0" step="1" name="points" value="' + esc(it.points == null ? "" : it.points) + '"' + dis + "></label></div>" +
+      '<div class="g2"><label>' + L("Budget", "Orçado") + " (" + cur() + ')<input type="number" min="0" step="any" name="budget" value="' + esc(it.budget == null ? "" : it.budget) + '"' + dis + "></label><label>" + L("Actual", "Realizado") + " (" + cur() + ')<input type="number" min="0" step="any" name="actual" value="' + esc(it.actual == null ? "" : it.actual) + '"' + dis + "></label></div>" +
+      (isContainer(it) ? (function () { const m = moneyOf(it); return m.b || m.a ? '<p class="d-money">' + IC("kr", 14) + " " + L("Total with child items: budget ", "Total com os itens filhos: orçado ") + money(m.b) + " · " + L("actual ", "realizado ") + "<b" + (m.a > m.b && m.b ? ' class="late"' : "") + ">" + money(m.a) + "</b>" + (m.b ? " (" + Math.round(m.a / m.b * 100) + "%)" : "") + "</p>" : ""; })() : "") +
       (it.type === "initiative" ? "" : "<label>" + (lvl(it.type) === 1 ? L("Initiative", "Iniciativa") : L("Parent (initiative / epic / phase)", "Pai (iniciativa / épico / fase)")) + '<select name="parent"' + dis + '><option value="">—</option>' + parents.map(function (p) { return '<option value="' + p.id + '"' + (p.id === it.parent ? " selected" : "") + ">" + esc((p.key ? p.key + " · " : "") + p.title) + "</option>"; }).join("") + "</select></label>") +
       (sps.length && !isContainer(it) ? "<label>Sprint<select name=\"sprint\"" + dis + '><option value="">Backlog</option>' + sps.map(function (k) { return '<option value="' + k + '"' + (k === it.sprint ? " selected" : "") + ">" + esc(data.sprints[k].name) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Depends on (finish → start)", "Depende de (fim → início)") + '<select name="deps" multiple size="4"' + dis + ">" + others.map(function (o) { return '<option value="' + o.id + '"' + ((it.deps || {})[o.id] ? " selected" : "") + ">" + esc((o.key ? o.key + " · " : "") + o.title) + "</option>"; }).join("") + "</select></label>" +
@@ -653,25 +714,59 @@
       (it.src && it.src.board ? '<a class="pl-src" href="../board/?id=' + encodeURIComponent(it.src.board) + '">' + IC("board", 15) + " " + L("Open the source board (process step)", "Abrir o quadro de origem (passo do processo)") + "</a>" : "") +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +
       (canEdit && !it.ext ? Object.keys(PROV).filter(function (k) { return data.settings && data.settings[k]; }).map(function (k) { return '<button type="button" class="pl-btn sm" data-mk="' + k + '">' + IC("send", 14) + " " + L("Create in ", "Criar no ") + PROV[k].short + "</button>"; }).join(" ") : "") +
-      '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc((PROV[it.ext.source] ? PROV[it.ext.source].short : it.ext.source) + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Assignee in ", "Responsável no ") + (PROV[it.ext.source] ? PROV[it.ext.source].short : "") + ": " + esc(it.ext.assigneeName) : "") + "</p></form>";
+      '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc((PROV[it.ext.source] ? PROV[it.ext.source].short : it.ext.source) + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Assignee in ", "Responsável no ") + (PROV[it.ext.source] ? PROV[it.ext.source].short : "") + ": " + esc(it.ext.assigneeName) : "") + "</p>" +
+      (canEdit ? '<p class="d-err" id="dErr" hidden></p><div class="d-actions"><button type="button" class="pl-btn" id="dCancel" disabled>' + L("Cancel changes", "Cancelar alterações") + '</button><button type="button" class="pl-btn primary" id="dSave" disabled>' + L("Save", "Salvar") + "</button></div>" : "") + "</form>";
     document.getElementById("dX").onclick = closeDrawer;
     document.querySelectorAll(".tl-row.sel").forEach(function (r) { r.classList.remove("sel"); });
     const row = document.querySelector('.tl-row[data-open="' + id + '"]'); if (row) row.classList.add("sel");
     if (!canEdit) return;
     const f = document.getElementById("dF");
+    /* explicit Save / Cancel: changes stay pending until “Save” (nothing is lost by a wrong click) */
+    const pend = {};
+    const sv = document.getElementById("dSave"), cc = document.getElementById("dCancel"), er = document.getElementById("dErr");
+    function setDirty() { const dirty = Object.keys(pend).length > 0; drawerDirty = dirty; sv.disabled = !dirty; cc.disabled = !dirty; d.classList.toggle("dirty", dirty); }
+    function readField(inp) {
+      const n = inp.name, o = {};
+      if (n === "deps" || n === "krs") { const dd = {}; Array.prototype.forEach.call(inp.selectedOptions, function (op) { dd[op.value] = true; }); o[n] = Object.keys(dd).length ? dd : null; }
+      else if (inp.type === "checkbox") o[n] = inp.checked || null;
+      else if (inp.type === "number") o[n] = inp.value === "" ? null : Number(inp.value);
+      else o[n] = n === "title" ? (inp.value.trim() || it.title) : (inp.value || null);
+      if (n === "status") { const st = statuses().find(function (x) { return x.id === inp.value; }); if (st && st.cat === "done") o.progress = 100; }
+      if (n === "type" && inp.value === "milestone") o.end = f.start.value || f.end.value || null;
+      return o;
+    }
+    function checkDates() {
+      const a = f.start && f.start.value, b = f.end && f.end.value;
+      if (f.end && a) f.end.min = a;
+      const bad = a && b && b < a;
+      er.hidden = !bad; er.textContent = bad ? L("The end date cannot be before the start date.", "A data final não pode ser anterior à data de início.") : "";
+      if (f.end) f.end.classList.toggle("bad", !!bad);
+      return !bad;
+    }
     f.querySelectorAll("input,select,textarea").forEach(function (inp) {
-      inp.onchange = function () {
-        const n = inp.name, o = {};
-        if (n === "deps" || n === "krs") { const dd = {}; Array.prototype.forEach.call(inp.selectedOptions, function (op) { dd[op.value] = true; }); o[n] = Object.keys(dd).length ? dd : null; }
-        else if (inp.type === "checkbox") o[n] = inp.checked || null;
-        else if (inp.type === "number") o[n] = inp.value === "" ? null : Number(inp.value);
-        else o[n] = n === "title" ? (inp.value.trim() || it.title) : (inp.value || null);
-        if (n === "status") { const st = statuses().find(function (s) { return s.id === inp.value; }); if (st && st.cat === "done") o.progress = 100; }
-        if (n === "type" && inp.value === "milestone") o.end = f.start.value || f.end.value || null;
-        const prevA = (data.items[id] || {}).assignee;
-        patch(id, o).then(function () { if (n === "assignee" && inp.value && inp.value !== me.email && inp.value !== prevA) notify("assign", { item: id }).then(function (j) { if (j && j.ok && (j.sent || []).length) toast(L("Assignee notified by e-mail", "Responsável avisado por e-mail")); }); });
-      };
+      if (!inp.name) return;
+      const h = function () { Object.assign(pend, readField(inp)); if (inp.name === "start" || inp.name === "end") checkDates(); setDirty(); };
+      inp.addEventListener("change", h);
+      if (inp.tagName === "TEXTAREA" || inp.type === "text" || inp.type === "number" || inp.type === "date") inp.addEventListener("input", h);
     });
+    checkDates();
+    function doSave() {
+      if (!Object.keys(pend).length) return;
+      if (!checkDates()) { f.end.focus(); return; }
+      const o = Object.assign({}, pend), prevA = (data.items[id] || {}).assignee;
+      sv.disabled = true;
+      patch(id, o).then(function () {
+        Object.keys(pend).forEach(function (k) { delete pend[k]; }); setDirty();
+        toast(L("Saved", "Salvo"));
+        if ("assignee" in o && o.assignee && o.assignee !== me.email && o.assignee !== prevA) notify("assign", { item: id }).then(function (j) { if (j && j.ok && (j.sent || []).length) toast(L("Assignee notified by e-mail", "Responsável avisado por e-mail")); });
+        openDrawer(id);
+      });
+    }
+    sv.onclick = doSave;
+    cc.onclick = function () { Object.keys(pend).forEach(function (k) { delete pend[k]; }); drawerDirty = false; openDrawer(id); };
+    f.addEventListener("keydown", function (e) { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); doSave(); } });
+    document.getElementById("dUp").onclick = function () { moveItem(id, -1); };
+    document.getElementById("dDn").onclick = function () { moveItem(id, 1); };
     f.title.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); f.title.blur(); } };
     f.querySelectorAll("[data-mk]").forEach(function (b) { b.onclick = function () { b.disabled = true; createInTool(b.dataset.mk, id).then(function () { b.disabled = false; }); }; });
     if (focusTitle) { f.title.focus(); f.title.select(); }
@@ -682,12 +777,30 @@
           const u = {}; u["items/" + id] = null;
           kids.forEach(function (k) { u["items/" + k.id + "/parent"] = null; });
           items().forEach(function (i) { if ((i.deps || {})[id]) u["items/" + i.id + "/deps/" + id] = null; });
-          db.ref("planning/" + ID + "/data").update(u).then(function () { close(); closeDrawer(); }, fail);
+          db.ref("planning/" + ID + "/data").update(u).then(function () { close(); drawerDirty = false; closeDrawer(); }, fail);
         };
       });
     };
   }
-  function closeDrawer() { openItem = null; const d = document.getElementById("drawer"); if (d) d.remove(); document.querySelectorAll(".tl-row.sel").forEach(function (r) { r.classList.remove("sel"); }); }
+  function confirmDiscard(go) {
+    modal("<h2>" + L("Discard changes?", "Descartar alterações?") + "</h2><p>" + L("You have unsaved changes in this item.", "Você tem alterações não salvas neste item.") + '</p><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Keep editing", "Continuar editando") + '</button><button class="pl-btn danger" id="dcGo">' + L("Discard", "Descartar") + "</button></div>", function (box, close) {
+      box.querySelector("#dcGo").onclick = function () { close(); go(); };
+    });
+  }
+  /* reorder among siblings (same parent): ↑ / ↓ in the item panel */
+  function siblingsOf(it) { return items().filter(function (i) { return (i.parent || "") === (it.parent || "") && isContainer(i) === isContainer(it); }).sort(byOrder); }
+  function moveItem(id, dir) {
+    const it = Object.assign({ id: id }, data.items[id]), sib = siblingsOf(it), i = sib.findIndex(function (x) { return x.id === id; }), j = i + dir;
+    if (i < 0 || j < 0 || j >= sib.length) return toast(dir < 0 ? L("Already the first one", "Já é o primeiro") : L("Already the last one", "Já é o último"));
+    const u = {};
+    sib.forEach(function (x, k) { x._o = (k + 1) * 1000; });
+    const a = sib[i]._o; sib[i]._o = sib[j]._o; sib[j]._o = a;
+    sib.forEach(function (x) { if (x.order !== x._o) u["items/" + x.id + "/order"] = x._o; });
+    db.ref("planning/" + ID + "/data").update(u).then(function () { toast(L("Moved", "Posição alterada")); }, fail);
+  }
+  function closeDrawer() {
+    if (drawerDirty) return confirmDiscard(function () { drawerDirty = false; closeDrawer(); });
+    openItem = null; const d = document.getElementById("drawer"); if (d) d.remove(); document.querySelectorAll(".tl-row.sel").forEach(function (r) { r.classList.remove("sel"); }); }
 
   /* ---------------- dialogs ---------------- */
   function modal(html, bind) {
@@ -716,6 +829,7 @@
     modal("<h2>" + L("Create item", "Criar item") + '</h2><form class="pl-form" id="qcF"><div class="type-chips">' + types.map(function (t) { const T = TYPES[t]; return '<button type="button" data-tc="' + t + '" class="' + (t === type ? "on" : "") + '" style="--c:' + T.color + '">' + T.icon + " " + esc(T.name) + "</button>"; }).join("") + '</div><p class="muted small" id="tcDesc"></p>' +
       '<label id="parL">' + L("Parent", "Pai") + '<select name="parent"></select></label>' +
       "<label>" + L("Title", "Título") + '<input name="title" required autocomplete="off"></label>' +
+      '<label id="posL">' + L("Position", "Posição") + '<select name="pos"></select></label>' +
       (allKrs().length ? '<label id="krL">' + IC("objective", 14) + " " + L("Contributes to (OKR key result)", "Contribui para (resultado-chave do OKR)") + '<select name="kr"><option value="">—</option>' + allKrs().map(function (k) { return '<option value="' + esc(k.ref) + '">' + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Assignee", "Responsável") + '<select name="assignee"><option value="">' + L("Unassigned", "Sem responsável") + "</option>" + Object.keys(members).map(function (k) { return '<option value="' + esc(members[k].email) + '">' + esc(members[k].name || members[k].email) + "</option>"; }).join("") + "</select></label>" +
       '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start"></label><label>' + L("Due / end", "Prazo / fim") + '<input type="date" name="end"></label></div>' +
@@ -729,6 +843,15 @@
         const krl = box.querySelector("#krL"); if (krl) krl.hidden = !(type === "initiative" || ((type === "epic" || type === "phase") && !parentChoices(type).some(function (p) { return p.type === "initiative"; })));
         f.parent.innerHTML = '<option value="">—</option>' + ps.map(function (p) { return '<option value="' + p.id + '">' + esc(TYPES[p.type].name + " · " + (p.key ? p.key + " " : "") + p.title) + "</option>"; }).join("");
       }
+      function sibs() { const par = f.parent.value || ""; const cont = isContainer({ type: type }); return items().filter(function (i) { return (i.parent || "") === par && isContainer(i) === cont; }).sort(byOrder); }
+      function fillPos() {
+        const list = sibs();
+        box.querySelector("#posL").hidden = !list.length;
+        f.pos.innerHTML = '<option value="">' + L("At the end", "No fim") + "</option>" + list.map(function (p) { return '<option value="' + p.id + '">' + L("Before ", "Antes de ") + esc((p.key ? p.key + " · " : "") + p.title) + "</option>"; }).join("");
+      }
+      f.parent.addEventListener("change", fillPos);
+      const _sync = sync; sync = function () { _sync(); fillPos(); };
+      f.start.addEventListener("change", function () { f.end.min = f.start.value; });
       box.querySelectorAll("[data-tc]").forEach(function (b) { b.onclick = function () { type = b.dataset.tc; sync(); }; });
       sync();
       setTimeout(function () { f.querySelector("[name=title]").focus(); }, 40);
@@ -737,6 +860,8 @@
         const o = { type: type, title: f.title.value.trim(), parent: f.parent.value || undefined, assignee: f.assignee.value || undefined, start: f.start.value || undefined, end: f.end.value || f.start.value || undefined };
         if (f.kr && f.kr.value && !box.querySelector("#krL").hidden) { o.krs = {}; o.krs[f.kr.value] = true; }
         if (o.type === "milestone") o.end = o.start = o.end || o.start;
+        if (o.start && o.end && o.end < o.start) { toast(L("The end date cannot be before the start date.", "A data final não pode ser anterior à data de início.")); f.end.focus(); return; }
+        const sl = sibs(); if (sl.length) o.order = orderAt(sl, f.pos.value || null);
         if (info.method === "scrum" && !isContainer(o) && activeSprint() && view === "board") o.sprint = activeSprint();
         createItem(o).then(function (nid) { close(); if (nid && o.parent) collapsed[o.parent] = false; });
       };
@@ -770,29 +895,56 @@
       f.onsubmit = function (e) { e.preventDefault(); const v = f.t.value.trim(); const u = {}; u["planning/" + ID + "/info/title"] = v; u["workspaces/" + info.ws + "/plannings/" + ID + "/title"] = v; db.ref().update(u).then(function () { info.title = v; close(); shell(); }, fail); };
     });
   }
+  /* ready-made workflows (Jira / Azure DevOps / Kanbanize style), incl. upstream (discovery) and downstream (delivery) */
+  function wfPresets() {
+    const st = function (id, en, pt, c, extra) { return Object.assign({ id: id, name: L(en, pt), cat: c }, extra || {}); };
+    return {
+      simple: { name: L("Simple", "Simples"), ss: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("done", "Done", "Concluído", "done")] },
+      scrum: { name: "Scrum", ss: [st("todo", "To do", "A fazer", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("review", "In review", "Em revisão", "doing"), st("done", "Done", "Concluído", "done")] },
+      waterfall: { name: L("Waterfall / project", "Waterfall / projeto"), ss: [st("todo", "Not started", "Não iniciado", "todo"), st("doing", "In progress", "Em andamento", "doing"), st("late", "At risk", "Em risco", "doing"), st("blocked", "Blocked", "Bloqueado", "doing"), st("done", "Done", "Concluído", "done")] },
+      down: { name: L("Kanban – downstream (delivery)", "Kanban – downstream (entrega)"), ss: [st("todo", "Ready to start", "Pronto para iniciar", "todo", { stage: "down" }), st("doing", "In development", "Em desenvolvimento", "doing", { stage: "down", wip: 3 }), st("review", "Code review", "Code review", "doing", { stage: "down", wip: 2 }), st("test", "Testing / QA", "Teste / QA", "doing", { stage: "down", wip: 2 }), st("deploy", "Ready to deploy", "Pronto para deploy", "doing", { stage: "down" }), st("done", "Delivered", "Entregue", "done", { stage: "down" })] },
+      up: { name: L("Kanban – upstream (discovery)", "Kanban – upstream (descoberta)"), ss: [st("idea", "Ideas", "Ideias", "todo", { stage: "up" }), st("analysis", "In analysis", "Em análise", "doing", { stage: "up", wip: 4 }), st("validate", "Validation / experiment", "Validação / experimento", "doing", { stage: "up", wip: 3 }), st("ready", "Ready for development", "Pronto para desenvolver", "done", { stage: "up" })] },
+      updown: { name: L("Upstream + downstream (Kanbanize style)", "Upstream + downstream (estilo Kanbanize)"), ss: [st("idea", "Ideas / requests", "Ideias / demandas", "todo", { stage: "up" }), st("analysis", "Analysis", "Análise", "doing", { stage: "up", wip: 4 }), st("ready", "Ready to commit", "Pronto para compromisso", "todo", { stage: "up" }), st("todo", "Committed", "Comprometido", "todo", { stage: "down" }), st("doing", "In progress", "Em andamento", "doing", { stage: "down", wip: 3 }), st("review", "Review / test", "Revisão / teste", "doing", { stage: "down", wip: 2 }), st("done", "Delivered", "Entregue", "done", { stage: "down" })] },
+      itsm: { name: L("Service desk (ITSM)", "Atendimento (ITSM)"), ss: [st("new", "New", "Novo", "todo"), st("doing", "In progress", "Em atendimento", "doing"), st("waiting", "Waiting for customer", "Aguardando cliente", "doing"), st("resolved", "Resolved", "Resolvido", "done"), st("closed", "Closed", "Fechado", "done")] }
+    };
+  }
   function workflowDialog() {
     let ss = JSON.parse(JSON.stringify(statuses()));
+    const P = wfPresets();
+    const catOpts = [["todo", L("To do", "A fazer")], ["doing", L("In progress", "Em andamento")], ["done", L("Done", "Concluído")]];
+    const stageOpts = [["", "—"], ["up", "Upstream"], ["down", "Downstream"]];
     function rowsH() {
       return ss.map(function (s, i) {
-        return '<div class="wf-row" data-i="' + i + '"><input data-k="name" value="' + esc(s.name) + '"><select data-k="cat">' + [["todo", L("To do", "Por fazer")], ["doing", L("In progress", "Em andamento")], ["done", L("Done", "Concluído")]].map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === s.cat ? " selected" : "") + ">" + c[1] + "</option>"; }).join("") + "</select>" +
-          '<input data-k="wip" type="number" min="0" placeholder="WIP" value="' + esc(s.wip || "") + '"><button type="button" data-up="' + i + '">↑</button><button type="button" data-rm="' + i + '">✕</button></div>';
+        return '<div class="wf-row" data-i="' + i + '"><input type="color" data-k="color" value="' + esc(stColor(s)) + '" title="' + L("Colour", "Cor") + '"><input data-k="name" value="' + esc(s.name) + '"><select data-k="cat" title="' + L("Category", "Categoria") + '">' + catOpts.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === s.cat ? " selected" : "") + ">" + c[1] + "</option>"; }).join("") + "</select>" +
+          '<select data-k="stage" title="' + L("Stage", "Etapa") + '">' + stageOpts.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === (s.stage || "") ? " selected" : "") + ">" + c[1] + "</option>"; }).join("") + "</select>" +
+          '<input data-k="wip" type="number" min="0" placeholder="WIP" value="' + esc(s.wip || "") + '"><button type="button" data-up="' + i + '" title="' + L("Move up", "Subir") + '">↑</button><button type="button" data-rm="' + i + '" title="' + L("Remove", "Remover") + '">✕</button></div>';
       }).join("");
     }
-    modal("<h2>" + L("Workflow and columns", "Fluxo e colunas") + '</h2><p class="muted small">' + L("Each status is a board column. The category tells reports what counts as done. WIP limits the number of cards in a column.", "Cada estado é uma coluna do quadro. A categoria diz aos relatórios o que conta como concluído. O WIP limita os cartões numa coluna.") + '</p><div id="wfRows"></div><button type="button" class="pl-btn sm" id="wfAdd">+ ' + L("Add status", "Adicionar estado") + '</button><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="wfSave">' + L("Save", "Salvar") + "</button></div>", function (box, close) {
+    modal("<h2>" + L("Workflow and columns", "Fluxo e colunas") + '</h2><p class="muted small">' + L("Each status is a board column – drag cards between them like in Jira, Azure DevOps or Kanbanize. The category tells reports what counts as done; WIP limits the cards per column; the stage groups columns into upstream (discovery) and downstream (delivery).", "Cada status é uma coluna do quadro – arraste os cartões entre elas como no Jira, Azure DevOps ou Kanbanize. A categoria diz o que conta como concluído; o WIP limita os cartões por coluna; a etapa agrupa as colunas em upstream (descoberta) e downstream (entrega).") + "</p>" +
+      '<label class="wf-pre">' + L("Start from a ready-made workflow", "Começar de um fluxo pronto") + '<select id="wfPre"><option value="">' + L("— keep the current workflow —", "— manter o fluxo atual —") + "</option>" + Object.keys(P).map(function (k) { return '<option value="' + k + '">' + esc(P[k].name) + "</option>"; }).join("") + "</select></label>" +
+      '<div class="wf-head"><span></span><span>' + L("Status", "Status") + "</span><span>" + L("Category", "Categoria") + "</span><span>" + L("Stage", "Etapa") + '</span><span>WIP</span><span></span><span></span></div><div id="wfRows"></div><button type="button" class="pl-btn sm" id="wfAdd">+ ' + L("Add status", "Adicionar status") + '</button><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="wfSave">' + L("Save", "Salvar") + "</button></div>", function (box, close) {
       const R = box.querySelector("#wfRows");
       function draw() {
         R.innerHTML = rowsH();
-        R.querySelectorAll("[data-k]").forEach(function (inp) { inp.onchange = function () { const i = Number(inp.closest(".wf-row").dataset.i); ss[i][inp.dataset.k] = inp.dataset.k === "wip" ? (Number(inp.value) || null) : inp.value; }; });
+        R.querySelectorAll("[data-k]").forEach(function (inp) { inp.onchange = function () { const i = Number(inp.closest(".wf-row").dataset.i), k = inp.dataset.k; ss[i][k] = k === "wip" ? (Number(inp.value) || null) : inp.value; }; });
         R.querySelectorAll("[data-up]").forEach(function (b) { b.onclick = function () { const i = Number(b.dataset.up); if (i > 0) { const t = ss[i - 1]; ss[i - 1] = ss[i]; ss[i] = t; draw(); } }; });
         R.querySelectorAll("[data-rm]").forEach(function (b) { b.onclick = function () { if (ss.length > 2) { ss.splice(Number(b.dataset.rm), 1); draw(); } }; });
       }
       draw();
-      box.querySelector("#wfAdd").onclick = function () { ss.splice(ss.length - 1, 0, { id: "s" + Date.now().toString(36), name: L("New status", "Novo estado"), cat: "doing" }); draw(); };
+      box.querySelector("#wfPre").onchange = function () { const p = P[this.value]; if (p) { ss = JSON.parse(JSON.stringify(p.ss)); draw(); } };
+      box.querySelector("#wfAdd").onclick = function () { ss.splice(ss.length - 1, 0, { id: "s" + Date.now().toString(36), name: L("New status", "Novo status"), cat: "doing" }); draw(); };
       box.querySelector("#wfSave").onclick = function () {
-        ss = ss.map(function (s) { const o = { id: s.id, name: (s.name || "").trim() || s.id, cat: s.cat }; if (s.wip) o.wip = s.wip; return o; });
+        const old = statuses();
+        ss = ss.map(function (s) { const o = { id: s.id, name: (s.name || "").trim() || s.id, cat: s.cat }; if (s.wip) o.wip = s.wip; if (s.stage) o.stage = s.stage; if (s.color && s.color.toLowerCase() !== stColor({ id: o.id, name: o.name, cat: o.cat }).toLowerCase()) o.color = s.color; return o; });
         const ids = {}; ss.forEach(function (s) { ids[s.id] = 1; });
         const u = { "settings/statuses": ss };
-        items().forEach(function (i) { if (!ids[i.status]) u["items/" + i.id + "/status"] = ss[0].id; });
+        /* items in a status that no longer exists move to the first status of the same category */
+        items().forEach(function (i) {
+          if (ids[i.status]) return;
+          const oc = (old.find(function (s) { return s.id === i.status; }) || old[0] || {}).cat || "todo";
+          const tgt = ss.find(function (s) { return s.cat === oc && s.stage !== "up"; }) || ss.find(function (s) { return s.cat === oc; }) || ss[0];
+          u["items/" + i.id + "/status"] = tgt.id;
+        });
         db.ref("planning/" + ID + "/data").update(u).then(close, fail);
       };
     });
@@ -1232,10 +1384,10 @@
   }
   function exportCsv() {
     const q = function (v) { v = v == null ? "" : String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    const head = ["Issue key", "Summary", "Issue Type", "Status", "Assignee", "Start date", "Due date", "Progress", "Story Points", "Parent", "Sprint", "Description"];
+    const head = ["Issue key", "Summary", "Issue Type", "Status", "Assignee", "Start date", "Due date", "Progress", "Story Points", "Parent", "Sprint", "Description", "Budget", "Actual"];
     const lines = [head.join(",")].concat(rows().map(function (r) {
       const i = r.it, p = i.parent && data.items[i.parent], sp = i.sprint && data.sprints && data.sprints[i.sprint];
-      return [i.key, i.title, (TYPES[i.type] || TYPES.task).name, statusOf(i).name, i.assignee, i.start, i.end, i.progress, i.points, p ? p.key || p.title : "", sp ? sp.name : "", i.desc].map(q).join(",");
+      return [i.key, i.title, (TYPES[i.type] || TYPES.task).name, statusOf(i).name, i.assignee, i.start, i.end, i.progress, i.points, p ? p.key || p.title : "", sp ? sp.name : "", i.desc, i.budget, i.actual].map(q).join(",");
     }));
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = (info.title || "planning").replace(/[^\w-]+/g, "-") + ".csv"; a.click();

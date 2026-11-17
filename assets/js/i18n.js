@@ -150,7 +150,7 @@
     "Sign-in and private access switch on as soon as Firebase is configured (see README). Until then, boards are saved only in your browser.": "O login e o acesso privado ficam ativos assim que o Firebase for configurado (ver README). Até lá, os quadros ficam salvos só no seu navegador.",
     "Demo": "Demo",
     "Boards & access": "Quadros e acessos",
-    "Create private boards and decide who can open them. Only you can grant access.": "Crie quadros privados e decida quem os pode abrir. Só você concede acesso.",
+    "Create private boards and decide who can open them. Only you can grant access.": "Crie quadros privados e decida quem pode abri-los. Só você concede acesso.",
     "Setup required": "Configuração necessária",
     "Private access needs Firebase. Follow these steps once:": "O acesso privado precisa do Firebase. Siga estes passos uma vez:",
     "Administrator": "Administrador",
