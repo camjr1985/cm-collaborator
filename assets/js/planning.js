@@ -39,7 +39,7 @@
     if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
     return { b: b, a: a };
   }
-  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Kanban board", "Quadro Kanban"), backlog: "Backlog", list: L("List", "Lista"), okr: "OKRs" };
+  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs" };
 
   let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
   const pushT = {};
@@ -86,6 +86,7 @@
   function patch(id, obj) {
     if (!canEdit) return Promise.resolve();
     const u = {}; Object.keys(obj).forEach(function (k) { u["items/" + id + "/" + k] = obj[k] === undefined ? null : obj[k]; });
+    if ("status" in obj && data.items[id]) { const nd = (statuses().find(function (x) { return x.id === obj.status; }) || {}).cat === "done", wasDone = cat(data.items[id]) === "done"; if (nd && !wasDone) u["items/" + id + "/doneAt"] = TS(); else if (!nd && wasDone) u["items/" + id + "/doneAt"] = null; }
     u["items/" + id + "/updated"] = TS();
     return db.ref("planning/" + ID + "/data").update(u).then(function () { jiraPushLater(id, obj); }).catch(fail);
   }
@@ -150,7 +151,9 @@
   /* ---------------- shell ---------------- */
   function shell() {
     const m = method();
-    const views = m.views.concat(["okr"]);
+    let views = m.views.slice();
+    if (views.indexOf("backlog") < 0 && boardsList().some(function (b) { return b.kind === "scrum"; })) views.splice(views.indexOf("board") + 1, 0, "backlog");
+    views = views.concat(["reports", "okr"]);
     if (!view) { try { view = localStorage.getItem("cmcollab:plview:" + ID); } catch (e) { /* ignore */ } }
     if (views.indexOf(view) < 0) view = views[0];
     const who = {}; items().forEach(function (i) { if (i.assignee) who[i.assignee] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = 1; });
@@ -190,7 +193,7 @@
     let mb = 0, ma = 0; all.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
     document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "") + (mb || ma ? ' · <span class="money" title="' + L("Budget vs actual", "Orçado x realizado") + '">' + L("Budget ", "Orçado ") + money(mb) + " · " + L("Actual ", "Realizado ") + '<b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></span>" : "");
     if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
-    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else list(v);
+    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else list(v);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
@@ -480,65 +483,160 @@
 
   /* ---------------- board (Kanban / sprint board) ---------------- */
   function activeSprint() { const ss = data.sprints || {}; return Object.keys(ss).find(function (k) { return ss[k].state === "active"; }); }
-  function board(v) {
-    const ss = statuses(), scrum = info.method === "scrum";
-    const sp = activeSprint();
-    let pool = items().filter(function (i) { return !isContainer(i) && i.type !== "milestone" && matches(i); });
-    let headNote = "";
-    if (scrum) {
-      if (!sp) { v.innerHTML = '<div class="pl-empty big"><h2>' + L("No active sprint", "Nenhuma sprint ativa") + "</h2><p>" + L("Start a sprint in the Backlog to see its board.", "Inicie uma sprint no Backlog para ver o quadro dela.") + '</p><button class="pl-btn primary" id="goBl">' + L("Go to Backlog", "Ir para o Backlog") + "</button></div>"; document.getElementById("goBl").onclick = function () { view = "backlog"; shell(); }; return; }
-      const S = data.sprints[sp];
-      pool = pool.filter(function (i) { return i.sprint === sp; });
-      headNote = '<div class="sp-head"><b>' + esc(S.name) + "</b> · " + fmt(S.start) + " → " + fmt(S.end) + (S.goal ? " · " + esc(S.goal) : "") + (canEdit ? ' <button class="pl-btn sm" id="endSp">' + L("Complete sprint", "Concluir sprint") + "</button>" : "") + "</div>";
-    }
-    /* Jira-style board options: swimlanes (none / epic / assignee) and an epic filter – the board is the
-       roadmap's workflow: moving a card here moves the progress of its epic and initiative on the roadmap */
-    const kb = kbOpt();
-    const conts = items().filter(function (i) { return i.type === "epic" || i.type === "phase" || i.type === "initiative"; }).sort(byOrder);
-    if (kb.epic && !data.items[kb.epic]) kb.epic = "";
-    if (kb.epic) pool = pool.filter(function (i) { return underOf(i, kb.epic); });
-    const bar = '<div class="kb-bar">' +
-      '<label>' + L("Swimlanes", "Raias") + '<select id="kbSwim"><option value="">' + L("None", "Nenhuma") + '</option><option value="epic"' + (kb.swim === "epic" ? " selected" : "") + ">" + L("By epic / phase", "Por épico / fase") + '</option><option value="who"' + (kb.swim === "who" ? " selected" : "") + ">" + L("By assignee", "Por responsável") + "</option></select></label>" +
-      (conts.length ? '<label>' + L("Epic / initiative", "Épico / iniciativa") + '<select id="kbEpic"><option value="">' + L("All", "Todos") + "</option>" + conts.map(function (c) { return '<option value="' + c.id + '"' + (kb.epic === c.id ? " selected" : "") + ">" + esc((TYPES[c.type] || TYPES.epic).name + " · " + (c.key ? c.key + " " : "") + c.title) + "</option>"; }).join("") + "</select></label>" : "") +
-      '<span class="muted small">' + pool.length + " " + (pool.length === 1 ? L("card", "cartão") : L("cards", "cartões")) + "</span><span class=\"sp\"></span>" +
-      (canEdit ? '<button class="pl-btn sm" id="kbFlow">' + IC("settings", 14) + " " + L("Workflow", "Fluxo") + "</button>" : "") +
-      '<button class="pl-btn sm ghost" id="kbRoad">' + IC("roadmap", 14) + " " + L("See on the roadmap", "Ver no roadmap") + "</button></div>";
-    const staged = ss.some(function (s) { return s.stage; });
-    function cols(list, lane, withHead) {
-      let lastStage = null, out = "";
-      ss.forEach(function (s, si) {
-        if (staged && !kb.swim && (s.stage || "") !== lastStage) { out += (lastStage !== null ? "</div></div>" : "") + '<div class="kb-stage st-' + (s.stage || "none") + '"><div class="kb-stage-h">' + (s.stage === "up" ? L("Upstream · discovery", "Upstream · descoberta") : s.stage === "down" ? L("Downstream · delivery", "Downstream · entrega") : "") + '</div><div class="kb-stage-cols">'; lastStage = s.stage || ""; }
-        const col = list.filter(function (i) { return statusOf(i).id === s.id; }).sort(byOrder);
-        const all = pool.filter(function (i) { return statusOf(i).id === s.id; }).length, over = s.wip && all > s.wip;
-        out += '<section class="kb-col' + (over ? " over" : "") + (s.stage ? " stg-" + s.stage : "") + '" data-col="' + s.id + '"' + (lane != null ? ' data-lane="' + esc(lane) + '"' : "") + ">" +
-          (withHead ? '<header><span class="dot" style="background:' + stColor(s) + '"></span><b>' + esc(s.name) + "</b>" + (staged && kb.swim && s.stage ? '<span class="stg">' + (s.stage === "up" ? "UP" : "DOWN") + "</span>" : "") + '<span class="cnt">' + all + (s.wip ? " / " + s.wip : "") + "</span></header>" : "") +
-          '<div class="kb-list">' + col.map(card).join("") + "</div>" + (canEdit && si === 0 && (withHead || lane != null) ? '<button class="kb-add" data-add="' + s.id + '"' + (lane != null ? ' data-lane="' + esc(lane) + '"' : "") + ">+ " + L("Create", "Criar") + "</button>" : "") + "</section>";
+  /* ---------------- boards: several boards per planning, each a view of the same work and the same roadmap ----------------
+   kinds: basic (fixed To do / In progress / Done), flow (the whole workflow – Kanbanize style when it has upstream +
+   downstream), up (discovery only, hands over to delivery), down (delivery only, pulls what is ready upstream),
+   scrum (active sprint). */
+  const BK = {
+    basic: { icon: "list", name: L("Basic board", "Quadro básico"), tag: L("Fixed · To do → In progress → Done", "Fixo · A fazer → Em andamento → Concluído") },
+    flow: { icon: "kanban", name: L("Workflow board", "Quadro do fluxo"), tag: L("All workflow columns", "Todas as colunas do fluxo") },
+    up: { icon: "objective", name: L("Upstream board", "Quadro upstream"), tag: L("Discovery · hands over to delivery", "Descoberta · entrega para o downstream") },
+    down: { icon: "send", name: L("Downstream board", "Quadro downstream"), tag: L("Delivery · pulls what is ready upstream", "Entrega · puxa o que está pronto no upstream") },
+    scrum: { icon: "sprint", name: L("Sprint board (Scrum)", "Quadro da sprint (Scrum)"), tag: L("Active sprint · delivery columns", "Sprint ativa · colunas de entrega") }
+  };
+  function staged() { return statuses().some(function (s) { return s.stage === "up"; }) && statuses().some(function (s) { return s.stage !== "up"; }); }
+  function boardsList() {
+    const b = data.settings && data.settings.boards;
+    if (b && b.length) return b;
+    const out = [];
+    if (info.method === "scrum") out.push({ id: "scrum", kind: "scrum" });
+    if (staged()) out.push({ id: "flow", kind: "flow" }, { id: "up", kind: "up" }, { id: "down", kind: "down" });
+    else if (info.method !== "scrum") out.push({ id: "flow", kind: "flow" });
+    out.push({ id: "basic", kind: "basic" });
+    return out;
+  }
+  function boardName(b) { return b.name || (b.kind === "flow" && staged() ? L("Upstream + downstream (Kanbanize)", "Upstream + downstream (Kanbanize)") : (BK[b.kind] || BK.flow).name); }
+  function boardTag(b) {
+    if (b.kind === "flow") return staged() ? L("Discovery → delivery, connected", "Descoberta → entrega, conectados") : statuses().map(function (x) { return x.name; }).slice(0, 4).join(" → ") + (statuses().length > 4 ? " …" : "");
+    return (BK[b.kind] || BK.flow).tag;
+  }
+  function upSS() { return statuses().filter(function (x) { return x.stage === "up"; }); }
+  function downSS() { const st = staged(); return statuses().filter(function (x) { return !st || x.stage !== "up"; }); }
+  function firstOfCat(c) { const d = downSS(); return (d.find(function (x) { return x.cat === c; }) || d[0] || statuses()[0]).id; }
+  function colSpecs(kind) {
+    const spec = function (x) { return { key: x.id, name: x.name, color: stColor(x), wip: x.wip, stage: x.stage, target: x.id, match: function (i) { return statusOf(i).id === x.id; } }; };
+    if (kind === "basic") {
+      const up = {}; upSS().forEach(function (x) { up[x.id] = 1; });
+      return [["todo", L("To do", "A fazer")], ["doing", L("In progress", "Em andamento")], ["done", L("Done", "Concluído")]].map(function (c) {
+        return { key: "_" + c[0], name: c[1], color: CATC[c[0]], target: firstOfCat(c[0]), match: function (i) { return !up[statusOf(i).id] && cat(i) === c[0]; } };
       });
-      return out + (staged && !kb.swim ? "</div></div>" : "");
     }
-    let html;
-    if (!kb.swim) html = '<div class="kb' + (staged ? " staged" : "") + '">' + cols(pool, null, true) + "</div>";
-    else {
-      const lanes = [];
-      if (kb.swim === "epic") {
-        conts.filter(function (c) { return c.type !== "initiative" || !conts.some(function (e) { return e.parent === c.id; }); }).forEach(function (c) { lanes.push({ k: c.id, name: (c.key ? c.key + " · " : "") + c.title, color: (TYPES[c.type] || TYPES.epic).color, list: pool.filter(function (i) { return laneOf(i) === c.id; }) }); });
-        lanes.push({ k: "", name: L("No epic", "Sem épico"), color: "#8a94a6", list: pool.filter(function (i) { return !laneOf(i); }) });
-      } else {
-        const who = {}; pool.forEach(function (i) { who[i.assignee || ""] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = who[members[k].email] || 0; });
-        Object.keys(who).filter(function (e) { return e; }).sort(function (a, b) { return memberName(a).localeCompare(memberName(b)); }).forEach(function (e) { lanes.push({ k: e, name: memberName(e), color: "#2CC4B3", list: pool.filter(function (i) { return i.assignee === e; }) }); });
-        lanes.push({ k: "", name: L("Unassigned", "Sem responsável"), color: "#8a94a6", list: pool.filter(function (i) { return !i.assignee; }) });
+    if (kind === "up") {
+      const u = upSS(), d = downSS();
+      if (!u.length) return null;
+      return u.map(spec).concat(d.length ? [{ key: "_handoff", name: L("→ Delivery (downstream)", "→ Entrega (downstream)"), cls: "handoff", color: "#2CC4B3", target: d[0].id, match: function () { return false; }, note: L("Drop here when the idea is committed: it enters the downstream board.", "Solte aqui quando a ideia for comprometida: ela entra no quadro downstream.") }] : []);
+    }
+    if (kind === "down" || kind === "scrum") {
+      const u = upSS(), d = downSS().map(spec);
+      if (kind === "down" && u.length) { const last = u[u.length - 1]; d.unshift({ key: "_pull", name: L("Ready upstream", "Pronto no upstream") + " · " + last.name, cls: "pull", color: "#E8C468", target: last.id, match: function (i) { return statusOf(i).id === last.id; }, note: L("Pull into delivery when there is capacity.", "Puxe para a entrega quando houver capacidade.") }); }
+      return d;
+    }
+    return statuses().map(spec);
+  }
+  function addBoardDialog() {
+    const kinds = ["basic", "flow", "up", "down", "scrum"];
+    modal("<h2>" + L("Add board", "Adicionar quadro") + '</h2><p class="muted small">' + L("All boards show the same items and stay connected to the roadmap – each one is a different view of the workflow.", "Todos os quadros mostram os mesmos itens e ficam conectados ao roadmap – cada um é uma visão diferente do fluxo.") + '</p><form class="pl-form" id="abF"><div class="ab-kinds">' + kinds.map(function (k, n) { return '<label class="ab-k"><input type="radio" name="kind" value="' + k + '"' + (n === 0 ? " checked" : "") + "><span>" + IC(BK[k].icon, 18) + "</span><b>" + esc(BK[k].name) + "</b><small>" + esc(BK[k].tag) + "</small></label>"; }).join("") + "</div>" +
+      "<label>" + L("Name (optional)", "Nome (opcional)") + '<input name="name" maxlength="60" autocomplete="off"></label><p class="muted small" id="abNote"></p><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Add board", "Adicionar quadro") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#abF"), note = box.querySelector("#abNote");
+      function upd() { const k = f.kind.value; note.textContent = (k === "up" || k === "down") && !staged() ? L("Your workflow has no upstream/downstream stages yet: the upstream columns (Ideas, Analysis, Ready to commit) will be added before your current columns.", "Seu fluxo ainda não tem etapas upstream/downstream: as colunas de upstream (Ideias, Análise, Pronto para compromisso) serão incluídas antes das colunas atuais.") : ""; }
+      f.querySelectorAll("[name=kind]").forEach(function (r) { r.onchange = upd; }); upd();
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const k = f.kind.value, list = boardsList().slice(), b = { id: k + "-" + Date.now().toString(36), kind: k };
+        if (f.name.value.trim()) b.name = f.name.value.trim();
+        list.push(b);
+        const u = { "settings/boards": list };
+        if ((k === "up" || k === "down") && !staged()) {
+          const W = window.PLAN_WORKFLOWS ? window.PLAN_WORKFLOWS() : {}, ups = ((W.updown || {}).ss || []).filter(function (x) { return x.stage === "up"; });
+          const ids = {}; statuses().forEach(function (x) { ids[x.id] = 1; });
+          u["settings/statuses"] = ups.filter(function (x) { return !ids[x.id]; }).concat(statuses().map(function (x) { return Object.assign({}, x, { stage: "down" }); }));
+        }
+        db.ref("planning/" + ID + "/data").update(u).then(function () { close(); const o = kbOpt(); o.board = b.id; kbSave(o); setTimeout(shell, 50); toast(L("Board added", "Quadro adicionado")); }, fail);
+      };
+    });
+  }
+  function boardMenu(b) {
+    modal("<h2>" + esc(boardName(b)) + '</h2><form class="pl-form" id="bmF"><label>' + L("Name", "Nome") + '<input name="name" maxlength="60" value="' + esc(b.name || "") + '" placeholder="' + esc(boardName(Object.assign({}, b, { name: "" }))) + '"></label><div class="pl-row-end">' + (boardsList().length > 1 ? '<button type="button" class="pl-btn danger" id="bmDel">' + L("Remove board", "Remover quadro") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#bmF");
+      f.onsubmit = function (e) { e.preventDefault(); const list = boardsList().map(function (x) { return x.id === b.id ? Object.assign({}, x, { name: f.name.value.trim() || null }) : x; }).map(function (x) { const o = { id: x.id, kind: x.kind }; if (x.name) o.name = x.name; return o; }); db.ref("planning/" + ID + "/data/settings/boards").set(list).then(close, fail); };
+      const del = box.querySelector("#bmDel"); if (del) del.onclick = function () { const list = boardsList().filter(function (x) { return x.id !== b.id; }).map(function (x) { const o = { id: x.id, kind: x.kind }; if (x.name) o.name = x.name; return o; }); db.ref("planning/" + ID + "/data/settings/boards").set(list).then(function () { close(); setTimeout(shell, 50); }, fail); };
+    });
+  }
+  function board(v) {
+    const kb = kbOpt(), boards = boardsList();
+    let B = boards.find(function (b) { return b.id === kb.board; }) || boards[0];
+    const side = '<aside class="kb-side"><div class="kb-side-h">' + L("Boards", "Quadros") + "</div>" + boards.map(function (b) {
+      return '<button class="kb-bd' + (b.id === B.id ? " on" : "") + '" data-bd="' + esc(b.id) + '"><span class="ic">' + IC((BK[b.kind] || BK.flow).icon, 16) + '</span><span class="t"><b>' + esc(boardName(b)) + "</b><small>" + esc(boardTag(b)) + "</small></span>" + (canEdit ? '<span class="ed" data-bdm="' + esc(b.id) + '" title="' + L("Rename / remove", "Renomear / remover") + '">⋯</span>' : "") + "</button>";
+    }).join("") + (canEdit ? '<button class="kb-bd add" id="bdAdd">' + IC("plus", 16) + " " + L("Add board", "Adicionar quadro") + "</button>" : "") +
+      '<div class="kb-side-f">' + IC("roadmap", 14) + " " + L("All boards share the same items and roadmap.", "Todos os quadros compartilham os mesmos itens e o roadmap.") + "</div></aside>";
+    const sp = activeSprint(), isScrum = B.kind === "scrum";
+    let pool = items().filter(function (i) { return !isContainer(i) && i.type !== "milestone" && matches(i); });
+    let headNote = "", inner = "";
+    if (isScrum) {
+      if (!sp) inner = '<div class="pl-empty big"><h2>' + L("No active sprint", "Nenhuma sprint ativa") + "</h2><p>" + L("Start a sprint in the Backlog to see its board.", "Inicie uma sprint no Backlog para ver o quadro dela.") + '</p><button class="pl-btn primary" id="goBl">' + L("Go to Backlog", "Ir para o Backlog") + "</button></div>";
+      else {
+        const S = data.sprints[sp];
+        pool = pool.filter(function (i) { return i.sprint === sp; });
+        headNote = '<div class="sp-head"><b>' + esc(S.name) + "</b> · " + fmt(S.start) + " → " + fmt(S.end) + (S.goal ? " · " + esc(S.goal) : "") + (canEdit ? ' <button class="pl-btn sm" id="endSp">' + L("Complete sprint", "Concluir sprint") + "</button>" : "") + "</div>";
       }
-      html = '<div class="kb lanes"><div class="kb-row kb-heads">' + cols([], null, true).replace(/<div class="kb-list"><\/div>(<button[^>]*>[^<]*<\/button>)?/g, "") + "</div>" +
-        lanes.filter(function (l) { return l.list.length || kb.swim === "epic" && l.k; }).map(function (l) {
-          const closed = kb.closed && kb.closed[l.k || "_"];
-          return '<div class="kb-lane' + (closed ? " closed" : "") + '"><button class="kb-lane-h" data-lanet="' + esc(l.k || "_") + '" style="--c:' + l.color + '"><span class="tw">' + (closed ? "▸" : "▾") + "</span><b>" + esc(l.name) + '</b><span class="cnt">' + l.list.length + "</span></button>" + (closed ? "" : '<div class="kb-row">' + cols(l.list, l.k, false) + "</div>") + "</div>";
-        }).join("") + "</div>";
     }
-    v.innerHTML = headNote + bar + html;
+    const specs = colSpecs(B.kind);
+    if (!specs) inner = '<div class="pl-empty big"><h2>' + L("No upstream columns", "Sem colunas de upstream") + "</h2><p>" + L("Choose an upstream workflow in “Workflow”.", "Escolha um fluxo com upstream em “Fluxo”.") + "</p></div>";
+    if (specs && !inner) {
+      const inBoard = function (i) { return specs.some(function (c) { return c.match(i); }); };
+      pool = pool.filter(inBoard);
+      /* Jira-style options: swimlanes (none / epic / assignee) and an epic filter */
+      const conts = items().filter(function (i) { return i.type === "epic" || i.type === "phase" || i.type === "initiative"; }).sort(byOrder);
+      if (kb.epic && !data.items[kb.epic]) kb.epic = "";
+      if (kb.epic) pool = pool.filter(function (i) { return underOf(i, kb.epic); });
+      const showStages = B.kind === "flow" && staged() && !kb.swim;
+      const bar = '<div class="kb-bar">' +
+        "<label>" + L("Swimlanes", "Raias") + '<select id="kbSwim"><option value="">' + L("None", "Nenhuma") + '</option><option value="epic"' + (kb.swim === "epic" ? " selected" : "") + ">" + L("By epic / phase", "Por épico / fase") + '</option><option value="who"' + (kb.swim === "who" ? " selected" : "") + ">" + L("By assignee", "Por responsável") + "</option></select></label>" +
+        (conts.length ? "<label>" + L("Epic / initiative", "Épico / iniciativa") + '<select id="kbEpic"><option value="">' + L("All", "Todos") + "</option>" + conts.map(function (c) { return '<option value="' + c.id + '"' + (kb.epic === c.id ? " selected" : "") + ">" + esc((TYPES[c.type] || TYPES.epic).name + " · " + (c.key ? c.key + " " : "") + c.title) + "</option>"; }).join("") + "</select></label>" : "") +
+        '<span class="muted small">' + pool.length + " " + (pool.length === 1 ? L("card", "cartão") : L("cards", "cartões")) + '</span><span class="sp"></span>' +
+        (canEdit && B.kind !== "basic" ? '<button class="pl-btn sm" id="kbFlow">' + IC("settings", 14) + " " + L("Workflow", "Fluxo") + "</button>" : "") +
+        '<button class="pl-btn sm ghost" id="kbRoad">' + IC("roadmap", 14) + " " + L("See on the roadmap", "Ver no roadmap") + "</button></div>";
+      const cols = function (list, lane, withHead) {
+        let lastStage = null, out = "";
+        specs.forEach(function (c, si) {
+          if (showStages && (c.stage || "") !== lastStage) { out += (lastStage !== null ? "</div></div>" : "") + '<div class="kb-stage st-' + (c.stage || "none") + '"><div class="kb-stage-h">' + (c.stage === "up" ? L("Upstream · discovery", "Upstream · descoberta") : c.stage === "down" ? L("Downstream · delivery", "Downstream · entrega") : "") + '</div><div class="kb-stage-cols">'; lastStage = c.stage || ""; }
+          const col = list.filter(c.match).sort(byOrder);
+          const all = pool.filter(c.match).length, over = c.wip && all > c.wip;
+          out += '<section class="kb-col' + (over ? " over" : "") + (c.cls ? " " + c.cls : "") + (c.stage ? " stg-" + c.stage : "") + '" data-col="' + esc(c.target) + '"' + (lane != null ? ' data-lane="' + esc(lane) + '"' : "") + ">" +
+            (withHead ? '<header><span class="dot" style="background:' + c.color + '"></span><b>' + esc(c.name) + "</b>" + (staged() && kb.swim && c.stage && B.kind === "flow" ? '<span class="stg">' + (c.stage === "up" ? "UP" : "DOWN") + "</span>" : "") + '<span class="cnt">' + all + (c.wip ? " / " + c.wip : "") + "</span></header>" + (c.note ? '<p class="kb-note">' + esc(c.note) + "</p>" : "") : "") +
+            '<div class="kb-list">' + col.map(card).join("") + "</div>" + (canEdit && si === 0 && !c.cls && (withHead || lane != null) ? '<button class="kb-add" data-add="' + esc(c.target) + '"' + (lane != null ? ' data-lane="' + esc(lane) + '"' : "") + ">+ " + L("Create", "Criar") + "</button>" : "") + "</section>";
+        });
+        return out + (showStages ? "</div></div>" : "");
+      };
+      let html;
+      if (!kb.swim) html = '<div class="kb' + (showStages ? " staged" : "") + '">' + cols(pool, null, true) + "</div>";
+      else {
+        const lanes = [];
+        if (kb.swim === "epic") {
+          conts.filter(function (c) { return c.type !== "initiative" || !conts.some(function (e) { return e.parent === c.id; }); }).forEach(function (c) { lanes.push({ k: c.id, name: (c.key ? c.key + " · " : "") + c.title, color: (TYPES[c.type] || TYPES.epic).color, list: pool.filter(function (i) { return laneOf(i) === c.id; }) }); });
+          lanes.push({ k: "", name: L("No epic", "Sem épico"), color: "#8a94a6", list: pool.filter(function (i) { return !laneOf(i); }) });
+        } else {
+          const who = {}; pool.forEach(function (i) { who[i.assignee || ""] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = who[members[k].email] || 0; });
+          Object.keys(who).filter(function (e) { return e; }).sort(function (a, b) { return memberName(a).localeCompare(memberName(b)); }).forEach(function (e) { lanes.push({ k: e, name: memberName(e), color: "#2CC4B3", list: pool.filter(function (i) { return i.assignee === e; }) }); });
+          lanes.push({ k: "", name: L("Unassigned", "Sem responsável"), color: "#8a94a6", list: pool.filter(function (i) { return !i.assignee; }) });
+        }
+        html = '<div class="kb lanes"><div class="kb-row kb-heads">' + cols([], null, true).replace(/<div class="kb-list"><\/div>(<button[^>]*>[^<]*<\/button>)?/g, "") + "</div>" +
+          lanes.filter(function (l) { return l.list.length || kb.swim === "epic" && l.k; }).map(function (l) {
+            const closed = kb.closed && kb.closed[l.k || "_"];
+            return '<div class="kb-lane' + (closed ? " closed" : "") + '"><button class="kb-lane-h" data-lanet="' + esc(l.k || "_") + '" style="--c:' + l.color + '"><span class="tw">' + (closed ? "▸" : "▾") + "</span><b>" + esc(l.name) + '</b><span class="cnt">' + l.list.length + "</span></button>" + (closed ? "" : '<div class="kb-row">' + cols(l.list, l.k, false) + "</div>") + "</div>";
+          }).join("") + "</div>";
+      }
+      inner = bar + html;
+    }
+    v.innerHTML = '<div class="kb-wrap">' + side + '<div class="kb-main">' + headNote + inner + "</div></div>";
+    v.querySelectorAll("[data-bd]").forEach(function (b) { b.onclick = function (e) { if (e.target.closest("[data-bdm]")) return; kb.board = b.dataset.bd; kbSave(kb); renderView(); }; });
+    v.querySelectorAll("[data-bdm]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); boardMenu(boards.find(function (x) { return x.id === b.dataset.bdm; })); }; });
+    const ba = document.getElementById("bdAdd"); if (ba) ba.onclick = addBoardDialog;
+    const gb = document.getElementById("goBl"); if (gb) gb.onclick = function () { view = "backlog"; shell(); };
     v.querySelectorAll(".kb-card").forEach(function (c) { c.onclick = function () { openDrawer(c.dataset.id); }; });
     v.querySelectorAll("[data-add]").forEach(function (b) {
       b.onclick = function () {
-        const base = { status: b.dataset.add, sprint: scrum ? sp : undefined };
+        const base = { status: b.dataset.add, sprint: isScrum ? sp : undefined };
         if (b.dataset.lane != null) { if (kb.swim === "epic") base.parent = b.dataset.lane || undefined; else if (kb.swim === "who") base.assignee = b.dataset.lane || undefined; }
         else if (kb.epic) base.parent = kb.epic;
         inlineAdd(b, base);
@@ -548,20 +646,156 @@
     const sw = document.getElementById("kbSwim"); if (sw) sw.onchange = function () { kb.swim = sw.value; kbSave(kb); renderView(); };
     const ep = document.getElementById("kbEpic"); if (ep) ep.onchange = function () { kb.epic = ep.value; kbSave(kb); renderView(); };
     const fl = document.getElementById("kbFlow"); if (fl) fl.onclick = workflowDialog;
-    document.getElementById("kbRoad").onclick = function () { view = "timeline"; if (kb.epic) collapsed[kb.epic] = false; shell(); };
+    const rd = document.getElementById("kbRoad"); if (rd) rd.onclick = function () { view = "timeline"; if (kb.epic) collapsed[kb.epic] = false; shell(); };
     const es = document.getElementById("endSp"); if (es) es.onclick = function () { completeSprint(sp); };
-    if (canEdit) dnd(v, ".kb-card", ".kb-col", function (id, col, beforeId) {
+    if (canEdit && specs) dnd(v, ".kb-card", ".kb-col", function (id, col, beforeId) {
       const list = items().filter(function (i) { return statusOf(i).id === col.dataset.col && i.id !== id; }).sort(byOrder);
-      const o = { status: col.dataset.col, order: orderAt(list, beforeId) };
-      const st = statuses().find(function (s) { return s.id === col.dataset.col; });
+      const o = { order: orderAt(list, beforeId) };
+      if ((data.items[id] || {}).status !== col.dataset.col) o.status = col.dataset.col;
+      const st = statuses().find(function (x) { return x.id === col.dataset.col; });
       if (st && st.cat === "done") o.progress = 100;
+      if (isScrum && sp) o.sprint = sp;
       const it = data.items[id] || {};
       if (col.dataset.lane != null) {
         if (kb.swim === "epic" && col.dataset.lane !== (laneOf(Object.assign({ id: id }, it)) || "")) o.parent = col.dataset.lane || null;
         if (kb.swim === "who" && col.dataset.lane !== (it.assignee || "")) o.assignee = col.dataset.lane || null;
       }
       patch(id, o);
+      if (col.classList.contains("handoff")) toast(L("Committed: it is now on the downstream board", "Comprometido: agora está no quadro downstream"));
     });
+  }
+  /* ---------------- reports & indicators (Jira overview + sprint / capacity dashboard) ---------------- */
+  const RPAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
+  let rpt = { sprint: "", type: "", status: "", who: "", epic: "", unit: "sp" };
+  function nf(n, d) { return (Number(n) || 0).toLocaleString(PT ? "pt-BR" : "en-GB", { maximumFractionDigits: d || 0, minimumFractionDigits: d || 0 }); }
+  function pct(a, b) { return b ? nf(a / b * 100, 1) + "%" : "–"; }
+  function donut(rows, total, label) {
+    const R = 54, C = 2 * Math.PI * R; let off = 0;
+    const segs = rows.filter(function (r) { return r.v > 0; }).map(function (r) {
+      const len = total ? r.v / total * C : 0, gap = rows.length > 1 ? Math.min(2, len / 3) : 0;
+      const el = '<circle r="' + R + '" cx="70" cy="70" fill="none" stroke="' + r.c + '" stroke-width="18" stroke-dasharray="' + Math.max(0, len - gap) + " " + (C - Math.max(0, len - gap)) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 70 70)"><title>' + esc(r.n) + ": " + r.v + " (" + pct(r.v, total) + ")</title></circle>";
+      off += len; return el;
+    }).join("");
+    return '<div class="rp-donut"><svg viewBox="0 0 140 140" role="img" aria-label="' + esc(label) + '"><circle r="' + R + '" cx="70" cy="70" fill="none" stroke="#eef1f6" stroke-width="18"/>' + segs + '<text x="70" y="68" text-anchor="middle" class="rp-big">' + total + '</text><text x="70" y="86" text-anchor="middle" class="rp-sm">' + esc(L("items", "itens")) + "</text></svg>" +
+      '<ul class="rp-leg">' + rows.filter(function (r) { return r.v > 0; }).map(function (r) { return '<li><i style="background:' + r.c + '"></i><span>' + esc(r.n) + "</span><b>" + r.v + "</b></li>"; }).join("") + "</ul></div>";
+  }
+  function bars(groups, series, unitLbl) { /* grouped vertical bars, one axis */
+    const max = Math.max(1, Math.max.apply(null, groups.map(function (g) { return Math.max.apply(null, series.map(function (s) { return g[s.k] || 0; })); })));
+    const W = Math.max(320, groups.length * (series.length * 16 + 26) + 40), H = 210, bw = 14, top = 24, base = H - 30;
+    let out = '<svg viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" class="rp-bars" role="img" aria-label="' + esc(unitLbl) + '">';
+    [0, .5, 1].forEach(function (t) { const y = base - (base - top) * t; out += '<line x1="30" x2="' + (W - 6) + '" y1="' + y + '" y2="' + y + '" class="rp-grid"/><text x="26" y="' + (y + 4) + '" text-anchor="end" class="rp-ax">' + nf(max * t) + "</text>"; });
+    groups.forEach(function (g, gi) {
+      const gx = 40 + gi * (series.length * 16 + 26);
+      series.forEach(function (s, si) {
+        const v = g[s.k] || 0, h = (base - top) * v / max, x = gx + si * 16, y = base - h;
+        out += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + Math.max(h, 0) + '" rx="3" fill="' + s.c + '"><title>' + esc(g.n + " · " + s.n + ": " + nf(v, 0)) + "</title></rect>";
+        if (h > 14) out += '<text x="' + (x + bw / 2) + '" y="' + (y - 3) + '" text-anchor="middle" class="rp-val">' + nf(v) + "</text>";
+      });
+      out += '<text x="' + (gx + series.length * 8) + '" y="' + (H - 12) + '" text-anchor="middle" class="rp-ax">' + esc(g.n.length > 12 ? g.n.slice(0, 11) + "…" : g.n) + "</text>";
+    });
+    return out + '</svg><div class="rp-leg row">' + series.map(function (s) { return '<span><i style="background:' + s.c + '"></i>' + esc(s.n) + "</span>"; }).join("") + "</div>";
+  }
+  function hstack(rows, a, b, la, lb) { /* horizontal stacked: delivered + remaining */
+    const max = Math.max(1, Math.max.apply(null, rows.map(function (r) { return r[a] + r[b]; })));
+    return '<div class="rp-hs">' + rows.map(function (r) {
+      const wa = r[a] / max * 100, wb = r[b] / max * 100;
+      return '<div class="rp-hr"><span class="n" title="' + esc(r.n) + '">' + esc(r.n) + '</span><span class="tr"><i class="a" style="width:' + wa + '%" title="' + esc(la + ": " + nf(r[a])) + '">' + (wa > 8 ? nf(r[a]) : "") + '</i><i class="b" style="width:' + wb + '%" title="' + esc(lb + ": " + nf(r[b])) + '">' + (wb > 8 ? nf(r[b]) : "") + "</i></span></div>";
+    }).join("") + '<div class="rp-leg row"><span><i class="a"></i>' + esc(la) + '</span><span><i class="b"></i>' + esc(lb) + "</span></div></div>";
+  }
+  function reportsView(v) {
+    const sps = Object.keys(data.sprints || {}).map(function (k) { return Object.assign({ id: k }, data.sprints[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    const conts = items().filter(isContainer).sort(byOrder);
+    const ppl = Object.keys(members).map(function (k) { return members[k]; }).sort(function (a, b) { return (a.name || a.email).localeCompare(b.name || b.email); });
+    const sel = function (id, cur, opts) { return '<select data-rp="' + id + '"><option value="">' + L("All", "Tudo") + "</option>" + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select>"; };
+    const base = items().filter(function (i) { return !isContainer(i) && i.type !== "milestone"; });
+    const W = base.filter(function (i) {
+      if (rpt.sprint && i.sprint !== rpt.sprint) return false;
+      if (rpt.type && i.type !== rpt.type) return false;
+      if (rpt.status && statusOf(i).id !== rpt.status) return false;
+      if (rpt.who && (i.assignee || "_") !== rpt.who) return false;
+      if (rpt.epic && !underOf(i, rpt.epic)) return false;
+      return true;
+    });
+    const now = Date.now(), D7 = 7 * DAY, td = today(), in7 = n2d(d2n(td) + 7 * DAY);
+    const sp = function (l) { return l.reduce(function (n, i) { return n + (Number(i.points) || 0); }, 0); };
+    const done = W.filter(function (i) { return cat(i) === "done"; });
+    const spPl = sp(W), spDn = sp(done), noSp = W.filter(function (i) { return !i.points; }).length;
+    const tile = function (ic, val, lbl, cls) { return '<div class="rp-tile' + (cls ? " " + cls : "") + '"><span class="ic">' + IC(ic, 18) + "</span><b>" + val + "</b><span>" + lbl + "</span></div>"; };
+    const statusRows = statuses().map(function (x) { return { n: x.name, c: stColor(x), v: W.filter(function (i) { return statusOf(i).id === x.id; }).length }; });
+    const typeRows = Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return { n: TYPES[t].name, c: TYPES[t].color, v: W.filter(function (i) { return i.type === t; }).length }; });
+    const whoAll = ppl.map(function (m) { return m.email; }); /* colour follows the person (fixed order), max 7 + others */
+    const whoRows = whoAll.slice(0, 7).map(function (e, k) { return { n: memberName(e), c: RPAL[k], v: W.filter(function (i) { return i.assignee === e; }).length }; });
+    const others = W.filter(function (i) { return i.assignee && whoAll.slice(0, 7).indexOf(i.assignee) < 0; }).length;
+    if (others) whoRows.push({ n: L("Others", "Outros"), c: "#8a94a6", v: others });
+    whoRows.push({ n: L("Unassigned", "Sem responsável"), c: "#c9d1e0", v: W.filter(function (i) { return !i.assignee; }).length });
+    /* sprint delivery (closed sprints use the snapshot taken when they were completed) */
+    const sprRows = sps.map(function (S) {
+      const its = W.filter(function (i) { return i.sprint === S.id; }), dn = its.filter(function (i) { return cat(i) === "done"; });
+      const live = { items: its.length, done: dn.length, sp: sp(its), spDone: sp(dn), noSp: its.filter(function (i) { return !i.points; }).length };
+      const r = S.state === "closed" && S.report && !rpt.type && !rpt.status && !rpt.who && !rpt.epic ? S.report : live;
+      return { n: S.name + (S.state === "active" ? L(" (in progress)", " (em andamento)") : ""), sp: r.sp, dn: r.spDone, rm: Math.max(0, r.sp - r.spDone), noSp: r.noSp, items: r.items, idone: r.done };
+    });
+    const unitSp = rpt.unit !== "items";
+    const epRows = conts.filter(function (c) { return c.type !== "initiative" || !conts.some(function (e) { return e.parent === c.id; }); }).map(function (c) {
+      const its = W.filter(function (i) { return laneOf(i) === c.id; }), dn = its.filter(function (i) { return cat(i) === "done"; });
+      const a = unitSp ? sp(dn) : dn.length, t = unitSp ? sp(its) : its.length;
+      return { n: (c.key ? c.key + " " : "") + c.title, a: a, b: Math.max(0, t - a) };
+    }).filter(function (r) { return r.a + r.b > 0; }).sort(function (x, y) { return (y.a + y.b) - (x.a + x.b); });
+    /* burndown of the active (or selected) sprint, from the date each item was done */
+    const bs = data.sprints && (data.sprints[rpt.sprint] ? Object.assign({ id: rpt.sprint }, data.sprints[rpt.sprint]) : sps.find(function (S) { return S.state === "active"; }));
+    let burn = "";
+    if (bs && bs.start && bs.end) {
+      const its = base.filter(function (i) { return i.sprint === bs.id; }), tot = unitSp ? sp(its) : its.length;
+      const s0 = d2n(bs.start), e0 = d2n(bs.end), days = Math.max(1, Math.round((e0 - s0) / DAY));
+      const Wd = 520, Hd = 180, x = function (d) { return 36 + d / days * (Wd - 50); }, y = function (vv) { return 14 + (1 - (tot ? vv / tot : 0)) * (Hd - 44); };
+      let pts = [];
+      for (let d = 0; d <= days; d++) { const t = s0 + d * DAY; if (t > d2n(td) + DAY) break; const doneBy = its.filter(function (i) { return cat(i) === "done" && i.doneAt && i.doneAt <= t + DAY; }); pts.push([d, tot - (unitSp ? sp(doneBy) : doneBy.length)]); }
+      burn = '<svg viewBox="0 0 ' + Wd + " " + Hd + '" class="rp-burn" role="img" aria-label="Burndown"><line x1="36" x2="' + (Wd - 14) + '" y1="' + y(0) + '" y2="' + y(0) + '" class="rp-grid"/><text x="30" y="' + (y(tot) + 4) + '" text-anchor="end" class="rp-ax">' + nf(tot) + '</text><text x="30" y="' + (y(0) + 4) + '" text-anchor="end" class="rp-ax">0</text>' +
+        '<line x1="' + x(0) + '" y1="' + y(tot) + '" x2="' + x(days) + '" y2="' + y(0) + '" stroke="#8a94a6" stroke-width="2" stroke-dasharray="5 5"><title>' + esc(L("Ideal", "Ideal")) + "</title></line>" +
+        (pts.length ? '<polyline fill="none" stroke="#2a78d6" stroke-width="2" points="' + pts.map(function (p) { return x(p[0]) + "," + y(p[1]); }).join(" ") + '"/>' + pts.map(function (p) { return '<circle cx="' + x(p[0]) + '" cy="' + y(p[1]) + '" r="4" fill="#2a78d6" stroke="#fff" stroke-width="2"><title>' + esc(fmt(n2d(s0 + p[0] * DAY)) + ": " + nf(p[1]) + (unitSp ? " SP" : "")) + "</title></circle>"; }).join("") : "") +
+        '<text x="' + x(0) + '" y="' + (Hd - 8) + '" class="rp-ax">' + fmt(bs.start) + '</text><text x="' + x(days) + '" y="' + (Hd - 8) + '" text-anchor="end" class="rp-ax">' + fmt(bs.end) + "</text></svg>" +
+        '<div class="rp-leg row"><span><i style="background:#2a78d6"></i>' + L("Remaining", "Restante") + '</span><span><i class="dash"></i>' + L("Ideal", "Ideal") + "</span></div>";
+    }
+    const tbl = function (head, rows, tot) { return '<div class="rp-tw"><table class="rp-t"><thead><tr>' + head.map(function (h, k) { return "<th" + (k ? ' class="n"' : "") + ">" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows.map(function (r) { return "<tr>" + r.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody>" + (tot ? "<tfoot><tr>" + tot.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr></tfoot>" : "") + "</table></div>"; };
+    const sum = function (k) { return sprRows.reduce(function (n, r) { return n + (r[k] || 0); }, 0); };
+    let mb = 0, ma = 0; W.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
+    v.innerHTML = '<div class="rp">' +
+      '<div class="rp-filters">' +
+      "<label>" + L("Sprint / cycle", "Sprint / ciclo") + sel("sprint", rpt.sprint, sps.map(function (S) { return [S.id, S.name]; })) + "</label>" +
+      "<label>" + L("Type", "Tipo") + sel("type", rpt.type, Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return [t, TYPES[t].name]; })) + "</label>" +
+      "<label>Status" + sel("status", rpt.status, statuses().map(function (x) { return [x.id, x.name]; })) + "</label>" +
+      "<label>" + L("Assignee", "Responsável") + sel("who", rpt.who, ppl.map(function (m) { return [m.email, m.name || m.email]; }).concat([["_", L("Unassigned", "Sem responsável")]])) + "</label>" +
+      "<label>" + L("Epic / initiative", "Épico / iniciativa") + sel("epic", rpt.epic, conts.map(function (c) { return [c.id, (c.key ? c.key + " " : "") + c.title]; })) + "</label>" +
+      '<label>' + L("Measure", "Medida") + '<select data-rp="unit"><option value="sp"' + (unitSp ? " selected" : "") + '>Story points</option><option value="items"' + (!unitSp ? " selected" : "") + ">" + L("Items", "Itens") + "</option></select></label>" +
+      '<button class="pl-btn sm ghost" id="rpCsv">' + IC("export", 14) + " CSV</button></div>" +
+      '<div class="rp-tiles">' +
+      tile("list", nf(W.length), L("Items", "Itens")) + tile("objective", nf(spPl), L("SP planned", "SP planejados")) + tile("task", nf(spDn), L("SP delivered", "SP entregues"), "good") +
+      tile("calendar", nf(spPl - spDn), L("SP remaining", "SP restantes")) + tile("kr", pct(spDn, spPl), L("% delivered (SP)", "% entregue (SP)")) + tile("bell", nf(noSp), L("Items without SP", "Itens sem SP"), noSp ? "warn" : "") + "</div>" +
+      '<div class="rp-tiles sm">' +
+      tile("task", nf(W.filter(function (i) { return i.doneAt && now - i.doneAt <= D7; }).length), L("completed in the last 7 days", "concluídos nos últimos 7 dias")) +
+      tile("pencil", nf(W.filter(function (i) { return i.updated && now - i.updated <= D7; }).length), L("updated in the last 7 days", "atualizados nos últimos 7 dias")) +
+      tile("plus", nf(W.filter(function (i) { return i.created && now - i.created <= D7; }).length), L("created in the last 7 days", "criados nos últimos 7 dias")) +
+      tile("calendar", nf(W.filter(function (i) { return i.end && i.end >= td && i.end <= in7 && cat(i) !== "done"; }).length), L("due in the next 7 days", "vencem nos próximos 7 dias")) +
+      tile("bell", nf(W.filter(overdue).length), L("overdue", "em atraso"), W.filter(overdue).length ? "bad" : "") + "</div>" +
+      '<div class="rp-grid3">' +
+      '<section class="rp-card"><h3>' + L("Items by status", "Itens por status") + "</h3>" + donut(statusRows, W.length, L("Items by status", "Itens por status")) + "</section>" +
+      '<section class="rp-card"><h3>' + L("Items by type", "Itens por tipo") + "</h3>" + donut(typeRows, W.length, L("Items by type", "Itens por tipo")) + "</section>" +
+      '<section class="rp-card"><h3>' + L("Items by assignee", "Itens por responsável") + "</h3>" + donut(whoRows, W.length, L("Items by assignee", "Itens por responsável")) + "</section></div>" +
+      (sprRows.length ? '<div class="rp-grid2">' +
+        '<section class="rp-card"><h3>' + L("Sprint delivery · story points", "Entrega por sprint · story points") + "</h3>" + tbl(["Sprint", L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes"), L("No SP (items)", "Sem SP (itens)"), L("% delivered", "% entregue")], sprRows.map(function (r) { return [esc(r.n), nf(r.sp), nf(r.dn), nf(r.rm), nf(r.noSp), pct(r.dn, r.sp)]; }), ["Total", nf(sum("sp")), nf(sum("dn")), nf(sum("rm")), nf(sum("noSp")), pct(sum("dn"), sum("sp"))]) + "</section>" +
+        '<section class="rp-card"><h3>' + L("Planned × delivered × remaining (SP)", "Planejado × entregue × restante (SP)") + '</h3><div class="rp-scroll">' + bars(sprRows, [{ k: "sp", n: L("SP planned", "SP planejados"), c: "#2a78d6" }, { k: "dn", n: L("SP delivered", "SP entregues"), c: "#1baf7a" }, { k: "rm", n: L("SP remaining", "SP restantes"), c: "#6250d6" }], "SP") + "</div></section></div>" +
+        '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Sprint delivery · items", "Entrega por sprint · itens") + "</h3>" + tbl(["Sprint", L("Items", "Itens"), L("Items done", "Itens concluídos"), L("Items remaining", "Itens restantes"), L("% done", "% concluído")], sprRows.map(function (r) { return [esc(r.n), nf(r.items), nf(r.idone), nf(r.items - r.idone), pct(r.idone, r.items)]; }), ["Total", nf(sum("items")), nf(sum("idone")), nf(sum("items") - sum("idone")), pct(sum("idone"), sum("items"))]) + "</section>" +
+        '<section class="rp-card"><h3>Burndown' + (bs ? " · " + esc(bs.name) : "") + "</h3>" + (burn || '<p class="muted small">' + L("Start a sprint (with dates) to see its burndown.", "Inicie uma sprint (com datas) para ver o burndown.") + "</p>") + "</section></div>"
+        : '<section class="rp-card rp-hint"><p class="muted small">' + L("Sprint reports (story points per sprint, planned × delivered, burndown) appear when the planning has sprints – use the Scrum method or add a “Sprint board (Scrum)” in Boards.", "Os relatórios de sprint (story points por sprint, planejado × entregue, burndown) aparecem quando o planejamento tem sprints – use o método Scrum ou adicione um “Quadro da sprint (Scrum)” em Quadros.") + "</p></section>") +
+      '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Epics · delivered and remaining", "Épicos · entregue e restante") + " (" + (unitSp ? "SP" : L("items", "itens")) + ")</h3>" + (epRows.length ? hstack(epRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No items linked to epics yet.", "Ainda não há itens ligados a épicos.") + "</p>") + "</section>" +
+      '<section class="rp-card"><h3>' + L("Budget × actual", "Orçado × realizado") + "</h3>" + (mb || ma ? '<div class="rp-money"><div><span>' + L("Budget", "Orçado") + "</span><b>" + money(mb) + "</b></div><div><span>" + L("Actual", "Realizado") + '</span><b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></div><div><span>" + L("Used", "Consumido") + "</span><b>" + pct(ma, mb) + '</b></div></div><span class="pbar big"><i style="width:' + Math.min(100, mb ? ma / mb * 100 : 0) + "%;background:" + (ma > mb ? "#e5484d" : "#1baf7a") + '"></i></span>' : '<p class="muted small">' + L("Fill in budget and actual on the items to follow the costs.", "Preencha orçado e realizado nos itens para acompanhar os custos.") + "</p>") + "</section></div>" +
+      '<p class="muted small rp-foot">' + L("Updated live from this planning", "Atualizado ao vivo a partir deste planejamento") + " · " + new Date().toLocaleString(PT ? "pt-BR" : "en-GB", { dateStyle: "short", timeStyle: "short" }) + "</p></div>";
+    v.querySelectorAll("[data-rp]").forEach(function (sl) { sl.onchange = function () { rpt[sl.dataset.rp] = sl.value; reportsView(v); }; });
+    document.getElementById("rpCsv").onclick = function () {
+      const q = function (x) { x = x == null ? "" : String(x); return /[",;\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+      const lines = [["Sprint", "SP planejados", "SP entregues", "SP restantes", "Sem SP (itens)", "Itens", "Itens concluídos"].join(",")].concat(sprRows.map(function (r) { return [r.n, r.sp, r.dn, r.rm, r.noSp, r.items, r.idone].map(q).join(","); }));
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" })); a.download = (info.title || "planning") + "-relatorio-sprints.csv"; a.click();
+    };
   }
   /* board options per planning (kept in this browser) */
   function kbOpt() { try { return JSON.parse(localStorage.getItem("cmcollab:kb:" + ID) || "{}"); } catch (e) { return {}; } }
@@ -715,6 +949,8 @@
       box.querySelector("#cpGo").onclick = function () {
         const to = (box.querySelector("#mvTo") || {}).value || null, u = {};
         u["sprints/" + id + "/state"] = "closed"; u["sprints/" + id + "/closedAt"] = TS();
+        const all = items().filter(function (i) { return i.sprint === id && !isContainer(i) && i.type !== "milestone"; }), dn = all.filter(function (i) { return cat(i) === "done"; });
+        u["sprints/" + id + "/report"] = { items: all.length, done: dn.length, sp: all.reduce(function (n, i) { return n + (Number(i.points) || 0); }, 0), spDone: dn.reduce(function (n, i) { return n + (Number(i.points) || 0); }, 0), noSp: all.filter(function (i) { return !i.points; }).length };
         open.forEach(function (i) { u["items/" + i.id + "/sprint"] = to; });
         db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Sprint completed", "Sprint concluída")); }, fail);
       };
