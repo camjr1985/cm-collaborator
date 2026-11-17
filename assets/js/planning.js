@@ -88,7 +88,9 @@
     const u = {}; Object.keys(obj).forEach(function (k) { u["items/" + id + "/" + k] = obj[k] === undefined ? null : obj[k]; });
     if ("status" in obj && data.items[id]) { const nd = (statuses().find(function (x) { return x.id === obj.status; }) || {}).cat === "done", wasDone = cat(data.items[id]) === "done"; if (nd && !wasDone) u["items/" + id + "/doneAt"] = TS(); else if (!nd && wasDone) u["items/" + id + "/doneAt"] = null; }
     u["items/" + id + "/updated"] = TS();
-    return db.ref("planning/" + ID + "/data").update(u).then(function () { jiraPushLater(id, obj); }).catch(fail);
+    const prevSt = data.items[id] ? data.items[id].status : null, w = data.items[id] && data.items[id].watch;
+    const tellW = "status" in obj && obj.status !== prevSt && w && Object.keys(w).some(function (k) { return w[k] && w[k].status !== false && String(w[k].email).toLowerCase() !== String(me.email).toLowerCase(); });
+    return db.ref("planning/" + ID + "/data").update(u).then(function () { jiraPushLater(id, obj); if (tellW) notify("watch", { item: id, from: prevSt }).then(function (j) { if (j && j.ok && (j.sent || []).length) toast(L("Card followers notified", "Quem acompanha o card foi avisado")); }); }).catch(fail);
   }
   /* changes to items that came from Jira / Azure DevOps / Kanbanize go back to the source tool */
   function jiraPushLater(id, obj) {
@@ -817,7 +819,7 @@
     return '<article class="kb-card' + (overdue(it) ? " late" : "") + '" draggable="' + canEdit + '" data-id="' + it.id + '"><div class="kt">' + esc(it.title) + "</div>" +
       (par ? '<span class="ep" style="--c:' + (TYPES[par.type] || TYPES.epic).color + '">' + esc(par.title) + "</span>" : "") +
       '<div class="km"><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + "</span>" + (it.points ? '<span class="pts">' + esc(it.points) + "</span>" : "") +
-      (it.end ? '<span class="due">' + fmt(it.end) + "</span>" : "") + '<span class="sp"></span>' + (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") + "</div></article>";
+      (it.end ? '<span class="due">' + fmt(it.end) + "</span>" : "") + (it.watch && Object.keys(it.watch).length ? '<span class="kw" title="' + esc(L("Alerts on: ", "Alertas ativos: ") + Object.keys(it.watch).map(function (k) { return memberName(it.watch[k].email); }).join(", ")) + '">' + IC("bell", 13) + "</span>" : "") + '<span class="sp"></span>' + (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") + "</div></article>";
   }
   function dnd(root, itemSel, zoneSel, onDrop) {
     let dragId = null;
@@ -983,6 +985,52 @@
   }
 
   /* ---------------- item drawer ---------------- */
+  /* ---------------- per-card alerts (followers) ----------------
+     items/<id>/watch/<emailKey> = { email, status, before: [days], late, by, at }
+     status → e-mail right away when the card changes status; before/late → in the daily alert (08:00 Lisbon) */
+  const WDAYS = [7, 3, 1, 0];
+  function wKey(e) { return String(e || "").toLowerCase().replace(/\./g, ","); }
+  function watchBlock(it) {
+    const w = it.watch || {}, ks = Object.keys(w), mine = w[wKey(me.email)];
+    const who = ks.map(function (k) { return wKey(me.email) === k ? L("you", "você") : memberName(w[k].email); });
+    const desc = function (x) { const p = []; if (x.status !== false) p.push(L("status change", "mudança de status")); if ((x.before || []).length) p.push(L("due: ", "prazo: ") + x.before.slice().sort(function (a, b) { return b - a; }).map(function (d) { return d === 0 ? L("on the day", "no dia") : d + "d"; }).join(", ")); if (x.late) p.push(L("when late", "quando atrasar")); return p.join(" · "); };
+    return '<div class="d-watch"><div class="dw-h">' + IC("bell", 15) + " <b>" + L("Alerts for this card", "Alertas deste card") + "</b></div>" +
+      (ks.length ? '<p class="small">' + L("Following: ", "Acompanham: ") + esc(who.join(", ")) + (mine ? '<br><span class="muted">' + L("Your alerts: ", "Seus alertas: ") + esc(desc(mine)) + "</span>" : "") + "</p>" : '<p class="muted small">' + L("No one is following this card yet.", "Ninguém acompanha este card ainda.") + "</p>") +
+      (canEdit ? '<div class="dw-a"><button type="button" class="pl-btn sm" id="wQuick">' + (mine ? L("Stop following", "Deixar de acompanhar") : IC("bell", 13) + " " + L("Follow this card", "Acompanhar este card")) + '</button><button type="button" class="pl-btn sm ghost" id="wCfg">' + L("Configure alerts…", "Configurar alertas…") + "</button></div>" : '<p class="muted small">' + L("Only editors can set alerts.", "Somente editores configuram alertas.") + "</p>") +
+      (!it.end ? '<p class="muted small">' + L("Tip: set a due date to get deadline alerts.", "Dica: defina um prazo para receber avisos de vencimento.") + "</p>" : "") + "</div>";
+  }
+  function bindWatch(id) {
+    const wq = document.getElementById("wQuick"); if (wq) wq.onclick = function () { quickWatch(id); };
+    const wc = document.getElementById("wCfg"); if (wc) wc.onclick = function () { watchDialog(id); };
+  }
+  function refreshWatch(id) { // the drawer may have unsaved edits, so only the alerts block is redrawn
+    setTimeout(function () { const b = document.querySelector("#drawer .d-watch"); if (!b || openItem !== id || !data.items[id]) return; b.outerHTML = watchBlock(Object.assign({ id: id }, data.items[id])); bindWatch(id); }, 120);
+  }
+  function quickWatch(id) {
+    const it = data.items[id], k = wKey(me.email);
+    if (it && it.watch && it.watch[k]) return save("items/" + id + "/watch/" + k, null).then(function () { refreshWatch(id); toast(L("You no longer follow this card", "Você deixou de acompanhar este card")); });
+    save("items/" + id + "/watch/" + k, { email: me.email, status: true, before: [1], late: true, by: me.email, at: Date.now() }).then(function () { refreshWatch(id); toast(L("Following: status changes, 1 day before the due date and when late", "Acompanhando: mudança de status, 1 dia antes do prazo e quando atrasar")); });
+  }
+  function watchDialog(id) {
+    const it = data.items[id]; if (!it) return;
+    const w = it.watch || {}, base = w[wKey(me.email)] || w[Object.keys(w)[0]] || { status: true, before: [1], late: true };
+    const ppl = Object.keys(members).map(function (k) { return members[k]; }).filter(function (m) { return m && m.email && (!m.expires || m.expires > Date.now()); });
+    if (!ppl.some(function (m) { return String(m.email).toLowerCase() === String(me.email).toLowerCase(); })) ppl.unshift({ email: me.email, name: me.displayName || me.email });
+    modal("<h2>" + IC("bell", 20) + " " + L("Alerts for ", "Alertas de ") + esc(it.key || it.title) + '</h2><p class="muted small">' + L("Choose who follows this card and what they are warned about. E-mails go out from the platform account.", "Escolha quem acompanha este card e sobre o que será avisado. Os e-mails saem pela conta da plataforma.") + "</p>" +
+      '<form class="pl-form" id="wF"><fieldset><legend>' + L("Warn about", "Avisar quando") + '</legend><label class="chk"><input type="checkbox" name="st"' + (base.status !== false ? " checked" : "") + "> " + L("The status changes (right away)", "O status mudar (na hora)") + '</label><div class="day-chips">' + WDAYS.map(function (d) { return '<label><input type="checkbox" name="b' + d + '"' + ((base.before || []).indexOf(d) >= 0 ? " checked" : "") + "><span>" + (d === 0 ? L("On the due date", "No dia do prazo") : d + " " + L(d === 1 ? "day before" : "days before", d === 1 ? "dia antes" : "dias antes")) + "</span></label>"; }).join("") + '</div><label class="chk"><input type="checkbox" name="late"' + (base.late ? " checked" : "") + "> " + L("It is late (every morning until done)", "Atrasar (todas as manhãs até concluir)") + "</label>" + (!it.end ? '<p class="muted small">' + L("This card has no due date yet – deadline alerts start when one is set.", "Este card ainda não tem prazo – os avisos de vencimento começam quando houver um.") + "</p>" : "") + "</fieldset>" +
+      "<fieldset><legend>" + L("Who follows", "Quem acompanha") + '</legend><div class="w-ppl">' + ppl.map(function (m) { const k = wKey(m.email); return '<label class="chk"><input type="checkbox" name="p" value="' + esc(m.email) + '"' + (w[k] || (!Object.keys(w).length && k === wKey(me.email)) ? " checked" : "") + "> " + esc(m.name || m.email) + ' <span class="muted">' + esc(m.email) + (k === wKey(me.email) ? " · " + L("you", "você") : "") + "</span></label>"; }).join("") + "</div></fieldset>" +
+      '<div class="pl-row-end">' + (Object.keys(w).length ? '<button type="button" class="pl-btn ghost danger" id="wOff">' + L("Turn off all", "Desligar todos") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save alerts", "Salvar alertas") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#wF");
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const cfg = { status: f.st.checked, before: WDAYS.filter(function (d) { return f["b" + d].checked; }), late: f.late.checked };
+        if (!cfg.status && !cfg.before.length && !cfg.late) return toast(L("Choose at least one kind of alert", "Escolha pelo menos um tipo de alerta"));
+        const out = {}; Array.prototype.forEach.call(f.querySelectorAll("input[name=p]:checked"), function (c) { const k = wKey(c.value), prev = w[k] || {}; out[k] = Object.assign({ email: c.value, by: prev.by || me.email, at: prev.at || Date.now() }, cfg); });
+        save("items/" + id + "/watch", Object.keys(out).length ? out : null).then(function () { refreshWatch(id); toast(Object.keys(out).length ? L("Alerts saved for ", "Alertas salvos para ") + Object.keys(out).length + L(" people", " pessoa(s)") : L("Alerts turned off", "Alertas desligados")); close(); });
+      };
+      const off = box.querySelector("#wOff"); if (off) off.onclick = function () { save("items/" + id + "/watch", null).then(function () { refreshWatch(id); toast(L("Alerts turned off", "Alertas desligados")); close(); }); };
+    });
+  }
   function openDrawer(id, focusTitle) {
     if (drawerDirty && id !== openItem) { return confirmDiscard(function () { drawerDirty = false; openDrawer(id, focusTitle); }); }
     drawerDirty = false;
@@ -1008,6 +1056,7 @@
       (sps.length && !isContainer(it) ? "<label>Sprint<select name=\"sprint\"" + dis + '><option value="">Backlog</option>' + sps.map(function (k) { return '<option value="' + k + '"' + (k === it.sprint ? " selected" : "") + ">" + esc(data.sprints[k].name) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Depends on (finish → start)", "Depende de (fim → início)") + '<select name="deps" multiple size="4"' + dis + ">" + others.map(function (o) { return '<option value="' + o.id + '"' + ((it.deps || {})[o.id] ? " selected" : "") + ">" + esc((o.key ? o.key + " · " : "") + o.title) + "</option>"; }).join("") + "</select></label>" +
       '<label class="chk prio"><input type="checkbox" name="prio"' + (it.prio ? " checked" : "") + dis + "> ★ " + L("Key activity – include in the e-mail alerts", "Atividade principal – incluir nos alertas por e-mail") + "</label>" +
+      watchBlock(it) +
       (allKrs().length ? "<label>" + L("Contributes to (OKR)", "Contribui para (OKR)") + '<select name="krs" multiple size="' + Math.min(5, allKrs().length) + '"' + dis + ">" + allKrs().map(function (k) { return '<option value="' + k.ref + '"' + ((it.krs || {})[k.ref] ? " selected" : "") + ">" + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
       (it.src && it.src.board ? '<a class="pl-src" href="../board/?id=' + encodeURIComponent(it.src.board) + '">' + IC("board", 15) + " " + L("Open the source board (process step)", "Abrir o quadro de origem (passo do processo)") + "</a>" : "") +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +
@@ -1067,6 +1116,7 @@
     document.getElementById("dDn").onclick = function () { moveItem(id, 1); };
     f.title.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); f.title.blur(); } };
     f.querySelectorAll("[data-mk]").forEach(function (b) { b.onclick = function () { b.disabled = true; createInTool(b.dataset.mk, id).then(function () { b.disabled = false; }); }; });
+    bindWatch(id);
     if (focusTitle) { f.title.focus(); f.title.select(); }
     document.getElementById("dDel").onclick = function () {
       const kids = children(id);

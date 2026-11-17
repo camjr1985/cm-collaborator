@@ -457,55 +457,7 @@
   function roleSelect(name, val, attr) {
     return '<select ' + (name ? 'name="' + name + '" ' : "") + (attr || "") + ' aria-label="' + t("Access") + '"><option value="editor"' + (val !== "viewer" ? " selected" : "") + ">" + t("Can edit") + '</option><option value="viewer"' + (val === "viewer" ? " selected" : "") + ">" + t("View only") + "</option></select>";
   }
-  /* all people across workspaces, with their access per workspace */
-  function usersSection(ids, LL) {
-    const map = {};
-    ids.forEach(function (id) {
-      const w = ws[id], mm = w.members || {};
-      Object.keys(mm).forEach(function (k) {
-        const m = mm[k]; const u = map[k] || (map[k] = { name: "", email: m.email || k.replace(/,/g, "."), acc: [] });
-        if (m.name && !u.name) u.name = m.name;
-        u.acc.push({ id: id, k: k, ws: (w.info || {}).name || id, m: m });
-      });
-    });
-    const keys = Object.keys(map).sort(function (a, b) { return (map[a].name || map[a].email).localeCompare(map[b].name || map[b].email); });
-    const rows = keys.map(function (k) {
-      const u = map[k];
-      return '<li class="u-row" data-q="' + esc((u.name + " " + u.email + " " + u.acc.map(function (a) { return a.ws; }).join(" ")).toLowerCase()) + '"><span class="av sm no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><span class="m-who"><b class="no-i18n">' + esc(u.name || "—") + '</b><span class="muted no-i18n">' + esc(u.email) + "</span></span>" +
-        '<span class="u-acc">' + u.acc.map(function (a) {
-          return '<span class="u-ws"><b class="no-i18n">' + esc(a.ws) + '</b><span class="muted">' + esc(t(a.m.role === "viewer" ? "Viewer" : "Editor")) + "</span>" + expiryBadge(a.m) +
-            '<button class="link" data-ext="' + a.id + "|" + a.k + '|7">' + t("+7 days") + "</button>" +
-            '<button class="link" data-welcome="' + a.id + "|" + a.k + '" title="' + esc(a.m.welcomed ? t("Welcome e-mail sent on") + " " + fmtDate(a.m.welcomed) : t("Welcome e-mail not sent yet")) + '">' + (a.m.welcomed ? "✓ " : "") + "✉</button>" +
-            '<button class="link" data-prospect="' + a.id + "|" + a.k + '" title="' + esc(a.m.prospected ? t("Prospecting e-mail sent on") + " " + fmtDate(a.m.prospected) : t("Prospecting e-mail not sent yet")) + '">' + (a.m.prospected ? "✓ " : "") + esc(t("Prospecting")) + "</button>" +
-            '<button class="link danger-t" data-remove="' + a.id + "|" + a.k + '" title="' + esc(LL("Remove access", "Remover acesso")) + '">✕</button></span>';
-        }).join("") + "</span></li>";
-    }).join("");
-    return '<section class="card fb-report" id="users"><div class="br-head"><div><span class="eyebrow sm no-i18n">' + LL("Users", "Usuários") + '</span><h2 class="no-i18n">' + LL("People and access", "Pessoas e acessos") + '</h2><p class="muted small no-i18n">' + LL("Everyone with access to any workspace – role, expiry and welcome e-mail per workspace. Add people inside each workspace.", "Todas as pessoas com acesso a algum workspace – papel, validade e e-mail de boas-vindas por workspace. Para adicionar pessoas, use o workspace.") + "</p></div>" +
-      '<input id="userSearch" class="u-search" type="search" placeholder="' + esc(LL("Search name, e-mail or workspace", "Buscar nome, e-mail ou workspace")) + '"></div>' +
-      '<ul class="members u-list">' + (rows || '<li class="muted small">' + t("No one has access yet.") + "</li>") + "</ul></section>";
-  }
-  function render() {
-    const ids = sortByCreated(Object.keys(ws).reduce(function (o, k) { o[k] = (ws[k] || {}).info || {}; return o; }, {}));
-    const nBoards = ids.reduce(function (a, id) { return a + Object.keys(ws[id].boards || {}).length; }, 0);
-    const people = {};
-    ids.forEach(function (id) { Object.keys(ws[id].members || {}).forEach(function (k) { people[k] = 1; }); });
-
-    let h = OWNER ? '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(me.email) + '</b></span><span class="plan-badge">' + esc(t("Plan")) + ": <b>" + esc(PLAN.name) + "</b> · " + PLAN.seats + " " + esc(t("seats")) + '</span><a class="btn sm primary" href="../pricing/">' + esc(t("Upgrade")) + '</a><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>'
-      : '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
-    const LL = function (en, pt) { return window.MB_LANG === "pt" ? pt : en; };
-    let tab = "ws"; try { tab = (location.hash === "#usuarios" || location.hash === "#users") ? "users" : (localStorage.getItem("cmcollab:admtab") || "ws"); } catch (e) { /* ignore */ }
-    const nPeople = Object.keys(people).length;
-    h += '<nav class="adm-tabs no-i18n" role="tablist"><button role="tab" data-atab="ws" class="' + (tab === "ws" ? "on" : "") + '">' + LL("Workspace administration", "Administração de workspaces") + ' <span class="count">' + ids.length + '</span></button><button role="tab" data-atab="users" class="' + (tab === "users" ? "on" : "") + '">' + LL("User administration", "Administração de usuários") + ' <span class="count">' + nPeople + "</span></button></nav>";
-    h += '<div class="adm-pane" data-pane="ws"' + (tab === "ws" ? "" : " hidden") + ">";
-    h += '<div class="admin-grid"><section class="card"><h2>New workspace</h2><p class="muted small">A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.</p>' +
-      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + areaSelect("area", "") + daysSelect("days", 0) + '<button class="btn primary">Create workspace</button><label class="consent"><input type="checkbox" name="prospect"><span>' + esc(t("Prospecting: one workspace per company (test access, 14 days by default)")) + "</span></label></form>" +
-      '<p class="muted small">' + t("Access period: choose 7 days for beta testers – access closes automatically.") + "</p></section>" +
-      '<section class="card stats"><h2>Overview</h2><div class="stat-row"><div class="stat"><b>' + ids.length + "</b><span>Workspaces</span></div><div class=\"stat\"><b>" + nBoards + "</b><span>Boards</span></div><div class=\"stat\"><b>" + Object.keys(people).length + "</b><span>People</span></div><a class=\"stat\" href=\"#signups\"><b>" + Object.keys(signups).length + "</b><span>Sign-ups</span></a><a class=\"stat\" href=\"#feedback\"><b>" + Object.keys(feedback).length + "</b><span>Feedback</span></a></div>" +
-      '<p class="muted small">Only invited e-mails can open a workspace. Admins are managed in the Firebase console.</p></section></div>';
-
-    if (!ids.length) h += '<div class="card empty-big" style="margin-top:24px"><h3>No workspaces yet</h3><p class="muted">Create the first one above – for example "Mentoring".</p></div>';
-
-    h += ids.map(function (id) {
+  function wsCard(id) {
       const w = ws[id], boards = w.boards || {}, members = w.members || {};
       const bIds = sortByCreated(boards), mIds = Object.keys(members).sort(function (a, b) { return (members[a].name || "").localeCompare(members[b].name || ""); });
       const bl = bIds.map(function (b) {
@@ -539,23 +491,236 @@
         roleSelect("role", "editor") + daysSelect("days", w.info.accessDays || (w.info.prospect ? 14 : 0)) +
         '<label class="mail-type">' + esc(t("E-mail type")) + ' <select name="mailType" aria-label="' + esc(t("E-mail type")) + '"><option value="welcome"' + (w.info.prospect ? "" : " selected") + ">" + esc(t("Welcome (beta)")) + '</option><option value="prospect"' + (w.info.prospect ? " selected" : "") + ">" + esc(t("Sales prospecting")) + "</option></select></label>" +
         '<button class="btn primary">Grant access</button></form><p class="muted small">' + esc(t("Prospecting: access is created first, then the e-mail is sent from the platform account. Tip: one workspace per company, with a test period (14 days).")) + "</p></div></div></section>";
-    }).join("");
+  }
 
-    h += "</div>";
-    h += '<div class="adm-pane" data-pane="users"' + (tab === "users" ? "" : " hidden") + ">" + usersSection(ids, LL) + (!OWNER ? signupsSection() + plansSection() + feedbackSection() + annSection() : "") + "</div>";
+  /* ---------- administration shell (Jira-like side menu) ---------- */
+  const LL = function (en, pt) { return window.MB_LANG === "pt" ? pt : en; };
+  const SEL = {}; let drawerK = null;
+  const UF = (function () { try { return JSON.parse(localStorage.getItem("cmcollab:admuf") || "{}"); } catch (e) { return {}; } })();
+  function saveUF() { try { localStorage.setItem("cmcollab:admuf", JSON.stringify(UF)); } catch (e) { /* ignore */ } }
+  function accSt(m) { if (!m.expires) return "none"; const d = daysLeft(m.expires); return d <= 0 ? "off" : d <= 7 ? "soon" : "ok"; }
+  function fmtShort(ts) { return new Date(ts).toLocaleDateString(PT ? "pt-BR" : "en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }); }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function buildUsers() {
+    const map = {};
+    Object.keys(ws).forEach(function (id) {
+      const w = ws[id], mm = w.members || {};
+      Object.keys(mm).forEach(function (k) {
+        const m = mm[k]; if (!m) return;
+        const u = map[k] || (map[k] = { k: k, name: "", email: m.email || k.replace(/,/g, "."), acc: [] });
+        if (m.name && !u.name) u.name = m.name;
+        u.acc.push({ id: id, k: k, ws: (w.info || {}).name || id, m: m, st: accSt(m), boards: Object.keys(w.boards || {}).length, plans: Object.keys(w.plannings || {}).length });
+      });
+    });
+    Object.keys(map).forEach(function (k) {
+      const u = map[k], act = u.acc.filter(function (a) { return a.st !== "off"; });
+      const lim = act.filter(function (a) { return a.st !== "none"; }).map(function (a) { return a.m.expires; });
+      u.next = lim.length ? Math.min.apply(null, lim) : null;
+      u.st = act.some(function (a) { return a.st === "soon"; }) ? "soon" : !act.length ? "off" : act.some(function (a) { return a.st === "ok"; }) ? "ok" : "none";
+      if (u.st === "off") u.next = Math.max.apply(null, u.acc.map(function (a) { return a.m.expires || 0; }));
+      u.off = u.acc.length - act.length;
+      u.boards = u.acc.reduce(function (s, a) { return s + a.boards; }, 0);
+      u.plans = u.acc.reduce(function (s, a) { return s + a.plans; }, 0);
+      u.noRenew = u.acc.some(function (a) { return a.m.noRenew; });
+      const roles = {}; u.acc.forEach(function (a) { roles[a.m.role === "viewer" ? "viewer" : "editor"] = 1; });
+      u.role = Object.keys(roles).length > 1 ? "mixed" : Object.keys(roles)[0];
+    });
+    return map;
+  }
+  function stLabel(u) {
+    if (u.st === "none") return '<span class="lic none">' + LL("No time limit", "Sem prazo") + "</span>";
+    if (u.st === "off") return '<span class="lic off">' + LL("Expired", "Expirado") + "</span>";
+    const d = daysLeft(u.next);
+    return '<span class="lic ' + u.st + '">' + (u.st === "soon" ? LL("Expires in ", "Vence em ") + plural(d, LL("day", "dia"), LL("days", "dias")) : LL("Active", "Ativo")) + "</span>";
+  }
+  function roleLabel(r) { return r === "mixed" ? LL("Mixed", "Misto") : r === "viewer" ? LL("Viewer", "Leitor") : LL("Editor", "Editor"); }
+  function accSel(u) { // accesses the bulk/row actions apply to (respects the workspace filter)
+    return u.acc.filter(function (a) { return !UF.ws || a.id === UF.ws; });
+  }
+  function expUpdates(list, mode, val) {
+    const u = {}, now = Date.now();
+    list.forEach(function (a) {
+      const base = "workspaces/" + a.id + "/members/" + a.k;
+      if (mode === "norenew") { u[base + "/noRenew"] = val ? true : null; return; }
+      if (mode === "add" && !a.m.expires) return; // "no time limit" stays unlimited when extending
+      let e = null;
+      if (mode === "add") e = Math.max(now, a.m.expires) + val * DAY;
+      else if (mode === "date") e = val;
+      else if (mode === "end") e = now - 1000;
+      u[base + "/expires"] = e;
+      if (mode !== "end") u[base + "/noRenew"] = null;
+      u["userWorkspaces/" + a.k + "/" + a.id] = { name: ws[a.id].info.name, expires: e };
+    });
+    return u;
+  }
+  const MSG = { add: ["Access extended", "Acesso prorrogado"], date: ["Expiry date updated", "Validade atualizada"], full: ["Full access granted", "Acesso sem prazo concedido"], end: ["Access ended", "Acesso encerrado"], norenew: ["Renewal preference saved", "Preferência de renovação salva"] };
+  function applyExp(list, mode, val) {
+    if (!list.length) return false;
+    if (mode === "end" && !window.confirm(LL("End access now for ", "Encerrar agora o acesso de ") + plural(list.length, LL("access", "acesso"), LL("accesses", "acessos")) + "?\n\n" + list.map(function (a) { return a.m.email + " · " + a.ws; }).join("\n"))) return false;
+    update(expUpdates(list, mode, val), LL(MSG[mode][0], MSG[mode][1]));
+    return true;
+  }
+  function usersFiltered(map) {
+    const q = (UF.q || "").toLowerCase();
+    return Object.keys(map).map(function (k) { return map[k]; }).filter(function (u) {
+      if (UF.ws && !u.acc.some(function (a) { return a.id === UF.ws; })) return false;
+      if (UF.st && UF.st !== "all") { if (UF.st === "norenew" ? !u.noRenew : u.st !== UF.st) return false; }
+      if (q && (u.name + " " + u.email + " " + u.acc.map(function (a) { return a.ws; }).join(" ")).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort(function (a, b) {
+      if (UF.sort === "exp") { const x = a.st === "none" ? 9e15 : a.next || 0, y = b.st === "none" ? 9e15 : b.next || 0; if (x !== y) return x - y; }
+      return (a.name || a.email).localeCompare(b.name || b.email);
+    });
+  }
+  function overviewPane(ids, map) {
+    const users = Object.keys(map).map(function (k) { return map[k]; });
+    const nB = ids.reduce(function (a, id) { return a + Object.keys(ws[id].boards || {}).length; }, 0);
+    const nP = ids.reduce(function (a, id) { return a + Object.keys(ws[id].plannings || {}).length; }, 0);
+    const cnt = function (st) { return users.filter(function (u) { return u.st === st; }).length; };
+    const att = [];
+    users.forEach(function (u) { u.acc.forEach(function (a) { if (a.st === "soon" || (a.st === "off" && daysLeft(a.m.expires) > -30)) att.push({ u: u, a: a }); }); });
+    att.sort(function (x, y) { return x.a.m.expires - y.a.m.expires; });
+    const tile = function (n, l, go, cls) { return '<button class="ov-tile' + (cls ? " " + cls : "") + '"' + (go ? ' data-go="' + go + '"' : "") + "><b>" + n + "</b><span>" + l + "</span></button>"; };
+    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Overview", "Visão geral") + '</h2><p class="muted small">' + LL("Everything that needs a decision first: accesses about to expire and recently expired.", "Primeiro, o que pede decisão: acessos vencendo e expirados recentemente.") + "</p></div></div>" +
+      '<div class="ov-grid">' + tile(users.length, LL("People", "Pessoas"), "users:all") + tile(cnt("ok") + cnt("none"), LL("Active", "Ativos"), "users:ok") + tile(cnt("soon"), LL("Expiring ≤ 7 days", "Vencendo em até 7 dias"), "users:soon", cnt("soon") ? "warn" : "") + tile(cnt("off"), LL("Expired", "Expirados"), "users:off", cnt("off") ? "bad" : "") +
+      tile(ids.length, "Workspaces", "ws") + tile(nB, LL("Boards", "Quadros"), "ws") + tile(nP, LL("Plannings & dashboards", "Planejamentos e painéis"), "ws") +
+      (!OWNER ? tile(Object.keys(signups).filter(function (k) { return (signups[k] || {}).status !== "invited"; }).length, LL("Pending sign-ups", "Inscrições pendentes"), "signups") : "") + "</div>";
+    h += "<h3>" + LL("Needs attention", "Requer atenção") + ' <span class="count">' + att.length + "</span></h3>";
+    h += att.length ? '<div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>' + LL("Person", "Pessoa") + "</th><th>Workspace</th><th>" + LL("Valid until", "Validade") + "</th><th>" + LL("Status", "Situação") + "</th><th>" + LL("Decision", "Decisão") + "</th></tr></thead><tbody>" + att.map(function (x) {
+      const a = x.a, ref = a.id + "|" + a.k;
+      return '<tr><td><button class="lnk-u" data-user="' + esc(x.u.k) + '"><b class="no-i18n">' + esc(x.u.name || x.u.email) + '</b><span class="muted no-i18n">' + esc(x.u.email) + '</span></button></td><td class="no-i18n">' + esc(a.ws) + "</td><td class=\"tnum\">" + fmtShort(a.m.expires) + "</td><td>" + stLabel({ st: a.st, next: a.m.expires }) + (a.m.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + '</td><td class="acts"><button class="btn sm" data-aexp="' + ref + '|add|7">+7</button><button class="btn sm" data-aexp="' + ref + '|add|30">+30</button><button class="btn sm ghost" data-aexp="' + ref + '|norenew|' + (a.m.noRenew ? 0 : 1) + '">' + (a.m.noRenew ? LL("Renew", "Renovar") : LL("Don't renew", "Não renovar")) + "</button></td></tr>";
+    }).join("") + "</tbody></table></div>" : '<p class="muted small">' + LL("Nothing expiring in the next 7 days.", "Nenhum acesso vencendo nos próximos 7 dias.") + "</p>";
+    return h + "</section>";
+  }
+  function usersPane(ids, map) {
+    const all = Object.keys(map).map(function (k) { return map[k]; }), list = usersFiltered(map);
+    const n = function (st) { return all.filter(function (u) { return st === "all" ? true : st === "norenew" ? u.noRenew : u.st === st; }).length; };
+    const chip = function (st, l) { return '<button class="fchip' + ((UF.st || "all") === st ? " on" : "") + '" data-ust="' + st + '">' + l + ' <span class="count">' + n(st) + "</span></button>"; };
+    const nsel = Object.keys(SEL).filter(function (k) { return map[k]; }).length;
+    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Users & licences", "Usuários e licenças") + '</h2><p class="muted small">' + LL("One row per person: what they can open, until when, and the decision to extend or not. Select people to act in bulk; click a person for the details.", "Uma linha por pessoa: o que ela acessa, até quando, e a decisão de prorrogar ou não. Selecione pessoas para agir em lote; clique na pessoa para ver os detalhes.") + '</p></div><div class="sec-acts"><button class="btn sm" id="uCsv">' + LL("Export CSV", "Exportar CSV") + "</button></div></div>";
+    h += '<div class="fbar">' + chip("all", LL("All", "Todos")) + chip("soon", LL("Expiring ≤ 7d", "Vencendo ≤ 7 dias")) + chip("off", LL("Expired", "Expirados")) + chip("ok", LL("Active", "Ativos")) + chip("none", LL("No limit", "Sem prazo")) + chip("norenew", LL("Won't renew", "Não renovar")) + "</div>";
+    h += '<div class="fbar f2"><input id="uQ" type="search" value="' + esc(UF.q || "") + '" placeholder="' + esc(LL("Search name, e-mail or workspace", "Buscar nome, e-mail ou workspace")) + '"><select id="uWs" class="no-i18n"><option value="">' + LL("All workspaces", "Todos os workspaces") + "</option>" + ids.map(function (id) { return '<option value="' + esc(id) + '"' + (UF.ws === id ? " selected" : "") + ">" + esc(ws[id].info.name) + "</option>"; }).join("") + '</select><select id="uSort"><option value="name">' + LL("Sort: name", "Ordenar: nome") + '</option><option value="exp"' + (UF.sort === "exp" ? " selected" : "") + ">" + LL("Sort: nearest expiry", "Ordenar: validade mais próxima") + "</option></select></div>";
+    h += '<div class="bulk"' + (nsel ? "" : " hidden") + '><b>' + plural(nsel, LL("selected", "selecionado"), LL("selected", "selecionados")) + '</b><span class="muted small">' + (UF.ws ? LL("in workspace ", "no workspace ") + esc((ws[UF.ws] && ws[UF.ws].info.name) || "") : LL("in all their workspaces", "em todos os workspaces deles")) + '</span><span class="sp"></span>' +
+      '<span class="bl">' + LL("Extend", "Prorrogar") + '</span><button class="btn sm" data-bulk="add|7">+7</button><button class="btn sm" data-bulk="add|14">+14</button><button class="btn sm" data-bulk="add|30">+30</button><input type="date" id="bDate" aria-label="' + esc(LL("Until date", "Até a data")) + '"><button class="btn sm" data-bulk="date">' + LL("Set date", "Definir data") + '</button>' +
+      '<button class="btn sm ghost" data-bulk="norenew|1">' + LL("Don't renew", "Não renovar") + '</button><button class="btn sm ghost danger-t" data-bulk="end">' + LL("End now", "Encerrar agora") + '</button><button class="btn sm ghost" data-bulk="welcome">✉ ' + LL("Welcome", "Boas-vindas") + '</button><button class="link" data-bulk="clear">' + LL("Clear", "Limpar") + "</button></div>";
+    if (!all.length) return h + '<p class="muted small">' + t("No one has access yet.") + "</p></section>";
+    h += '<div class="tbl-wrap"><table class="adm-tbl utbl"><thead><tr><th class="ck"><input type="checkbox" id="uAll" aria-label="' + esc(LL("Select all", "Selecionar todos")) + '"' + (list.length && list.every(function (u) { return SEL[u.k]; }) ? " checked" : "") + "></th><th>" + LL("Person", "Pessoa") + "</th><th>Workspaces</th><th>" + LL("Access", "Acessos") + "</th><th>" + LL("Role", "Papel") + "</th><th>" + LL("Valid until", "Validade") + "</th><th>" + LL("Status", "Situação") + "</th><th>E-mails</th><th></th></tr></thead><tbody>" +
+      list.map(function (u) {
+        const wsn = u.acc.map(function (a) { return a.ws; });
+        return '<tr data-row="' + esc(u.k) + '"' + (SEL[u.k] ? ' class="sel"' : "") + '><td class="ck"><input type="checkbox" data-sel="' + esc(u.k) + '"' + (SEL[u.k] ? " checked" : "") + ' aria-label="' + esc(u.email) + '"></td>' +
+          '<td data-l="' + esc(LL("Person", "Pessoa")) + '"><button class="lnk-u" data-user="' + esc(u.k) + '"><span class="av sm no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><span><b class="no-i18n">' + esc(u.name || "—") + '</b><span class="muted no-i18n">' + esc(u.email) + "</span></span></button></td>" +
+          '<td data-l="Workspaces" class="no-i18n wsn" title="' + esc(wsn.join(" · ")) + '">' + esc(wsn[0]) + (wsn.length > 1 ? "<small>+ " + esc(wsn.slice(1, 3).join(", ")) + (wsn.length > 3 ? " +" + (wsn.length - 3) : "") + "</small>" : "") + "</td>" +
+          '<td data-l="' + esc(LL("Access", "Acessos")) + '">' + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + "</td>" +
+          '<td data-l="' + esc(LL("Role", "Papel")) + '">' + roleLabel(u.role) + "</td>" +
+          '<td data-l="' + esc(LL("Valid until", "Validade")) + '" class="tnum">' + (u.st === "none" ? "—" : fmtShort(u.next)) + (u.off && u.st !== "off" ? '<span class="muted small"> · ' + plural(u.off, LL("expired", "expirado"), LL("expired", "expirados")) + "</span>" : "") + "</td>" +
+          '<td data-l="' + esc(LL("Status", "Situação")) + '">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + "</td>" +
+          '<td data-l="E-mails" class="mails">' + (u.acc.some(function (a) { return a.m.welcomed; }) ? '<span title="' + esc(LL("Welcome sent", "Boas-vindas enviado")) + '">✓ ✉</span>' : '<span class="muted" title="' + esc(LL("Welcome not sent", "Boas-vindas não enviado")) + '">✉</span>') + (u.acc.some(function (a) { return a.m.prospected; }) ? ' <span class="xp prospected">' + LL("Prosp.", "Prosp.") + "</span>" : "") + "</td>" +
+          '<td class="go"><button class="btn sm" data-user="' + esc(u.k) + '">' + LL("Manage", "Gerenciar") + " ›</button></td></tr>";
+      }).join("") + "</tbody></table></div>" + (list.length ? "" : '<p class="muted small">' + LL("No one matches the filters.", "Ninguém corresponde aos filtros.") + "</p>");
+    return h + "</section>";
+  }
+  function drawerHtml(u) {
+    if (!u) return "";
+    const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 14) : ""; };
+    return '<div class="adm-drawer-bg" data-dclose></div><aside class="adm-drawer" role="dialog" aria-label="' + esc(u.name || u.email) + '"><header><span class="av no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><div><h2 class="no-i18n">' + esc(u.name || u.email) + '</h2><span class="muted no-i18n">' + esc(u.email) + '</span></div><button class="btn sm ghost" data-dclose aria-label="' + esc(LL("Close", "Fechar")) + '">✕</button></header>' +
+      '<div class="d-sum">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + '<span class="muted small">' + plural(u.acc.length, "workspace", "workspaces") + " · " + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + "</span></div>" +
+      u.acc.map(function (a) {
+        const w = ws[a.id], ref = a.id + "|" + a.k, bl = w.boards || {}, pl = w.plannings || {};
+        return '<section class="d-acc"><div class="d-acc-h"><b class="no-i18n">' + esc(a.ws) + "</b>" + roleSelect("", a.m.role, 'data-role="' + ref + '"') + "</div>" +
+          '<div class="d-line">' + expiryBadge(a.m) + (a.m.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + "</div>" +
+          '<div class="d-acts"><span class="bl">' + LL("Extend", "Prorrogar") + '</span><button class="btn sm" data-aexp="' + ref + '|add|7">+7</button><button class="btn sm" data-aexp="' + ref + '|add|14">+14</button><button class="btn sm" data-aexp="' + ref + '|add|30">+30</button><input type="date" data-adate="' + ref + '" aria-label="' + esc(LL("Until date", "Até a data")) + '"' + (a.m.expires ? ' value="' + new Date(a.m.expires).toISOString().slice(0, 10) + '"' : "") + "></div>" +
+          '<div class="d-acts">' + (a.m.expires ? '<button class="btn sm ghost" data-aexp="' + ref + '|full|0">' + LL("No time limit", "Sem prazo") + "</button>" : "") + '<button class="btn sm ghost" data-aexp="' + ref + "|norenew|" + (a.m.noRenew ? 0 : 1) + '">' + (a.m.noRenew ? LL("Renew", "Renovar") : LL("Don't renew", "Não renovar")) + "</button>" + (a.st !== "off" ? '<button class="btn sm ghost danger-t" data-aexp="' + ref + '|end|0">' + LL("End now", "Encerrar agora") + "</button>" : "") + '<button class="btn sm ghost danger-t" data-remove="' + ref + '">' + LL("Remove", "Remover") + "</button></div>" +
+          '<details class="d-list"><summary>' + plural(Object.keys(bl).length, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(Object.keys(pl).length, LL("planning (with dashboards)", "planejamento (com painéis)"), LL("plannings (with dashboards)", "planejamentos (com painéis)")) + "</summary><ul>" +
+          Object.keys(bl).map(function (b) { return '<li>' + ic("board") + ' <a class="no-i18n" href="../board/?id=' + encodeURIComponent(b) + '">' + esc(bl[b].title || b) + "</a></li>"; }).join("") +
+          Object.keys(pl).map(function (p) { return '<li>' + ic("planning") + ' <a class="no-i18n" href="../planning/?id=' + encodeURIComponent(p) + '">' + esc(pl[p].title || p) + '</a> <a class="muted small" href="../planning/?id=' + encodeURIComponent(p) + '#reports">' + LL("dashboard", "painel") + "</a></li>"; }).join("") + "</ul></details>" +
+          '<div class="d-mail"><button class="link" data-welcome="' + ref + '">' + (a.m.welcomed ? "✓ " + LL("Welcome sent ", "Boas-vindas enviado em ") + fmtDate(a.m.welcomed) : "✉ " + LL("Send welcome", "Enviar boas-vindas")) + '</button><button class="link" data-prospect="' + ref + '">' + (a.m.prospected ? "✓ " + LL("Prospecting sent ", "Prospecção enviada em ") + fmtDate(a.m.prospected) : "✉ " + LL("Send prospecting", "Enviar prospecção")) + "</button></div></section>";
+      }).join("") + "</aside>";
+  }
+  function wsPane(ids) {
+    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("New workspace", "Novo workspace") + '</h2><p class="muted small">' + t('A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.') + "</p></div></div>" +
+      '<form id="newWs" class="form-inline ws-form"><input name="wsname" required placeholder="' + esc(t("Workspace name")) + '" autocomplete="off">' + areaSelect("area", "") + daysSelect("days", 0) + '<button class="btn primary">' + t("Create workspace") + '</button><label class="consent"><input type="checkbox" name="prospect"><span>' + esc(t("Prospecting: one workspace per company (test access, 14 days by default)")) + "</span></label></form></section>";
+    h += '<section class="card adm-sec"><div class="sec-head"><div><h2>Workspaces <span class="count">' + ids.length + '</span></h2><p class="muted small">' + LL("Click a workspace to manage its boards, plannings and people.", "Clique num workspace para gerenciar quadros, planejamentos e pessoas.") + "</p></div></div>";
+    if (!ids.length) return h + '<p class="muted">' + t("No workspaces yet") + "</p></section>";
+    const AR = window.PLAN_AREAS || {};
+    h += '<div class="ws-list"><div class="ws-row ws-hd"><span>Workspace</span><span>' + LL("Area", "Área") + "</span><span>" + LL("Boards", "Quadros") + "</span><span>" + LL("Plannings", "Planejamentos") + "</span><span>" + LL("People", "Pessoas") + "</span><span>" + LL("Default access", "Acesso padrão") + "</span></div>" +
+      ids.map(function (id) {
+        const w = ws[id], i = w.info || {}, ar = AR[i.area] || {};
+        return '<details class="ws-det" id="wsd-' + id + '"' + (UF.open === id ? " open" : "") + '><summary class="ws-row"><span><b class="no-i18n">' + esc(i.name) + "</b>" + (i.prospect ? ' <span class="xp prospected">' + esc(t("Prospecting workspace")) + "</span>" : "") + '</span><span data-l="' + esc(LL("Area", "Área")) + '">' + esc(ar.name || "—") + '</span><span data-l="' + esc(LL("Boards", "Quadros")) + '">' + Object.keys(w.boards || {}).length + '</span><span data-l="' + esc(LL("Plannings", "Planejamentos")) + '">' + Object.keys(w.plannings || {}).length + '</span><span data-l="' + esc(LL("People", "Pessoas")) + '">' + Object.keys(w.members || {}).length + '</span><span data-l="' + esc(LL("Default access", "Acesso padrão")) + '">' + (i.accessDays ? i.accessDays + " " + LL("days", "dias") : LL("No limit", "Sem prazo")) + "</span></summary>" + wsCard(id) + "</details>";
+      }).join("") + "</div>";
+    return h + "</section>";
+  }
+  function render() {
+    const ids = sortByCreated(Object.keys(ws).reduce(function (o, k) { o[k] = (ws[k] || {}).info || {}; return o; }, {}));
+    const map = buildUsers(), users = Object.keys(map).map(function (k) { return map[k]; });
+    let h = OWNER ? '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(me.email) + '</b></span><span class="plan-badge">' + esc(t("Plan")) + ": <b>" + esc(PLAN.name) + "</b> · " + PLAN.seats + " " + esc(t("seats")) + '</span><a class="btn sm primary" href="../pricing/">' + esc(t("Upgrade")) + '</a><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>'
+      : '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
+    const SECS = [["overview", LL("Overview", "Visão geral"), "visao-geral", "", "chart"], ["users", LL("Users & licences", "Usuários e licenças"), "usuarios", users.filter(function (u) { return u.st === "soon"; }).length || users.length, "users"], ["ws", "Workspaces", "workspaces", ids.length, "folder"]]
+      .concat(OWNER ? [] : [["signups", LL("Beta sign-ups", "Inscrições no beta"), "inscricoes", Object.keys(signups).length, "inbox"], ["plans", LL("Plans", "Planos"), "planos", Object.keys(plans).length, "card"], ["comms", LL("Announcement", "Comunicação"), "comunicacao", "", "bell"], ["feedback", "Feedback", "feedback", Object.keys(feedback).length, "chat"]]);
+    const hash = (location.hash || "").slice(1);
+    let sec = (SECS.find(function (s) { return s[2] === hash || s[0] === hash; }) || [])[0];
+    if (!sec) { try { sec = localStorage.getItem("cmcollab:admsec"); } catch (e) { /* ignore */ } }
+    if (!SECS.some(function (s) { return s[0] === sec; })) sec = "overview";
+    const soon = users.filter(function (u) { return u.st === "soon"; }).length;
+    h += '<div class="adm-shell"><nav class="adm-nav no-i18n" aria-label="' + esc(LL("Administration", "Administração")) + '">' + SECS.map(function (s) {
+      const badge = s[0] === "users" && soon ? '<span class="count warn" title="' + esc(LL("Expiring in 7 days", "Vencendo em 7 dias")) + '">' + soon + "</span>" : s[3] !== "" ? '<span class="count">' + s[3] + "</span>" : "";
+      return '<button data-sec="' + s[0] + '"' + (s[0] === sec ? ' class="on" aria-current="page"' : "") + "><span>" + s[1] + "</span>" + badge + "</button>";
+    }).join("") + '</nav><div class="adm-main no-i18n-wrap">';
+    const pane = function (k, html) { return '<div class="adm-pane" data-pane="' + k + '"' + (k === sec ? "" : " hidden") + ">" + html + "</div>"; };
+    h += pane("overview", overviewPane(ids, map)) + pane("users", usersPane(ids, map)) + pane("ws", wsPane(ids));
+    if (!OWNER) h += pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
+    h += "</div></div>" + '<div id="admDrawer">' + (drawerK && map[drawerK] ? drawerHtml(map[drawerK]) : "") + "</div>";
     h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">' + t("The sign-in link was e-mailed automatically. If you like, also send this personal message (e.g. by WhatsApp).") + '</p>' +
       '<textarea rows="10" readonly></textarea><div class="row-end"><button class="btn" id="dlgClose">Close</button><button class="btn" id="copyInv">Copy message</button><a class="btn primary" id="mailBtn" href="#">Open in e-mail</a></div></div></div>';
     el.innerHTML = h;
-    el.querySelectorAll("[data-atab]").forEach(function (b) {
-      b.onclick = function () {
-        const k = b.dataset.atab;
-        el.querySelectorAll("[data-atab]").forEach(function (x) { x.classList.toggle("on", x === b); });
-        el.querySelectorAll("[data-pane]").forEach(function (p) { p.hidden = p.dataset.pane !== k; });
-        try { localStorage.setItem("cmcollab:admtab", k); history.replaceState(null, "", k === "users" ? "#usuarios" : "#workspaces"); } catch (e) { /* ignore */ }
-      };
-    });
-    const us = el.querySelector("#userSearch");
-    if (us) us.oninput = function () { const q = us.value.trim().toLowerCase(); el.querySelectorAll(".u-row").forEach(function (r) { r.hidden = !!q && r.dataset.q.indexOf(q) < 0; }); };
+    const SLUG = {}; SECS.forEach(function (x) { SLUG[x[0]] = x[2]; });
+    function go(k, st) {
+      if (st) { UF.st = st; saveUF(); return render(), go(k); }
+      el.querySelectorAll("[data-sec]").forEach(function (x) { const on = x.dataset.sec === k; x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
+      el.querySelectorAll("[data-pane]").forEach(function (p) { p.hidden = p.dataset.pane !== k; });
+      try { localStorage.setItem("cmcollab:admsec", k); history.replaceState(null, "", "#" + SLUG[k]); } catch (e) { /* ignore */ }
+      window.scrollTo({ top: 0 });
+    }
+    el.querySelectorAll("[data-sec]").forEach(function (b) { b.onclick = function () { go(b.dataset.sec); }; });
+    el.querySelectorAll("[data-go]").forEach(function (b) { b.onclick = function () { const g = b.dataset.go.split(":"); if (g[1]) { UF.st = g[1]; saveUF(); render(); } go(g[0] === "users" ? "users" : g[0]); }; });
+    function rr(focusId) { render(); const f = focusId && document.getElementById(focusId); if (f) { f.focus(); if (f.setSelectionRange && f.type === "search") { const n = f.value.length; f.setSelectionRange(n, n); } } }
+    el.querySelectorAll("[data-ust]").forEach(function (b) { b.onclick = function () { UF.st = b.dataset.ust; saveUF(); rr(); }; });
+    const uQ = document.getElementById("uQ"); if (uQ) uQ.oninput = function () { UF.q = uQ.value; saveUF(); rr("uQ"); };
+    const uWs = document.getElementById("uWs"); if (uWs) uWs.onchange = function () { UF.ws = uWs.value; saveUF(); rr(); };
+    const uSort = document.getElementById("uSort"); if (uSort) uSort.onchange = function () { UF.sort = uSort.value; saveUF(); rr(); };
+    el.querySelectorAll("[data-sel]").forEach(function (c) { c.onchange = function () { if (c.checked) SEL[c.dataset.sel] = 1; else delete SEL[c.dataset.sel]; rr(); }; });
+    const uAll = document.getElementById("uAll"); if (uAll) uAll.onchange = function () { usersFiltered(map).forEach(function (u) { if (uAll.checked) SEL[u.k] = 1; else delete SEL[u.k]; }); rr(); };
+    const selAcc = function () { return Object.keys(SEL).filter(function (k) { return map[k]; }).reduce(function (l, k) { return l.concat(accSel(map[k])); }, []); };
+    el.querySelectorAll("[data-bulk]").forEach(function (b) { b.onclick = function () {
+      const q = b.dataset.bulk.split("|"), list = selAcc();
+      if (q[0] === "clear") { Object.keys(SEL).forEach(function (k) { delete SEL[k]; }); return rr(); }
+      if (q[0] === "welcome") {
+        const byWs = {}; list.filter(function (a) { return a.st !== "off"; }).forEach(function (a) { (byWs[a.id] = byWs[a.id] || []).push(a.m.email); });
+        const n = Object.keys(byWs).reduce(function (s, k) { return s + byWs[k].length; }, 0);
+        if (!n) return toast(LL("No active access selected", "Nenhum acesso ativo selecionado"));
+        if (window.confirm(t("Send the welcome e-mail to") + " " + n + " " + t("people") + "?")) Object.keys(byWs).forEach(function (w) { sendWelcome(w, byWs[w]); });
+        return;
+      }
+      if (q[0] === "date") { const v = document.getElementById("bDate").value; if (!v) return toast(LL("Choose a date", "Escolha uma data")); if (applyExp(list, "date", new Date(v + "T23:59:00").getTime())) Object.keys(SEL).forEach(function (k) { delete SEL[k]; }); return; }
+      if (applyExp(list, q[0], Number(q[1] || 0))) Object.keys(SEL).forEach(function (k) { delete SEL[k]; });
+    }; });
+    el.querySelectorAll("[data-aexp]").forEach(function (b) { b.onclick = function () {
+      const q = b.dataset.aexp.split("|"), m = ((ws[q[0]] || {}).members || {})[q[1]]; if (!m) return;
+      applyExp([{ id: q[0], k: q[1], m: m, ws: ws[q[0]].info.name }], q[2], Number(q[3]));
+    }; });
+    el.querySelectorAll("[data-adate]").forEach(function (i) { i.onchange = function () {
+      const q = i.dataset.adate.split("|"), m = ((ws[q[0]] || {}).members || {})[q[1]]; if (!m || !i.value) return;
+      applyExp([{ id: q[0], k: q[1], m: m, ws: ws[q[0]].info.name }], "date", new Date(i.value + "T23:59:00").getTime());
+    }; });
+    el.querySelectorAll("[data-user]").forEach(function (b) { b.onclick = function () { drawerK = b.dataset.user; rr(); }; });
+    el.querySelectorAll("[data-dclose]").forEach(function (b) { b.onclick = function () { drawerK = null; const d = document.getElementById("admDrawer"); if (d) d.innerHTML = ""; }; });
+    if (drawerK) document.onkeydown = function (e) { if (e.key === "Escape" && drawerK) { drawerK = null; const d = document.getElementById("admDrawer"); if (d) d.innerHTML = ""; } };
+    el.querySelectorAll(".ws-det").forEach(function (d) { d.ontoggle = function () { if (d.open) { UF.open = d.id.slice(4); saveUF(); } else if (UF.open === d.id.slice(4)) { UF.open = ""; saveUF(); } }; });
+    const uCsv = document.getElementById("uCsv"); if (uCsv) uCsv.onclick = function () {
+      const q = function (v) { v = v == null ? "" : String(v); return '"' + v.replace(/"/g, '""') + '"'; };
+      const rows = []; usersFiltered(map).forEach(function (u) { u.acc.forEach(function (a) { rows.push([u.name, u.email, a.ws, a.m.role || "editor", a.m.expires ? new Date(a.m.expires).toISOString().slice(0, 10) : "", a.st === "none" ? "sem prazo" : a.st === "off" ? "expirado" : a.st === "soon" ? "vence em 7 dias" : "ativo", a.m.noRenew ? "sim" : "", a.boards, a.plans, a.m.welcomed ? new Date(a.m.welcomed).toISOString().slice(0, 10) : "", a.m.prospected ? new Date(a.m.prospected).toISOString().slice(0, 10) : ""].map(q).join(",")); }); });
+      const blob = new Blob(["﻿" + ["nome", "email", "workspace", "papel", "validade", "situacao", "nao_renovar", "quadros", "planejamentos", "boas_vindas", "prospeccao"].join(",") + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+      const x = document.createElement("a"); x.href = URL.createObjectURL(blob); x.download = "cm-collaborator-usuarios-licencas-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(x); x.click(); x.remove();
+    };
 
     document.getElementById("newWs").onsubmit = function (e) { e.preventDefault(); createWorkspace(e.target); };
     const af = document.getElementById("annForm");

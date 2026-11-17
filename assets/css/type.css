@@ -1,0 +1,34 @@
+/* CM Collaborator – typography system (one scale for the whole platform).
+   Inspired by Jira (Atlassian Sans is derived from Inter), Azure DevOps and Kanbanize, fixing what they get wrong:
+   - same font on every OS (Azure DevOps falls back to each system's font) → Inter shipped as a web font;
+   - one fixed scale instead of ad-hoc sizes; body 14px like Jira; nothing readable below 11px;
+   - unambiguous characters for IDs and keys (l / I / 1) via Inter's alternate glyphs;
+   - aligned (tabular) numbers in tables, reports and indicators;
+   - secondary text meets WCAG AA contrast (4.5:1), unlike the pale greys common in these tools.
+   Poppins stays only for the logo and marketing pages (landing / beta). Whiteboard content keeps user-chosen sizes. */
+:root {
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-brand: "Poppins", var(--font);
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* scale: caption · small · dense UI · body · large · heading S · heading M · heading L */
+  --fs-10: 10px;  /* only tiny badges ("NOVO" corner) and avatar initials */
+  --fs-11: 11px;  /* captions, labels, column headers */
+  --fs-12: 12px;  /* secondary text, card metadata */
+  --fs-13: 13px;  /* dense UI: tables, cards, toolbars */
+  --fs-14: 14px;  /* body (default) */
+  --fs-16: 16px;  /* large body, section titles */
+  --fs-20: 20px;  /* page/section headings */
+  --fs-24: 24px;  /* page titles */
+  --fs-32: 32px;  /* indicators (KPI numbers) */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+}
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  font-family: var(--font);
+  font-feature-settings: "cv05" 1, "cv08" 1, "calt" 1; /* l with tail, I with serifs: no l/I/1 confusion */
+  text-rendering: optimizeLegibility;
+}
+b, strong { font-weight: var(--fw-semibold); }
+input, select, textarea, button { font-family: inherit; }
+table, .tnum, .kpi, .kpis, [data-num] { font-variant-numeric: tabular-nums; }
+code, kbd, pre { font-family: var(--font-mono); }

@@ -32,7 +32,7 @@ function doPost(e) {
     var req = JSON.parse(e.postData.contents || "{}");
     var brand = String(req.brand || "").replace(/[^\w À-ÿ&.·-]/g, "").trim().slice(0, 40) || CFG.brand;
     var who = verify(req.idToken);
-    if (req.kind === "assign" || req.kind === "due") return json(planNotify(req, who, brand));
+    if (req.kind === "assign" || req.kind === "due" || req.kind === "watch") return json(planNotify(req, who, brand));
     if (req.kind === "digest") return json(digestManual(req, who, brand));
     if (req.kind === "digest-status") return json({ ok: true, daily: ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "dailyDigest"; }) });
     if (/^jira-/.test(String(req.kind || ""))) return json(jiraHandle(req, who));
@@ -263,6 +263,20 @@ function planNotify(req, who, brand) {
     var text = html.replace(/<\/tr>|<\/p>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
     MailApp.sendEmail(to, subject, text, opt); sent.push(to);
+  }
+  if (req.kind === "watch") { // a followed card changed status → tell its followers right away
+    var wi = items[String(req.item || "")];
+    if (!wi || !wi.watch) return { ok: true, sent: [] };
+    var from = String(req.from || ""), fromOk = sts.some(function (x) { return x.id === from; });
+    var seen = {};
+    Object.keys(wi.watch).forEach(function (k) {
+      var w = wi.watch[k] || {}, to = String(w.email || "").toLowerCase();
+      if (!to || w.status === false || seen[to] || to === String(who.email).toLowerCase() || !isMember(to) || sent.length >= CFG.maxPerCall) return;
+      seen[to] = 1;
+      send(w.email, (pt ? "Status alterado: " : "Status changed: ") + (wi.key ? wi.key + " · " : "") + wi.title,
+        esc(byName) + (pt ? " moveu um card que você acompanha para <b>" : " moved a card you follow to <b>") + esc(stName(wi.status)) + "</b>" + (fromOk ? (pt ? " (antes: " : " (before: ") + esc(stName(from)) + ")" : "") + (pt ? " no planejamento <b>“" : " in the planning <b>“") + esc(pinfo.title) + "”</b>.", [wi]);
+    });
+    return { ok: true, sent: sent };
   }
   if (req.kind === "assign") {
     var it = items[String(req.item || "")];
@@ -627,8 +641,8 @@ function kbHandle(req, who) {
 function dayStr(d) { return Utilities.formatDate(d, "Europe/Lisbon", "yyyy-MM-dd"); }
 function dayDiff(a, b) { return Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 864e5); }
 function digestCompute(planId, P, W, today, test) {
-  var info = P.info || {}, data = P.data || {}, cfg = (data.settings || {}).notify;
-  if (!cfg || !cfg.enabled) return {};
+  var info = P.info || {}, data = P.data || {}, cfg = (data.settings || {}).notify, planOn = !!(cfg && cfg.enabled);
+  cfg = cfg || {};
   var sts = (data.settings || {}).statuses || [], items = data.items || {};
   var cat = function (id) { for (var i = 0; i < sts.length; i++) if (sts[i].id === id) return sts[i].cat; return "todo"; };
   var before = (cfg.before || [7, 1]).map(Number), maxB = Math.max.apply(null, before.concat([0]));
@@ -638,9 +652,18 @@ function digestCompute(planId, P, W, today, test) {
   var owner = winfo.ownerEmail || info.createdBy || null, per = {};
   Object.keys(items).forEach(function (k) {
     var it = items[k]; if (!it.end || cat(it.status) === "done") return;
+    var d = dayDiff(it.end, today), send = false, kind = null;
+    var row = { key: it.key, title: it.title, type: it.type, end: it.end, start: it.start, d: d, kind: d < 0 ? "late" : d === 0 ? "today" : "soon", prio: !!it.prio, assignee: it.assignee || "" };
+    var put = function (e) { if (!e) return; e = e.toLowerCase(); var l = per[e] = per[e] || []; if (!l.some(function (x) { return x.key === row.key && x.title === row.title; })) l.push(row); };
+    // per-card followers (alerts configured on the card itself)
+    Object.keys(it.watch || {}).forEach(function (wk) {
+      var w = it.watch[wk] || {}, b = (w.before || []).map(Number), ok = false;
+      if (d < 0) ok = !!w.late; else ok = test ? (b.length > 0 && d <= Math.max.apply(null, b)) : b.indexOf(d) >= 0;
+      if (ok) put(memberEmail(w.email));
+    });
+    if (!planOn) return;
     var inScope = sc.all || (sc.milestones && it.type === "milestone") || (sc.key && it.prio);
     if (!inScope) return;
-    var d = dayDiff(it.end, today), send = false, kind = null;
     if (d < 0) { var late = -d; kind = "late"; send = test || od === "daily" || (od === "every3" && (late === 1 || late % 3 === 1)) || (od === "weekly" && (late === 1 || late % 7 === 1)); }
     else if (d === 0) { kind = "today"; send = true; }
     else { kind = "soon"; send = test ? d <= maxB : before.indexOf(d) >= 0; }
@@ -649,7 +672,7 @@ function digestCompute(planId, P, W, today, test) {
     if (to.assignee !== false && it.assignee) rc.push(memberEmail(it.assignee));
     if (to.owner && owner) rc.push(memberEmail(owner) || owner);
     (to.watchers || []).forEach(function (w) { rc.push(memberEmail(w)); });
-    rc.filter(Boolean).forEach(function (e) { e = e.toLowerCase(); (per[e] = per[e] || []).push({ key: it.key, title: it.title, type: it.type, end: it.end, start: it.start, d: d, kind: kind, prio: !!it.prio, assignee: it.assignee || "" }); });
+    rc.filter(Boolean).forEach(put);
   });
   return per;
 }
@@ -668,10 +691,10 @@ function digestSend(planId, P, W, per, brand, lang) {
     var sec = function (title, arr) { return arr.length ? '<h3 style="margin:16px 0 4px;font-size:15px">' + title + '</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="background:#f3f5f9;text-align:left"><th style="padding:8px">Item</th><th style="padding:8px">' + (pt ? "Responsável" : "Owner") + '</th><th style="padding:8px">' + (pt ? "Prazo" : "Due") + '</th><th style="padding:8px"></th></tr>' + arr.map(row).join("") + "</table>" : ""; };
     var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:640px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
       '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + " · " + (pt ? "Alertas do planejamento" : "Planning alerts") + '</div><div style="padding:20px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
-      "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + (pt ? "Resumo de marcos e atividades principais do planejamento <b>“" : "Milestones and key activities of the planning <b>“") + esc(info.title || planId) + "”</b>:</p>" +
+      "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + (pt ? "Resumo dos prazos que você acompanha no planejamento <b>“" : "Deadlines you follow in the planning <b>“") + esc(info.title || planId) + "”</b>:</p>" +
       sec(pt ? "Em atraso" : "Overdue", late) + sec(pt ? "Vencem hoje" : "Due today", tod) + sec(pt ? "Próximos prazos" : "Coming up", soon) +
       '<p style="text-align:center;margin:22px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planejamento" : "Open the planning") + " →</a></p></div>" +
-      brandSig(brand, pt) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Alerta automático configurado no planejamento (menu Alertas por e-mail) · " : "Automatic alert set up in the planning (E-mail alerts) · ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
+      brandSig(brand, pt) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Alerta automático configurado no planejamento (menu Alertas por e-mail) ou no próprio card (Alertas deste card) · " : "Automatic alert set up in the planning (E-mail alerts) or on the card itself (Alerts for this card) · ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
     var subj = (late.length ? (pt ? "⚠ " + late.length + " em atraso · " : "⚠ " + late.length + " overdue · ") : "") + (pt ? "Alertas: " : "Alerts: ") + (info.title || planId);
     var text = html.replace(/<\/tr>|<\/p>|<\/h3>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
@@ -697,7 +720,9 @@ function adminGet(path) {
 function dailyDigest() {
   var today = dayStr(new Date()), plans = adminGet("planning") || {}, wsCache = {}, total = 0;
   Object.keys(plans).forEach(function (pid) {
-    var P = plans[pid]; if (!P || !P.info || !P.data || !((P.data.settings || {}).notify || {}).enabled) return;
+    var P = plans[pid]; if (!P || !P.info || !P.data) return;
+    var hasWatch = Object.keys(P.data.items || {}).some(function (k) { var w = (P.data.items[k] || {}).watch; return w && Object.keys(w).length; });
+    if (!((P.data.settings || {}).notify || {}).enabled && !hasWatch) return;
     var ws = P.info.ws; if (!wsCache[ws]) wsCache[ws] = adminGet("workspaces/" + ws) || {};
     var per = digestCompute(pid, P, wsCache[ws], today, false);
     if (Object.keys(per).length && MailApp.getRemainingDailyQuota() > Object.keys(per).length) total += digestSend(pid, P, wsCache[ws], per, CFG.brand, "pt").length;
