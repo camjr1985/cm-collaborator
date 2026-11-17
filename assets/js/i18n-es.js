@@ -2132,5 +2132,20 @@ window.MB_ES = {
 "in development": "en desarrollo",
 "This module is being finished and will open here as soon as it is published.": "Este módulo se está terminando y se abrirá aquí en cuanto se publique.",
 "Request sent ✓ – the Administration will contact you": "Solicitud enviada ✓: la Administración se pondrá en contacto contigo",
-"Could not send – try again": "No se pudo enviar: inténtalo de nuevo"
+"Could not send – try again": "No se pudo enviar: inténtalo de nuevo",
+"New game": "Nueva partida",
+"My games": "Mis partidas",
+"Business simulation": "Simulación empresarial",
+"Student": "Alumno",
+"Professor": "Profesor",
+"Add-on module – request access": "Módulo adicional – solicitar acceso",
+"game": "partida",
+"games": "partidas",
+"New name for the game": "Nuevo nombre de la partida",
+"Game renamed": "Partida renombrada",
+"Game deleted": "Partida eliminada",
+"This permanently deletes the game, its decisions and results. Type the game id to confirm:": "Esto elimina la partida, sus decisiones y resultados. Escribe el id de la partida para confirmar:",
+"Open the game": "Abrir la partida",
+"open the game": "abrir la partida",
+"round ": "ronda "
 };
