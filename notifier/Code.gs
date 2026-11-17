@@ -169,10 +169,11 @@ function prospect(m, info, brand, altSubject) {
   var co = company ? "a " + company : "sua empresa", coDe = company ? "da " + company : "da sua empresa";
   var days = prospectDays();
   var subject = altSubject
-    ? "Estratégia e execução no mesmo lugar, com IA: proposta para " + (company || "sua empresa") + " (20 min)"
-    : (first ? first + ", proposta" : "Proposta") + " para " + (company ? "a " + company : "sua empresa") + ": menos reunião de status, mais entrega, com IA";
+    ? "Estratégia e execução no mesmo lugar, com IA: um convite para " + (company ? "a " + company : "sua empresa")
+    : (first ? first + ", um" : "Um") + " ambiente exclusivo do " + brand + " para " + (company ? "a " + company : "sua empresa");
   var li = function (ic, t, d) { return '<li style="margin:0 0 10px">' + ic + " <b>" + t + "</b> " + d + "</li>"; };
   var vbtn = function (href, label) { return '<a href="' + href + '" style="background:#0e1a33;color:#ffffff;text-decoration:none;font-weight:bold;padding:11px 18px;border-radius:10px;display:inline-block;margin:4px">' + label + "</a>"; };
+  var cta = function (label) { return '<p style="text-align:center;margin:20px 0"><a href="' + hub + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:13px 24px;border-radius:10px;display:inline-block">' + label + " →</a></p>"; };
   var html =
     '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">' +
     '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
@@ -180,20 +181,24 @@ function prospect(m, info, brand, altSubject) {
     ' <span style="font-size:18px;font-weight:bold;vertical-align:middle">' + esc(brand) + '</span></div>' +
     '<div style="padding:24px;color:#1d2433;font-size:15px;line-height:1.55">' +
     "<p>Olá" + (first ? ", " + esc(first) : "") + "! Bom dia, boa tarde ou boa noite.</p>" +
-    "<p>Vou direto ao ponto: sou o Carlos Alexandre, CEO da " + CFG.company + ", e quero apresentar o <b>" + esc(brand) + "</b> para " + esc(co) + " como a ferramenta de planejamento e facilitação dos seus times.</p>" +
-    "<p><b>O problema que resolvemos:</b> a estratégia nasce no Miro, o plano vai para uma planilha, a execução corre no Jira, e o status chega desatualizado na reunião de segunda. Cada passagem custa horas de retrabalho e decisões tomadas no escuro.</p>" +
+    "<p>Meu nome é Carlos Alexandre, sou CEO da " + CFG.company + ", e gostaria muito de oferecer " + (company ? "à " + esc(company) : "à sua empresa") + " a oportunidade de usar o <b>" + esc(brand) + "</b> no dia a dia dos seus times, sem custo durante o período de teste.</p>" +
+    "<p>Preparei um <b>ambiente exclusivo " + esc(coDe) + "</b>, já pronto para uso" + (until ? " e válido até <b>" + until + "</b>" : "") + ". A ideia é simples: o seu time experimenta com um projeto real e decide com base em resultado, não em apresentação.</p>" +
+    cta("Começar a usar agora") +
+    "<p>Sabemos como é: a estratégia nasce no Miro, o plano vai para uma planilha, a execução corre no Jira, e o status chega desatualizado na reunião de segunda. Cada passagem custa horas de retrabalho e decisões tomadas no escuro. O " + esc(brand) + " junta tudo isso em um só lugar.</p>" +
     '<div style="background:#eef9f7;border:1px solid #bfe9e3;border-radius:12px;padding:16px;text-align:center;margin:18px 0">' +
     '<div style="font-weight:bold;font-size:16px;margin-bottom:8px">▶ Veja o ' + esc(brand) + " em ação</div>" +
     vbtn(PROSPECT_VIDEOS.short, "▶ Vídeo curto") + vbtn(PROSPECT_VIDEOS.full, "▶ Apresentação completa") + "</div>" +
-    "<p><b>O que entregamos:</b></p><ul style=\"padding-left:18px;margin:8px 0\">" +
+    "<p><b>O que o seu time ganha:</b></p><ul style=\"padding-left:18px;margin:8px 0\">" +
     li("🤖", "IA que trabalha junto com o time:", "monta o workshop completo, cronometra a dinâmica e transforma as ideias em um plano de ação com responsáveis.") +
     li("🎯", "Planejamento mais intuitivo e assertivo do que o Miro:", "roadmap, Scrum, Kanban ou Waterfall, com OKR, iniciativa, épico e história conectados e alertas antes de um marco atrasar.") +
     li("🔗", "Integração nativa com Jira, Azure DevOps e Kanbanize:", "o que é decidido no quadro vira item real nas ferramentas da engenharia, e o progresso volta sozinho.") +
     "</ul>" +
-    "<p><b>O resultado:</b> menos reuniões de alinhamento, decisões com dado atualizado e workshops prontos em minutos, não em uma tarde.</p>" +
-    '<p style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px"><b>Minha proposta:</b> 20 minutos na ' + days[0] + " ou na " + days[1] + " para mostrar a ferramenta aplicada a um caso real " + esc(coDe) + ". É só responder este e-mail com o melhor horário.</p>" +
-    "<p>Para adiantar, já deixei um ambiente exclusivo " + esc(coDe) + (until ? ", válido até <b>" + until + "</b>" : "") + ". É só entrar com este e-mail (" + esc(m.email) + "):</p>" +
-    '<p style="text-align:center;margin:18px 0"><a href="' + hub + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Abrir o ambiente ' + esc(coDe) + " →</a></p>" +
+    '<div style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px;margin:18px 0"><b>Para aproveitar o teste em 10 minutos:</b><ol style="padding-left:20px;margin:8px 0 0">' +
+    "<li>Entre com este e-mail (" + esc(m.email) + ") pelo botão acima.</li>" +
+    "<li>Clique em ✨ e peça à IA para montar o quadro do seu próximo planejamento ou workshop.</li>" +
+    "<li>Transforme o resultado em um roadmap e, se quiser, conecte ao Jira ou ao Azure DevOps.</li></ol></div>" +
+    "<p>Para o teste render ainda mais, ofereço <b>20 minutos</b> na " + days[0] + " ou na " + days[1] + " para configurarmos juntos o ambiente com um caso real " + esc(coDe) + ". É só responder este e-mail com o melhor horário.</p>" +
+    "<p>E se a experiência fizer sentido para o seu time, conversamos sobre levar o " + esc(brand) + " para toda " + (company ? "a " + esc(company) : "a empresa") + ".</p>" +
     "<p>Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company + "</p></div>" +
     '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Você recebeu este convite porque atua com liderança em tecnologia e produto. Se preferir não receber mais mensagens, é só responder “remover”.</div></div></div>';
   var text = html.replace(/<li[^>]*>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1) ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\n{3,}/g, "\n\n").trim();
