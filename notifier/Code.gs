@@ -175,7 +175,7 @@ function prospect(m, info, brand, altSubject) {
     '<div style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px"><b>Por que líderes estão trocando reuniões de alinhamento por um único quadro:</b><ul style="padding-left:18px;margin:10px 0 0">' +
     li("🤖", "IA que trabalha junto com o time.", "Você descreve o objetivo e ela monta o quadro completo, sugere a dinâmica certa com tempo cronometrado e, no fim, transforma as ideias em um plano de ação com responsáveis. A workshop que levava uma tarde de preparo fica pronta em minutos.") +
     li("🔗", "Integração nativa com Jira, Azure DevOps e Kanbanize.", "O roadmap e os OKRs desenhados no quadro viram itens reais nas ferramentas que sua engenharia já usa, e o progresso volta sozinho. Sem copiar e colar, sem relatório paralelo.") +
-    li("🎯", "Do OKR à tarefa, com visibilidade.", "Objetivo, iniciativa, épico e história conectados, com alertas automáticos por e-mail antes de um marco atrasar.") +
+    li("🎯", "Planejamento mais intuitivo e assertivo do que o Miro.", "Roadmap, Scrum, Kanban ou Waterfall no mesmo lugar dos quadros, com OKR, iniciativa, épico e história conectados e alertas automáticos por e-mail antes de um marco atrasar. Menos post-it solto, mais plano que se cumpre.") +
     "</ul></div>" +
     "<p>Se fizer sentido, separo 20 minutos para mostrar como isso funcionaria na sua operação. É só responder este e-mail.</p>" +
     "<p>Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company + "</p></div>" +
