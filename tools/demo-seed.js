@@ -181,7 +181,8 @@
       off: [[0, "Entrega atrasada", "incident"], [1, "Agendar recebimento", "request"]],
       recs: [["incident", "Carga parada na rodovia – pedido 4521", "high", "medium", "doing", 5, 0], ["request", "Agendar recebimento de 3 carretas", "medium", "medium", "resolved", 30, 1], ["incident", "Rastreamento sem atualização desde ontem", "medium", "high", "new", 20, 2], ["improvement", "Roteirização com janela de entrega", "medium", "low", "doing", 250, 0]] }
   ];
-  function buildCentre(c, owner, test, nowTs) {
+  function buildCentre(c, owner, test, nowTs, wsId) {
+    wsId = wsId || WS;
     const I = window.ITSM, G = {}, gk = ["g1", "g2", "g3"];
     c.groups.forEach(function (n, i) { G[gk[i]] = { name: n }; });
     const settings = {
@@ -202,7 +203,7 @@
         key: pre + "-" + String(counters[pre]).padStart(4, "0"), service: "s" + (r[6] + 1), group: services["s" + (r[6] + 1)].group };
       o.priority = I.priority(o.impact, o.urgency, settings.matrix);
       if (r[0] === "incident" || r[0] === "request") {
-        const rq = reqs[i % 2]; o.requester = { k: rq.k, email: rq.email, name: rq.name, ws: WS };
+        const rq = reqs[i % 2]; o.requester = { k: rq.k, email: rq.email, name: rq.name, ws: wsId };
         const tg = I.targets(o, { defaults: I.SLA_DEFAULT }); o.sla = { start: t, resp: tg.resp, res: tg.res };
         if (r[4] !== "new") o.sla.respAt = t + 600000;
         if (r[4] === "resolved") o.sla.stopAt = t + 3 * 3600000;
@@ -216,11 +217,90 @@
     const cmdb = { cis: { ci1: { name: c.svc[0][0] + " – sistema", type: "application", status: "live", service: "s1" }, ci2: { name: c.svc[1][0] + " – sistema", type: "application", status: "live", service: "s2" } }, rels: { r1: { from: "ci1", type: "depends", to: "ci2" } } };
     const members = {}; members[key(test)] = { email: test, name: "Usuário de teste", role: "agent" };
     return {
-      info: { title: c.title, ws: WS, area: "service", owner: key(owner), created: nowTs, createdBy: owner, framework: "both", members: members },
+      info: { title: c.title, ws: wsId, area: c.area || "service", owner: key(owner), created: nowTs, createdBy: owner, framework: "both", members: members },
       data: { settings: settings, counters: counters, records: records, history: history, catalog: { categories: { c1: { name: "Geral" } }, services: services, offerings: offerings }, kb: kb, cmdb: cmdb, sla: { defaults: I.SLA_DEFAULT } },
       mine: mine
     };
   }
+
+
+  /* ---------- extra demo spaces owned by a customer account (full management inside them) ---------- */
+  const SPACES = [
+    { id: "demo-saude-ocupacional", name: "Demonstração – Saúde ocupacional", area: "health",
+      plans: [
+        { id: "sst-pcmso", area: "health", method: "waterfall", workflow: "waterfall", title: "SST · Programa de saúde ocupacional (PCMSO) 2027", budget: true,
+          epics: [["Diagnóstico", [["task", "Inventário de riscos (PGR)"], ["task", "Mapa de exposição por função"]]], ["Exames ocupacionais", [["task", "Exames admissionais"], ["task", "Exames periódicos por função"], ["task", "Retorno ao trabalho"], ["task", "Exames demissionais"]]], ["Ergonomia", [["task", "Análise ergonômica do trabalho (AET)"], ["task", "Ginástica laboral"]]], ["Indicadores e eSocial", [["task", "Envio dos eventos S-2220 e S-2240"], ["task", "Indicadores de absenteísmo"], ["milestone", "Relatório anual do PCMSO"]]]] },
+        { id: "sst-cipa", area: "health", method: "kanban", workflow: "simple", title: "SST · Prevenção de acidentes e CIPA", ini: "Zero acidente com afastamento",
+          epics: [["Treinamentos NR", [["task", "NR-35 – trabalho em altura"], ["task", "NR-10 – eletricidade"], ["task", "NR-06 – entrega e uso de EPIs"]]], ["CIPA", [["task", "Eleição da CIPA"], ["task", "Mapa de riscos por setor"], ["task", "SIPAT"]]], ["Investigação de acidentes", [["task", "Investigação – acidente no almoxarifado"], ["task", "Plano de ação 5W2H"]]]] },
+        { id: "sst-mental", area: "health", method: "hybrid", workflow: "simple", title: "SST · Saúde mental e bem-estar", ini: "Programa de bem-estar", okr: ["Reduzir afastamentos por saúde mental", "Afastamentos de 18 para 10 por trimestre", "Adesão ao programa de 30 para 60%"],
+          epics: [["Riscos psicossociais (NR-1)", [["task", "Pesquisa de riscos psicossociais"], ["task", "Plano de ação por área"]]], ["Apoio psicológico", [["task", "Contratar programa de apoio"], ["task", "Divulgar o canal de acolhimento"]]], ["Campanhas", [["task", "Setembro Amarelo"], ["task", "Semana de qualidade de vida"]]]] }
+      ],
+      centres: [
+        { id: "sst", title: "Saúde ocupacional · Central de atendimento SST", area: "health", groups: ["Medicina do trabalho", "Segurança do trabalho", "Ergonomia"],
+          svc: [["Exames ocupacionais", "Agendamento e resultados (ASO).", 0], ["Atestados e afastamentos", "Envio e homologação de atestados.", 0], ["EPIs", "Solicitação e troca de equipamentos de proteção.", 1], ["Ergonomia do posto de trabalho", "Avaliação e ajustes.", 2]],
+          off: [[0, "Agendar exame periódico", "request"], [1, "Enviar atestado médico", "request"], [2, "Solicitar EPI", "request", true], [-1, "Relatar acidente ou incidente de trabalho", "incident"], [3, "Pedir avaliação ergonômica", "request"]],
+          recs: [["incident", "Queda de escada no almoxarifado (sem afastamento)", "high", "high", "doing", 3, 2], ["request", "Agendar exame periódico – equipe de produção", "medium", "medium", "doing", 20, 0], ["request", "Homologar atestado de 3 dias", "low", "medium", "resolved", 30, 1], ["request", "Troca de protetor auricular – linha 2", "medium", "high", "approval", 6, 2], ["request", "Avaliação ergonômica – atendimento", "low", "low", "new", 40, 3], ["problem", "Aumento de queixas de dor lombar no setor de expedição", "medium", "medium", "analysis", 120, 3], ["improvement", "Agendamento on-line dos exames periódicos", "medium", "low", "approved", 300, 0]] }
+      ] },
+    { id: "demo-she", name: "Demonstração – SHE (segurança, saúde e meio ambiente)", area: "she",
+      plans: [
+        { id: "she-iso14001", area: "she", method: "waterfall", workflow: "waterfall", title: "SHE · Gestão ambiental (ISO 14001)", budget: true,
+          epics: [["Aspectos e impactos", [["task", "Levantamento de aspectos ambientais"], ["task", "Matriz de significância"]]], ["Licenças ambientais", [["task", "Renovação da licença de operação"], ["task", "Condicionantes da licença"]]], ["Resíduos e efluentes", [["task", "Plano de gerenciamento de resíduos"], ["task", "Monitoramento de efluentes"]]], ["Certificação", [["task", "Auditoria interna"], ["milestone", "Auditoria de certificação ISO 14001"]]]] },
+        { id: "she-safety", area: "she", method: "kanban", workflow: "simple", title: "SHE · Inspeções e permissões de trabalho", ini: "Segurança operacional",
+          epics: [["Permissões de trabalho", [["task", "PT – manutenção em altura na torre 2"], ["task", "PT – trabalho a quente na caldeira"]]], ["Inspeções", [["task", "Inspeção mensal de extintores"], ["task", "Inspeção de andaimes"], ["task", "Checklist de empilhadeiras"]]], ["Emergências", [["task", "Simulado de evacuação"], ["task", "Treinamento da brigada"], ["task", "Plano de atendimento a emergências"]]]] },
+        { id: "she-metas", area: "she", method: "hybrid", workflow: "simple", title: "SHE · Metas SSMA 2027", ini: "Zero acidente grave", okr: ["Zero acidente grave em 2027", "Taxa de frequência de 3,2 para 1,5", "Resíduos reciclados de 40 para 70%"],
+          epics: [["Cultura de segurança", [["task", "DDS diário em todas as áreas"], ["task", "Observação comportamental"]]], ["Meio ambiente", [["task", "Coleta seletiva nas unidades"], ["task", "Redução do consumo de água"]]], ["Saúde", [["task", "Campanha de vacinação"], ["task", "Programa de conservação auditiva"]]]] }
+      ],
+      centres: [
+        { id: "she", title: "SHE · Central SSMA (ocorrências e solicitações)", area: "she", groups: ["Segurança do trabalho", "Meio ambiente", "Emergências"],
+          svc: [["Permissão de trabalho", "Emissão e liberação de PTs.", 0], ["Ocorrências e quase-acidentes", "Registro e investigação.", 0], ["Resíduos e licenças", "Coletas e condicionantes.", 1], ["Inspeções", "Extintores, andaimes e equipamentos.", 0]],
+          off: [[-1, "Relatar quase-acidente ou condição insegura", "incident"], [0, "Pedir permissão de trabalho", "request", true], [2, "Coleta de resíduo perigoso", "request"], [-1, "Relatar vazamento ou impacto ambiental", "incident"]],
+          recs: [["incident", "Vazamento de óleo na área de tancagem", "high", "high", "doing", 2, 2], ["incident", "Quase-acidente: empilhadeira sem sinal sonoro", "medium", "high", "new", 4, 1], ["request", "PT para solda na caldeira – sábado", "high", "medium", "approval", 10, 0], ["request", "Coleta de lâmpadas fluorescentes", "low", "low", "resolved", 60, 2], ["request", "Inspeção dos extintores do galpão B", "medium", "medium", "doing", 20, 3], ["problem", "Quase-acidentes recorrentes no carregamento", "medium", "medium", "analysis", 150, 1], ["change", "Novo procedimento de bloqueio e etiquetagem", "medium", "medium", "approved", 90, 0]] }
+      ] }
+  ];
+  window.CMDemoSpaces = function (opt) {
+    opt = opt || {};
+    const db = window.firebase.database(), me = window.firebase.auth().currentUser, admin = me.email, cust = (opt.email || "").toLowerCase(), nowTs = Date.now();
+    if (!cust) return Promise.reject(new Error("email required"));
+    const people = [cust, admin], log = [];
+    // customer validation account: every add-on licensed individually + Enterprise plan (not a platform admin)
+    const base = {};
+    base["entitlements/users/" + key(cust) + "/itsm"] = { on: true, until: null, plan: "paid", by: admin, at: nowTs };
+    base["entitlements/users/" + key(cust) + "/game"] = { on: true, until: null, plan: "paid", by: admin, at: nowTs };
+    base["plans/" + key(cust)] = { email: cust, plan: "enterprise", seats: 200, until: null, by: admin, at: nowTs, source: "admin" };
+    SPACES.forEach(function (sp) {
+      base["workspaces/" + sp.id + "/info"] = { name: sp.name, owner: key(cust), created: nowTs, area: sp.area, demo: true };
+      base["workspaces/" + sp.id + "/members/" + key(admin)] = { email: admin, name: "Carlos Alexandre", role: "editor", added: nowTs };
+      base["userWorkspaces/" + key(cust) + "/" + sp.id] = { name: sp.name, expires: null };
+      base["userWorkspaces/" + key(admin) + "/" + sp.id] = { name: sp.name, expires: null };
+      base["entitlements/ws/" + sp.id + "/itsm"] = { on: true, until: null, plan: "paid", pkg: "empresarial", by: admin, at: nowTs };
+      base["entitlements/ws/" + sp.id + "/game"] = { on: true, until: null, plan: "paid", pkg: "empresarial", by: admin, at: nowTs };
+    });
+    return db.ref().update(base).then(function () {
+      log.push("licences, plan, spaces");
+      return load("../assets/js/itsm-core.js");
+    }).then(function () {
+      const jobs = [];
+      SPACES.forEach(function (sp) {
+        sp.plans.forEach(function (a) { jobs.push(function () {
+          const id = "demo-" + a.id, u = {}, method = a.tpl ? (window.PLAN_AREA_PLANS.find(function (x) { return x.id === a.tpl; }) || {}).method : a.method;
+          u["planning/" + id + "/info"] = { title: a.title, ws: sp.id, method: method, created: nowTs, createdBy: cust, area: a.area, demo: true };
+          u["planning/" + id + "/data"] = buildPlanning(a, people, nowTs);
+          u["workspaces/" + sp.id + "/plannings/" + id] = { title: a.title, method: method, created: nowTs };
+          return db.ref().update(u).then(function () { log.push("planning " + id); }, function (e) { log.push("planning " + id + " FAILED: " + e.message); });
+        }); });
+        sp.centres.forEach(function (c0) { jobs.push(function () {
+          const c = c0.base ? Object.assign({}, CENTRES.find(function (x) { return x.id === c0.base; }), { id: c0.id, title: "TI · Central de serviços" }) : c0;
+          const id = "demo-" + c.id, u = {}, cen = buildCentre(c, cust, admin, nowTs, sp.id);
+          cen.info.owner = key(cust); cen.info.members = {}; cen.info.members[key(cust)] = { email: cust, name: "Digital Agile", role: "manager" };
+          u["itsm/" + id] = cen;
+          u["workspaces/" + sp.id + "/itsm/" + id] = { title: c.title, created: nowTs, home: true };
+          u["userItsm/" + key(cust) + "/" + id] = { title: c.title, role: "manager" };
+          return db.ref().update(u).then(function () { log.push("itsm " + id); }, function (e) { log.push("itsm " + id + " FAILED: " + e.message); });
+        }); });
+      });
+      return jobs.reduce(function (p, j) { return p.then(j); }, Promise.resolve());
+    }).then(function () { return log; });
+  };
 
   window.CMDemoSeed = function (opt) {
     opt = opt || {};

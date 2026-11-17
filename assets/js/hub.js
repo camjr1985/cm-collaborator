@@ -53,7 +53,7 @@
   function planStrip(canCreate) {
     if (!canCreate || !window.PLAN_ORDER) return "";
     const M = window.PLAN_METHODS;
-    return '<section class="hub-sec plan-sec"><div class="hub-sec-head"><h2>' + (window.CMIcon ? window.CMIcon("planning", 20) : "") + " " + esc(LL("Planning", "Planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</h2><span class="muted small">' + esc(LL("Roadmaps, schedules, sprints and Kanban – with OKRs, e-mail alerts and Jira, Azure DevOps and Kanbanize integration.", "Roadmaps, cronogramas, sprints e Kanban – com OKRs, alertas por e-mail e integração com Jira, Azure DevOps e Kanbanize.")) + "</span></div>" +
+    return '<section class="hub-sec plan-sec"><div class="hub-sec-head"><h2>' + (window.CMModules && window.CMModules.icon ? '<span class="mod-tile-ic" data-m="planning">' + window.CMModules.icon("planning", 18) + "</span>" : (window.CMIcon ? window.CMIcon("planning", 20) : "")) + " " + esc(LL("Planning", "Planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</h2><span class="muted small">' + esc(LL("Roadmaps, schedules, sprints and Kanban – with OKRs, e-mail alerts and Jira, Azure DevOps and Kanbanize integration.", "Roadmaps, cronogramas, sprints e Kanban – com OKRs, alertas por e-mail e integração com Jira, Azure DevOps e Kanbanize.")) + "</span></div>" +
       '<div class="tpl-strip">' + window.PLAN_ORDER.map(function (k) {
         const m = M[k];
         return '<button class="tpl-tile plan-tile" data-newplanm="' + k + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + '</span><b class="no-i18n">' + (window.CMIcon ? window.CMIcon(m.icon, 15) : "") + " " + esc(m.name) + "</b></button>";
@@ -74,7 +74,8 @@
     const T = { boards: [LL("Collaboration", "Colaboração"), LL("Your boards, by workspace. Start a new one from a template.", "Seus quadros, por workspace. Comece um novo a partir de um template.")],
       plans: [LL("Planning", "Planejamento"), LL("Your plannings, by workspace. Create a new one with the methods below.", "Seus planejamentos, por workspace. Crie um novo com os métodos abaixo.")],
       games: ["Business Game", LL("Your games, by workspace. Professors create a new game with “New game”.", "Suas partidas, por workspace. Professores criam uma nova partida em “Nova partida”.")] }[v];
-    const html = '<div class="view-bar"><div><span class="eyebrow">' + esc(LL("Module", "Módulo")) + '</span><h2>' + esc(T[0]) + '</h2><p class="muted small">' + esc(T[1]) + '</p></div><a class="btn sm" href="#">' + esc(LL("Show everything", "Ver tudo")) + "</a></div>";
+    const mid = v === "plans" ? "planning" : v === "games" ? "game" : "collab", mic = window.CMModules && window.CMModules.icon ? '<span class="mod-tile-ic" data-m="' + mid + '">' + window.CMModules.icon(mid, 18) + "</span> " : "";
+    const html = '<div class="view-bar"><div><span class="eyebrow">' + esc(LL("Module", "Módulo")) + '</span><h2>' + mic + esc(T[0]) + '</h2><p class="muted small">' + esc(T[1]) + '</p></div><a class="btn sm" href="#">' + esc(LL("Show everything", "Ver tudo")) + "</a></div>";
     if (bar) bar.outerHTML = html; else { const ub = el.querySelector(".userbar"); if (ub) ub.insertAdjacentHTML("afterend", html); }
     el.querySelector(".view-bar a").onclick = function (e) { e.preventDefault(); history.replaceState(null, "", location.pathname + location.search); applyView(el); };
     window.scrollTo({ top: 0 });
@@ -295,8 +296,8 @@
   }
   function userBar(user, admin) {
     return '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(user.email) + "</b></span>" + planBadge() +
-      '<button class="btn" data-howto>❓ <span>' + esc(LL("How to start", "Como começar")) + "</span></button>" +
-      '<button class="btn" data-feedback>💬 <span>Give feedback</span></button>' +
+      '<button class="btn" data-howto><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.1-2.4 3.8M12 17h.01"/></svg> <span>' + esc(LL("How to start", "Como começar")) + "</span></button>" +
+      '<button class="btn" data-feedback><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg> <span>Give feedback</span></button>' +
       (admin ? '<a class="btn" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';
   }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LOCALE || (window.MB_LANG === "pt" ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short" }); }

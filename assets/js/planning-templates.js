@@ -59,7 +59,9 @@
     retail: { name: L("Retail", "Varejo"), icon: "kanban", desc: L("Stores, e-commerce and campaigns.", "Lojas, e-commerce e campanhas.") },
     consulting: { name: L("Consulting", "Consultoria"), icon: "people", desc: L("Client projects and portfolio.", "Projetos de clientes e portfólio.") },
     education: { name: L("Education", "Educação"), icon: "story", desc: L("Schools, universities and courses.", "Escolas, faculdades e cursos.") },
-    service: { name: L("Service management", "Service management"), icon: "settings", desc: L("Service desk, operations and IT services.", "Central de serviços, operações e serviços de TI.") }
+    service: { name: L("Service management", "Service management"), icon: "settings", desc: L("Service desk, operations and IT services.", "Central de serviços, operações e serviços de TI.") },
+    ohs: { name: L("Occupational health", "Saúde ocupacional"), icon: "people", desc: L("Medical exams, ergonomics, absences and well-being programmes.", "Exames ocupacionais, ergonomia, afastamentos e programas de bem-estar.") },
+    she: { name: L("SHE – safety, health & environment", "SHE – segurança, saúde e meio ambiente"), icon: "milestone", desc: L("Workplace safety, environmental licences and emergency plans.", "Segurança do trabalho, licenças ambientais e planos de emergência.") }
   };
   /* tree rows: [type, title, startDay, endDay, children?] – dates are offsets from today */
   const T = function (type, en, pt, s, e, kids) { return [type, L(en, pt), s, e, kids || []]; };
@@ -92,7 +94,15 @@
     { id: "s-csi", area: "service", method: "hybrid", workflow: "updown", name: L("Continual service improvement", "Melhoria contínua de serviços"), desc: L("Improvement initiatives from incident trends and SLA results, upstream to downstream.", "Iniciativas de melhoria a partir de tendências de incidentes e SLA, do upstream ao downstream."),
       tree: [T("initiative", "Reduce repeat incidents", "Reduzir incidentes recorrentes", 0, 90, [T("epic", "Problem management", "Gestão de problemas", 0, 45), T("epic", "Knowledge base", "Base de conhecimento", 20, 90)]), T("initiative", "Meet the SLA", "Cumprir o SLA", 0, 120, [T("epic", "Queue and shift review", "Revisão de filas e turnos", 0, 60)])] },
     { id: "s-transition", area: "service", method: "waterfall", workflow: "waterfall", name: L("New service transition", "Transição de novo serviço"), desc: L("Service design, readiness, go-live and hypercare.", "Desenho do serviço, prontidão, entrada em produção e operação assistida."),
-      tree: [T("phase", "Service design", "Desenho do serviço", 0, 30, [T("task", "Catalogue and SLAs", "Catálogo e SLAs", 0, 20)]), T("phase", "Readiness", "Prontidão operacional", 31, 60, [T("task", "Runbooks and training", "Runbooks e treinamento", 31, 55)]), T("milestone", "Go-live", "Entrada em produção", 62, 62), T("phase", "Hypercare", "Operação assistida", 63, 90)] }
+      tree: [T("phase", "Service design", "Desenho do serviço", 0, 30, [T("task", "Catalogue and SLAs", "Catálogo e SLAs", 0, 20)]), T("phase", "Readiness", "Prontidão operacional", 31, 60, [T("task", "Runbooks and training", "Runbooks e treinamento", 31, 55)]), T("milestone", "Go-live", "Entrada em produção", 62, 62), T("phase", "Hypercare", "Operação assistida", 63, 90)] },
+    { id: "o-pcmso", area: "ohs", method: "waterfall", workflow: "waterfall", name: L("Occupational health programme", "Programa de saúde ocupacional (PCMSO)"), desc: L("Risk inventory, medical exams by role, ergonomics and annual report.", "Inventário de riscos, exames por função, ergonomia e relatório anual."),
+      tree: [T("phase", "Diagnosis", "Diagnóstico", 0, 25, [T("task", "Risk inventory", "Inventário de riscos (PGR)", 0, 15), T("task", "Exposure map by role", "Mapa de exposição por função", 10, 25)]), T("phase", "Medical exams", "Exames ocupacionais", 26, 120, [T("task", "Periodic exams by role", "Exames periódicos por função", 26, 110), T("task", "Return-to-work exams", "Exames de retorno ao trabalho", 26, 120)]), T("phase", "Ergonomics", "Ergonomia", 40, 100, [T("task", "Ergonomic work analysis", "Análise ergonômica do trabalho (AET)", 40, 80)]), T("milestone", "Annual report", "Relatório anual", 125, 125)] },
+    { id: "o-wellbeing", area: "ohs", method: "hybrid", workflow: "simple", name: L("Mental health and well-being", "Saúde mental e bem-estar"), desc: L("Psychosocial risks, support programme and campaigns.", "Riscos psicossociais, programa de apoio e campanhas."),
+      tree: [T("initiative", "Well-being programme", "Programa de bem-estar", 0, 120, [T("epic", "Psychosocial risks", "Riscos psicossociais", 0, 45, [T("task", "Survey", "Pesquisa de riscos psicossociais", 0, 20)]), T("epic", "Support programme", "Apoio psicológico", 30, 90), T("epic", "Campaigns", "Campanhas", 60, 120)])] },
+    { id: "x-env", area: "she", method: "waterfall", workflow: "waterfall", name: L("Environmental management (ISO 14001)", "Gestão ambiental (ISO 14001)"), desc: L("Aspects and impacts, licences, waste and the certification audit.", "Aspectos e impactos, licenças, resíduos e auditoria de certificação."),
+      tree: [T("phase", "Aspects and impacts", "Aspectos e impactos", 0, 30), T("phase", "Licences", "Licenças ambientais", 20, 80, [T("task", "Operating licence renewal", "Renovação da licença de operação", 20, 80)]), T("phase", "Waste", "Resíduos", 40, 110, [T("task", "Waste management plan", "Plano de gerenciamento de resíduos", 40, 90)]), T("milestone", "ISO 14001 audit", "Auditoria ISO 14001", 130, 130)] },
+    { id: "x-safety", area: "she", method: "kanban", workflow: "simple", name: L("Safety inspections and permits", "Inspeções e permissões de trabalho"), desc: L("Work permits, inspections, lockout/tagout and emergency drills.", "Permissões de trabalho, inspeções, bloqueio e etiquetagem e simulados."),
+      tree: [T("task", "Work permit – maintenance at height", "Permissão de trabalho – manutenção em altura"), T("task", "Monthly fire extinguisher inspection", "Inspeção mensal de extintores"), T("task", "Lockout/tagout procedure", "Procedimento de bloqueio e etiquetagem"), T("task", "Evacuation drill", "Simulado de evacuação")] },
   ];
   function seedTree(tree, method) {
     const items = {}; let n = 0, prevLeaf = null;
@@ -179,7 +189,7 @@
   window.PLAN_METHODS = METHODS;
   window.PLAN_WORKFLOWS = workflows;
   window.PLAN_AREAS = AREAS;
-  window.PLAN_AREA_ORDER = ["general", "health", "retail", "consulting", "education", "service"];
+  window.PLAN_AREA_ORDER = ["general", "health", "ohs", "she", "retail", "consulting", "education", "service"];
   window.PLAN_AREA_PLANS = AREA_PLANS;
   window.PLAN_ORDER = ["hybrid", "waterfall", "scrum", "kanban"];
   window.PLAN_INITIAL = initialData;

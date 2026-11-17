@@ -69,3 +69,12 @@ code, kbd, pre { font-family: var(--font-mono); }
   .modsw-btn { padding: 0 10px; } .modsw-btn > span:not(.modsw-car) { display: none; }
   .modsw-pop { position: fixed; top: 64px; left: 12px; right: 12px; width: auto; }
 }
+.modsw-ic[data-m="collab"] { background: rgba(44,196,179,.14); color: #0b8f80; }
+.modsw-ic[data-m="planning"] { background: rgba(66,98,255,.12); color: #3550d6; }
+.modsw-ic[data-m="itsm"] { background: rgba(130,92,230,.13); color: #6a43c9; }
+.modsw-ic[data-m="game"] { background: rgba(232,196,104,.25); color: #8a6100; }
+.modsw-hic { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; vertical-align: middle; margin-right: 4px; }
+.modsw-hic[data-m="itsm"] { background: rgba(130,92,230,.13); color: #6a43c9; } .modsw-hic[data-m="game"] { background: rgba(232,196,104,.25); color: #8a6100; }
+.mod-tile-ic { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; vertical-align: middle; }
+.mod-tile-ic[data-m="planning"] { background: rgba(66,98,255,.16); color: #8ea2ff; } .mod-tile-ic[data-m="collab"] { background: rgba(44,196,179,.16); color: #5fe0d1; }
+.mod-tile-ic[data-m="game"] { background: rgba(232,196,104,.2); color: #e8c468; } .userbar .btn svg { vertical-align: -3px; }

@@ -112,11 +112,19 @@
     });
     return accessP;
   }
-  function icon(a) { const ic = window.CMIcon ? window.CMIcon(a.icon, 18) : ""; return ic && ic.indexOf("<svg") >= 0 ? ic : EMO[a.id]; }
+  /* professional line icons for the modules (24px grid, 1.8 stroke, currentColor) */
+  const MOD_SVG = {
+    collab: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><rect x="6" y="7" width="4" height="4" rx=".8"/><rect x="12" y="7" width="6" height="2" rx=".8"/><path d="M12 12h4"/>',
+    planning: '<path d="M4 4v16h16"/><rect x="7" y="6" width="8" height="3" rx="1"/><rect x="10" y="11" width="8" height="3" rx="1"/><path d="M15.5 17.5l1.5-1.5 1.5 1.5-1.5 1.5z"/>',
+    itsm: '<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/><path d="M19 19c0 1.5-2 2.5-5 2.5"/>',
+    game: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8.5 20h7M10 17h4v3h-4z"/>'
+  };
+  function modIcon(id, size) { const p = MOD_SVG[id]; if (!p) return ""; const z = size || 18; return '<svg viewBox="0 0 24 24" width="' + z + '" height="' + z + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + "</svg>"; }
+  function icon(a) { return modIcon(a.id, 20) || EMO[a.id]; }
   function contact(mod, wsId) {
     const m = get(mod) || { id: mod, full: mod, desc: "" };
     const d = document.createElement("div"); d.className = "modsw-dlg"; d.setAttribute("role", "dialog");
-    d.innerHTML = '<div class="modsw-dlg-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h2>" + (EMO[mod] || "🧩") + " " + esc(m.full) + "</h2><p>" +
+    d.innerHTML = '<div class="modsw-dlg-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h2><span class=\"modsw-hic\" data-m=\"" + mod + "\">" + modIcon(mod, 20) + "</span> " + esc(m.full) + "</h2><p>" +
       esc(L("This module is not part of your licence yet. Contact the CM Collaborator administration to purchase it.", "Este módulo ainda não faz parte da sua licença. Entre em contato com a administração do CM Collaborator para fazer a aquisição.")) +
       '</p><p class="modsw-muted">' + esc(m.desc) + '</p><div class="mod-gate-acts"><button class="modsw-b primary" data-req>' + esc(L("Contact the administration", "Falar com a administração")) + '</button><button class="modsw-b" data-x>' + esc(L("Close", "Fechar")) + "</button></div></div>";
     document.body.appendChild(d);
@@ -140,7 +148,7 @@
       else if (acc[a.id] && acc[a.id].ok) chip = L("Licensed", "Licenciado");
       else { chip = "🔒 " + L("Add-on", "Adicional"); cls = " locked"; ok = false; }
       if (a.id === "itsm" && ok && !avail.itsm) chip += " · " + L("soon", "em breve");
-      return '<button type="button" role="menuitem" class="modsw-row' + cls + '" data-app="' + a.id + '"><span class="modsw-ic">' + icon(a) + '</span><span class="modsw-t"><b>' + esc(a.name) + "</b><small>" + esc(a.desc) + '</small></span><span class="modsw-chip' + (ok ? "" : " no") + '">' + esc(chip) + "</span></button>";
+      return '<button type="button" role="menuitem" class="modsw-row' + cls + '" data-app="' + a.id + '"><span class="modsw-ic" data-m="' + a.id + '">' + icon(a) + '</span><span class="modsw-t"><b>' + esc(a.name) + "</b><small>" + esc(a.desc) + '</small></span><span class="modsw-chip' + (ok ? "" : " no") + '">' + esc(chip) + "</span></button>";
     }).join("");
   }
   function mountInto(host, after) {
@@ -191,5 +199,5 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else setTimeout(start, 0);
 
-  window.CMModules = { LIST: LIST, PACKAGES: PACKAGES, get: get, active: active, has: has, forWorkspace: forWorkspace, gate: gate, request: request, key: key, access: access, contact: contact, apps: apps };
+  window.CMModules = { LIST: LIST, PACKAGES: PACKAGES, get: get, active: active, has: has, forWorkspace: forWorkspace, gate: gate, request: request, key: key, access: access, contact: contact, apps: apps, icon: modIcon };
 })();
