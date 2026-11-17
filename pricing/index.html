@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pricing · CM Collaborator</title>
-  <meta name="description" content="CM Collaborator plans: Free, Pro, Team (per user) and Enterprise. Prices in USD.">
+  <meta name="description" content="CM Collaborator plans: Free, Pro, Team (per user) and Enterprise, plus the ITSM and Business Game add-on modules. Prices in USD.">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="manifest" href="../manifest.webmanifest">
   <meta name="theme-color" content="#0e1a33">
@@ -51,6 +51,15 @@
     .pr-foot { max-width: 820px; margin: 36px auto 60px; padding: 0 16px; text-align: center; color: var(--ink-3); font-size: 14px; line-height: 1.6; }
     @media (max-width: 980px) { .pr-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 560px) { .pr-grid { grid-template-columns: 1fr; } }
+      .pr-mods { margin-top: 40px; }
+    .pr-mods h2 { margin: 6px 0 6px; }
+    .pr-mods-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+    .pr-mods-grid .card { display: flex; flex-direction: column; gap: 8px; }
+    .pr-mods-grid .card p { flex: 1; margin: 0; }
+    .pr-mods-grid .btn { align-self: flex-start; }
+    .pr-mods-grid .card.hi { border-color: var(--gold, #e8c468); }
+    .pr-val { font-weight: 700; color: var(--gold, #e8c468); font-size: var(--fs-14); }
+    @media (max-width: 900px) { .pr-mods-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body class="mkt">
@@ -97,6 +106,16 @@
         <a class="btn" data-buy="enterprise" href="#">Talk to us</a>
       </div>
     </div>
+    <section class="pr-mods">
+      <span class="eyebrow">Modules</span>
+      <h2>Add-on modules</h2>
+      <p class="muted">Licensed separately, for a whole company or per user, on top of any plan. Prices are being validated with the first customers – beta access available.</p>
+      <div class="pr-mods-grid">
+        <div class="card"><h3>Service management – ITSM</h3><p class="muted">Requester portal, incidents, requests, problems, changes, SLAs, catalogue, knowledge base and CMDB – connectable to Planning.</p><div class="pr-val">Price under validation</div><a class="btn" data-buy="itsm" href="#">Talk about my team</a></div>
+        <div class="card"><h3>Business Game</h3><p class="muted">Business simulation by rounds for courses and training, with professor panel, rankings and reports – connectable to Planning.</p><div class="pr-val">Price under validation</div><a class="btn" data-buy="business-game" href="#">Discover the solution for my class</a></div>
+        <div class="card hi"><h3>Enterprise package</h3><p class="muted">Base plan + ITSM + Business Game for the whole company, with onboarding and dedicated support.</p><div class="pr-val">Price under validation</div><a class="btn primary" data-buy="enterprise-package" href="#">Talk about my team</a></div>
+      </div>
+    </section>
     <section class="sz" id="sizing">
       <div class="card">
         <div>
