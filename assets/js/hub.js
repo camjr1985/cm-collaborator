@@ -66,7 +66,7 @@
     el.dataset.view = v;
     el.querySelectorAll(".ws-sec").forEach(function (sec) {
       if (!v) { sec.classList.remove("vf-empty"); return; }
-      const sel = v === "plans" ? ".is-plan" : v === "games" ? ".is-game" : ".board-card:not(.is-plan):not(.is-game)";
+      const sel = v === "plans" ? ".is-plan" : v === "games" ? ".is-game" : ".board-card:not(.is-plan):not(.is-game):not(.is-itsm)";
       sec.classList.toggle("vf-empty", !sec.querySelector(sel) && !(v === "games" && sec.querySelector("[data-newgame]:not(.locked)")) && !(v === "plans" && sec.querySelector("[data-newplan]")));
     });
     let bar = el.querySelector(".view-bar");

@@ -667,3 +667,5 @@ body.mkt h1, body.mkt h2, body.mkt h3 { font-weight: 700; }
 #hub[data-view] .ws-sec.vf-empty { display: none; }
 #hub[data-view="plans"] [data-newin], #hub[data-view="games"] [data-newin], #hub[data-view="games"] [data-newplan], #hub[data-view="boards"] [data-newplan], #hub[data-view="boards"] [data-newgame], #hub[data-view="plans"] [data-newgame] { display: none; }
 #hub[data-view=""] .view-bar { display: none; }
+#hub[data-view="boards"] .board-card.is-itsm, #hub[data-view="plans"] .board-card.is-itsm, #hub[data-view="games"] .board-card.is-itsm,
+#hub[data-view="boards"] [data-newitsm], #hub[data-view="plans"] [data-newitsm], #hub[data-view="games"] [data-newitsm] { display: none; }
