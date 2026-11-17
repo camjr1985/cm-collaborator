@@ -2147,5 +2147,22 @@ window.MB_ES = {
 "This permanently deletes the game, its decisions and results. Type the game id to confirm:": "Esto elimina la partida, sus decisiones y resultados. Escribe el id de la partida para confirmar:",
 "Open the game": "Abrir la partida",
 "open the game": "abrir la partida",
-"round ": "ronda "
+"round ": "ronda ",
+"New service centre": "Nueva central ITSM",
+"Service centre": "Central de servicios",
+"connected": "conectada",
+"Service centres (ITSM)": "Centrales de servicios (ITSM)",
+"connected service centre": "central conectada",
+"Service centre · ITIL 4 and 5": "Central de servicios · ITIL 4 y 5",
+"New name for the service centre": "Nuevo nombre de la central de servicios",
+"Service centre renamed": "Central renombrada",
+"Service centre deleted": "Central eliminada",
+"This permanently deletes the service centre and all its records. Type the id to confirm:": "Esto elimina la central de servicios y todos sus registros. Escribe el id para confirmar:",
+"service centre": "central ITSM",
+"service centres": "centrales ITSM",
+"Service centre (ITSM) – ITIL 4 and ITIL 5": "Central de servicios (ITSM) – ITIL 4 e ITIL 5",
+"Add-on module · incidents, requests, problems, changes, SLAs": "Módulo adicional · incidentes, solicitudes, problemas, cambios, SLA",
+"Open in ITSM": "Abrir en ITSM",
+"From ITSM": "Origen: ITSM",
+"ITSM – service management (ITIL 4 and ITIL 5)": "ITSM – gestión de servicios (ITIL 4 e ITIL 5)"
 };
