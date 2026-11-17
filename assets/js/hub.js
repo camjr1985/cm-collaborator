@@ -59,6 +59,54 @@
         return '<button class="tpl-tile plan-tile" data-newplanm="' + k + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + '</span><b class="no-i18n">' + (window.CMIcon ? window.CMIcon(m.icon, 15) : "") + " " + esc(m.name) + "</b></button>";
       }).join("") + "</div></section>";
   }
+  /* add-on modules (ITSM, Business Game): always visible; open when licensed, otherwise "contact the administration" */
+  const MOD_EMO = { itsm: "🛠️", game: "🎲" };
+  function modStrip(admin) {
+    const MODS = (window.CMModules && window.CMModules.LIST) || []; if (!MODS.length) return "";
+    return '<section class="hub-sec mod-sec"><div class="hub-sec-head"><h2>' + esc(LL("Add-on modules", "Módulos adicionais")) + '</h2><span class="muted small">' + esc(admin ? LL("As the main administrator you see every module. Grant licences in Administration → Modules & packages.", "Como administrador principal você vê todos os módulos. Conceda licenças em Administração → Módulos e pacotes.") : LL("Extra licences for your company or for you – connectable to Planning.", "Licenças extras para sua empresa ou para você – conectáveis ao Planning.")) + "</span>" +
+      (admin ? '<a class="btn sm ghost" href="../admin/#modulos">' + esc(LL("Manage licences", "Gerenciar licenças")) + "</a>" : "") + '</div><div class="mod-grid">' +
+      MODS.map(function (m) {
+        return '<article class="mod-card" data-mod="' + m.id + '"><div class="mod-top"><span class="mod-ic" aria-hidden="true">' + (MOD_EMO[m.id] || "🧩") + '</span><div><b class="no-i18n">' + esc(m.name) + '</b><span class="mod-st" data-modst="' + m.id + '">' + esc(LL("Checking licence…", "Verificando licença…")) + '</span></div></div><p class="muted small">' + esc(m.desc) + '</p><button class="btn sm primary" data-modopen="' + m.id + '">' + esc(LL("Open ", "Abrir ")) + '<span class="no-i18n">' + esc(m.name) + "</span></button></article>";
+      }).join("") + "</div></section>";
+  }
+  function bindModStrip(el, admin, wsIds) {
+    const CM = window.CMModules; if (!CM) return;
+    const avail = {}, lic = {};
+    // which workspaces license each module (company package) or the person (individual) – admins see all
+    const checks = (wsIds.length ? wsIds : [null]).map(function (id) { return CM.forWorkspace(id).then(function (o) { return [id, o]; }); });
+    const pages = CM.LIST.map(function (m) { return fetch("../" + m.path, { method: "HEAD", cache: "no-store" }).then(function (r) { avail[m.id] = r.ok; }, function () { avail[m.id] = false; }); });
+    Promise.all(checks).then(function (rows) {
+      CM.LIST.forEach(function (m) { lic[m.id] = rows.filter(function (r) { return r[1][m.id]; }).map(function (r) { return r[0]; }); });
+      return Promise.all(pages);
+    }).then(function () {
+      CM.LIST.forEach(function (m) {
+        const st = el.querySelector('[data-modst="' + m.id + '"]'), card = el.querySelector('[data-mod="' + m.id + '"]'); if (!st) return;
+        const ok = admin || lic[m.id].length > 0;
+        card.classList.toggle("locked", !ok);
+        st.className = "mod-st " + (admin ? "adm" : ok ? "ok" : "no");
+        st.textContent = admin ? LL("Administrator · full access", "Administrador · acesso total") : ok ? LL("Licensed", "Licenciado") : LL("Not included in your licence", "Não incluído na sua licença");
+        if (!avail[m.id]) st.textContent += " · " + LL("in development", "em desenvolvimento");
+      });
+    });
+    el.querySelectorAll("[data-modopen]").forEach(function (b) { b.onclick = function () {
+      const id = b.dataset.modopen, m = CM.get(id), ok = admin || (lic[id] || []).length > 0;
+      if (!ok) return modContact(m);
+      if (!avail[id]) return toast(LL("This module is being finished and will open here as soon as it is published.", "Este módulo está em finalização e abre aqui assim que for publicado."));
+      const ws = (lic[id] || []).filter(Boolean)[0] || wsIds[0] || "";
+      // Business Game opens the "new game" flow in the licensed workspace (existing games are listed in each workspace and in "My games")
+      location.href = "../" + m.path + (ws ? (id === "game" ? "?new=1&ws=" : "?ws=") + encodeURIComponent(ws) : "");
+    }; });
+  }
+  function modContact(m) {
+    const d = document.createElement("div"); d.className = "modal-lite"; d.setAttribute("role", "dialog");
+    d.innerHTML = '<div class="card mod-contact"><span class="mod-gate-tag">' + esc(LL("Add-on module", "Módulo adicional")) + "</span><h2>" + (MOD_EMO[m.id] || "🧩") + ' <span class="no-i18n">' + esc(m.full) + "</span></h2><p>" + esc(LL("You don't have access to this module yet. Contact the Administration to get the licence.", "Você ainda não tem acesso a este módulo. Entre em contato com a Administração para ter acesso ao licenciamento.")) + '</p><p class="muted small">' + esc(m.desc) + '</p><div class="mod-gate-acts"><button class="btn primary" id="mcReq">' + esc(LL("Notify the Administration", "Avisar a Administração")) + '</button><button class="btn" id="mcX">' + esc(LL("Close", "Fechar")) + "</button></div></div>";
+    document.body.appendChild(d);
+    const close = function () { d.remove(); };
+    d.addEventListener("click", function (e) { if (e.target === d) close(); });
+    d.querySelector("#mcX").onclick = close;
+    const r = d.querySelector("#mcReq");
+    r.onclick = function () { r.disabled = true; window.CMModules.request(m.id, "").then(function () { r.textContent = LL("Request sent ✓ – the Administration will contact you", "Pedido enviado ✓ – a Administração vai entrar em contato"); }, function () { r.disabled = false; toast(LL("Could not send – try again", "Não foi possível enviar – tente de novo")); }); };
+  }
   function planCard(id, p, wsName) {
     const m = (window.PLAN_METHODS || {})[p.method] || {};
     return '<a class="board-card is-plan" href="../planning/?id=' + encodeURIComponent(id) + '" data-title="' + esc((p.title || "").toLowerCase()) + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(p.method) : "") + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("planning", 12) : "") + " Planning</span></span>" +
@@ -356,10 +404,11 @@
           const bs = Object.keys(wss[firstBeta.id].boards || {}).sort();
           FIRST_BOARD = bs.filter(function (b) { return /comece|start|^1-/.test(b); })[0] || bs[0] || null;
         }
-        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + planStrip(Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }) || !entries.length) + recentRows(allowed) + '<div id="gameSlot"></div>' +
+        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true) + planStrip(Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }) || !entries.length) + modStrip(admin) + recentRows(allowed) + '<div id="gameSlot"></div>' +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
             : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
         bindFeedback();
+        bindModStrip(el, admin, ids);
         el.querySelectorAll("[data-howto]").forEach(function (b) { b.onclick = function () { welcomeDialog(user); }; });
         db.ref("announcement").once("value").then(function (s) {
           const slot = document.getElementById("annSlot"); if (!slot) return;

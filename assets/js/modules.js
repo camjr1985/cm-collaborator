@@ -69,8 +69,8 @@
       if (ok || !el) return ok;
       const m = get(mod) || { name: mod, full: mod, desc: "" };
       el.innerHTML = '<div class="mod-gate"><div class="mod-gate-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h1>" + esc(m.full) + "</h1><p>" + esc(m.desc) + "</p><p>" +
-        esc(L("This module is not included in your licence yet. Ask for access and the Digital Agile Technology team will get in touch (beta access available).", "Este módulo ainda não está incluído na sua licença. Solicite o acesso e a equipe da Digital Agile Technology entra em contato (há acesso beta disponível).")) +
-        '</p><div class="mod-gate-acts"><button class="btn primary" id="modReq">' + esc(L("Request access", "Solicitar acesso")) + '</button><a class="btn" href="' + esc((window.CMCOLLAB_BASE || "../") + "workspaces/") + '">' + esc(L("Back to my boards", "Voltar para Meus quadros")) + "</a></div></div></div>";
+        esc(L("You don't have access to this module yet. Contact the Administration to get the licence (beta access available).", "Você ainda não tem acesso a este módulo. Entre em contato com a Administração para ter acesso ao licenciamento (há acesso beta disponível).")) +
+        '</p><div class="mod-gate-acts"><button class="btn primary" id="modReq">' + esc(L("Notify the Administration", "Avisar a Administração")) + '</button><a class="btn" href="' + esc((window.CMCOLLAB_BASE || "../") + "workspaces/") + '">' + esc(L("Back to my boards", "Voltar para Meus quadros")) + "</a></div></div></div>";
       const b = el.querySelector("#modReq");
       if (b) b.onclick = function () { b.disabled = true; request(mod, wsId).then(function () { b.textContent = L("Request sent ✓", "Pedido enviado ✓"); }, function () { b.disabled = false; }); };
       return false;

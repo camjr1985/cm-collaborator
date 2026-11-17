@@ -629,3 +629,31 @@ body.mkt h1, body.mkt h2, body.mkt h3 { font-weight: 700; }
 .mod-gate-tag { display: inline-block; font: var(--fw-semibold) var(--fs-11)/1 var(--font); text-transform: uppercase; letter-spacing: .06em; padding: 5px 9px; border-radius: 999px; background: rgba(232,196,104,.18); color: var(--gold, #e8c468); }
 .mod-gate-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 @media (max-width: 560px) { .lang button { padding: 4px 6px; font-size: var(--fs-11); } }
+/* landing: modular licensing and promo videos */
+.plans.plans4 { grid-template-columns: repeat(4, 1fr); }
+.plan .tag { white-space: nowrap; }
+.vids { margin-top: 36px; }
+.vids h3 { font-size: var(--fs-20); margin: 0 0 14px; }
+.vid-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 280px); gap: 18px; align-items: start; }
+.vid { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.vid.wide { aspect-ratio: 16 / 9; } .vid.short { aspect-ratio: 9 / 16; }
+.vid iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+@media (max-width: 1100px) { .plans.plans4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .plans.plans4 { grid-template-columns: 1fr; } .vid-row { grid-template-columns: 1fr; } .vid.short { max-width: 300px; margin: 0 auto; width: 100%; } }
+/* header language switch never wraps; long e-mails in the user bar never overlap */
+.lang button { white-space: nowrap; }
+.userbar > span { overflow-wrap: anywhere; }
+/* hub: add-on modules */
+.mod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.mod-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--card, rgba(255,255,255,.04)); }
+.mod-card p { margin: 0; flex: 1; }
+.mod-card .btn { align-self: flex-start; }
+.mod-card.locked .btn { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.mod-top { display: flex; gap: 12px; align-items: center; }
+.mod-top > div { display: flex; flex-direction: column; gap: 2px; }
+.mod-top b { font-size: var(--fs-16); }
+.mod-ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 20px; background: rgba(44,196,179,.14); }
+.mod-st { font-size: var(--fs-12); color: var(--ink-3); }
+.mod-st.ok, .mod-st.adm { color: #5fe0d1; } .mod-st.no { color: var(--gold); }
+.mod-contact h2 { font-size: var(--fs-20); margin: 10px 0 8px; }
+.plans4 .plan { display: flex; flex-direction: column; } .plans4 .plan ul { flex: 1; } .plans4 .plan h3 { gap: 8px; }

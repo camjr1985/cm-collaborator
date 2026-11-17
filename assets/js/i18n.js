@@ -699,7 +699,32 @@
     "Please enter a valid e-mail.": "Indique um e-mail válido.",
     "Please choose your role.": "Escolha sua função.",
     "Please accept to be contacted about the beta.": "Aceito ser contatado(a) sobre o beta.",
-    "People on this board": "Pessoas neste quadro", "Tools": "Ferramentas"
+    "People on this board": "Pessoas neste quadro", "Tools": "Ferramentas",
+    "One platform, modular licences": "Uma plataforma, licenças modulares",
+    "Boards and Planning are the base. Add the modules your team needs – as a company package or an individual licence. Beta access available.": "Quadros e Planning são a base. Acrescente os módulos de que sua equipe precisa – em pacote para a empresa ou licença individual. Acesso beta disponível.",
+    "Essential": "Essencial",
+    "Base": "Base",
+    "Collaborative boards with AI": "Quadros colaborativos com IA",
+    "50+ ready-made templates": "Mais de 50 templates prontos",
+    "Planning: roadmap, Waterfall, Scrum and Kanban": "Planning: roadmap, Waterfall, Scrum e Kanban",
+    "OKRs, reports and e-mail alerts": "OKRs, relatórios e alertas por e-mail",
+    "Jira, Azure DevOps and Kanbanize integration": "Integração com Jira, Azure DevOps e Kanbanize",
+    "Add-on module": "Módulo adicional",
+    "Service desk and requester portal": "Central de serviço e portal do solicitante",
+    "Incidents, requests, problems and changes": "Incidentes, requisições, problemas e mudanças",
+    "SLAs, CMDB and knowledge base (ITIL 4)": "SLAs, CMDB e base de conhecimento (ITIL 4)",
+    "Connectable to Planning": "Conectável ao Planning",
+    "Round-based business simulation": "Simulação empresarial por rodadas",
+    "Teams, decisions and rankings": "Equipes, decisões e ranking",
+    "Professor dashboard and ready-made scenarios": "Painel do professor e cenários prontos",
+    "Customisable per institution": "Personalizável por instituição",
+    "Package": "Pacote",
+    "Base + ITSM + Business Game": "Base + ITSM + Business Game",
+    "Licences per company or per user": "Licenças por empresa ou por usuário",
+    "Onboarding and training": "Onboarding e treinamento",
+    "See CM Collaborator in action": "Veja o CM Collaborator em ação",
+    "CM Collaborator – presentation": "CM Collaborator – apresentação",
+    "CM Collaborator – short video": "CM Collaborator – vídeo curto"
   };
 
   const PATTERNS = [
