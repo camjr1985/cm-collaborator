@@ -83,6 +83,19 @@ function key(email) { return String(email).toLowerCase().replace(/\./g, ","); }
 function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
+// Brand signature card appended to every automatic e-mail (brand name comes from the site; falls back to CFG.brand)
+function brandSig(brand, pt) {
+  brand = String(brand || CFG.brand);
+  var w = brand.split(/\s+/), mark = w[0].length <= 3 ? w[0] : w.map(function (x) { return x.charAt(0); }).join("").slice(0, 2).toUpperCase();
+  var tag = pt === false ? "AI collaborative boards · Planning · OKRs · Jira, Azure DevOps and Kanbanize integration" : "Quadros colaborativos com IA · Planning · OKRs · Integração com Jira, Azure DevOps e Kanbanize";
+  var site = CFG.site.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return '<div style="padding:0 24px 22px"><table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif"><tr><td style="background:#0e1a33;border-radius:12px;padding:14px 18px">' +
+    '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr><td style="padding-right:12px;vertical-align:middle"><span style="display:inline-block;background:#2cc4b3;color:#0e1a33;font-weight:bold;border-radius:8px;padding:7px 9px;font-size:14px">' + esc(mark) + '</span></td>' +
+    '<td style="vertical-align:middle;color:#ffffff"><div style="font-size:16px;font-weight:bold;color:#ffffff">' + esc(brand) + '</div><div style="font-size:12px;color:#c9d2e3">' + tag + '</div></td></tr></table>' +
+    '<div style="height:2px;background:#e8c468;margin:10px 0 8px;border-radius:2px;font-size:1px;line-height:2px">&nbsp;</div>' +
+    '<div style="font-size:12px;color:#c9d2e3">' + (pt === false ? "A solution by " : "Uma solução ") + '<b style="color:#e8c468">' + esc(CFG.company) + '</b> · <a href="' + CFG.site + '" style="color:#2cc4b3;text-decoration:none">' + site + '</a></div></td></tr></table></div>';
+}
+
 function welcome(m, info, lang, brand) {
   brand = brand || CFG.brand;
   var w0 = brand.split(/\s+/)[0], mark = (w0.length <= 3 ? w0 : brand.split(/\s+/).map(function (w) { return w[0]; }).join("").slice(0, 2)).toUpperCase();
@@ -139,8 +152,8 @@ function welcome(m, info, lang, brand) {
     '<p style="text-align:center;margin:22px 0"><a href="' + hub + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">' + L.cta + " →</a></p>" +
     '<div style="background:#fff8e6;border:1px solid #f0dca4;border-radius:12px;padding:14px 16px"><b>' + L.aiT + '</b><ul style="padding-left:18px;margin:8px 0">' + L.ai.map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</ul>" + L.aiH + "</div>" +
     '<p style="background:#eef6ff;border:1px solid #cfe0f5;border-radius:12px;padding:12px 16px">📄 <a href="' + guide + '" style="font-weight:bold">' + L.guide + "</a></p><p>" + L.fb + "</p><p>" + L.bye + "</p></div>" +
-    '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + L.auto + "</div></div></div>";
-  var text = html.replace(/<li>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1)").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
+    brandSig(brand, pt) + '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + L.auto + "</div></div></div>";
+  var text = html.replace(/<li>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1)").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   return { subject: L.subject, html: html, text: text };
 }
 
@@ -200,8 +213,8 @@ function prospect(m, info, brand, altSubject) {
     "<p>Para o teste render ainda mais, ofereço <b>20 minutos</b> na " + days[0] + " ou na " + days[1] + " para configurarmos juntos o ambiente com um caso real " + esc(coDe) + ". É só responder este e-mail com o melhor horário.</p>" +
     "<p>E se a experiência fizer sentido para o seu time, conversamos sobre levar o " + esc(brand) + " para toda " + (company ? "a " + esc(company) : "a empresa") + ".</p>" +
     "<p>Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company + "</p></div>" +
-    '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Você recebeu este convite porque atua com liderança em tecnologia e produto. Se preferir não receber mais mensagens, é só responder “remover”.</div></div></div>';
-  var text = html.replace(/<li[^>]*>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1) ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\n{3,}/g, "\n\n").trim();
+    brandSig(brand, true) + '<div style="padding:14px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Você recebeu este convite porque atua com liderança em tecnologia e produto. Se preferir não receber mais mensagens, é só responder “remover”.</div></div></div>';
+  var text = html.replace(/<li[^>]*>/g, "\n- ").replace(/<br>|<\/p>|<\/h3>|<\/div>|<\/ol>|<\/ul>/g, "\n").replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "$2 ($1) ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\n{3,}/g, "\n\n").trim();
   return { subject: subject, html: html, text: text };
 }
 
@@ -246,8 +259,8 @@ function planNotify(req, who, brand) {
       '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + ' · Planning</div><div style="padding:22px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
       "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + introHtml + "</p>" + table +
       '<p style="text-align:center;margin:20px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planejamento" : "Open the planning") + " →</a></p></div>" +
-      '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Notificação automática do " : "Automatic notification from ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
-    var text = html.replace(/<\/tr>|<\/p>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
+      brandSig(brand, pt) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Notificação automática do " : "Automatic notification from ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
+    var text = html.replace(/<\/tr>|<\/p>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
     MailApp.sendEmail(to, subject, text, opt); sent.push(to);
   }
@@ -658,9 +671,9 @@ function digestSend(planId, P, W, per, brand, lang) {
       "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + (pt ? "Resumo de marcos e atividades principais do planejamento <b>“" : "Milestones and key activities of the planning <b>“") + esc(info.title || planId) + "”</b>:</p>" +
       sec(pt ? "Em atraso" : "Overdue", late) + sec(pt ? "Vencem hoje" : "Due today", tod) + sec(pt ? "Próximos prazos" : "Coming up", soon) +
       '<p style="text-align:center;margin:22px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planejamento" : "Open the planning") + " →</a></p></div>" +
-      '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Alerta automático configurado no planejamento (menu Alertas por e-mail) · " : "Automatic alert set up in the planning (E-mail alerts) · ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
+      brandSig(brand, pt) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Alerta automático configurado no planejamento (menu Alertas por e-mail) · " : "Automatic alert set up in the planning (E-mail alerts) · ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
     var subj = (late.length ? (pt ? "⚠ " + late.length + " em atraso · " : "⚠ " + late.length + " overdue · ") : "") + (pt ? "Alertas: " : "Alerts: ") + (info.title || planId);
-    var text = html.replace(/<\/tr>|<\/p>|<\/h3>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
+    var text = html.replace(/<\/tr>|<\/p>|<\/h3>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
     MailApp.sendEmail(to, subj, text, opt); sent.push(to);
   });
