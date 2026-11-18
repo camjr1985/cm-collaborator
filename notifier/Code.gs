@@ -834,7 +834,7 @@ function itsmPeople(info, ws) {
   Object.keys(wm).forEach(function (k) { var m = wm[k]; if (m && m.email && (!m.expires || m.expires > now)) out[k] = { email: m.email, name: m.name || m.email.split("@")[0], agent: m.role === "editor", mgr: false }; });
   if (own) out[own] = Object.assign(out[own] || { email: (ws.info.ownerEmail || own.replace(/,/g, ".")), name: (ws.info.ownerName || own.replace(/,/g, ".").split("@")[0]) }, { agent: true, mgr: true });
   Object.keys(im).forEach(function (k) { var m = im[k]; if (!m || !m.email || (m.expires && m.expires < now)) return; var p = out[k] || (out[k] = { email: m.email, name: m.name || m.email.split("@")[0] }); if (m.role === "agent" || m.role === "manager") p.agent = true; if (m.role === "manager") p.mgr = true; });
-  if (info.owner && out[info.owner]) { out[info.owner].agent = true; out[info.owner].mgr = true; }
+  if (info.owner) { var oe = String(info.createdBy || info.owner.replace(/,/g, ".")).toLowerCase(); out[info.owner] = Object.assign(out[info.owner] || { email: oe, name: oe.split("@")[0] }, { agent: true, mgr: true }); } // the centre's owner always counts, even when not listed as a workspace member
   return out;
 }
 function itsmCap(id, settings, n) {
