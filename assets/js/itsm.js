@@ -219,6 +219,10 @@
       '<section class="it-hero"><div><span class="it-eyebrow">' + IC("itsm", 15) + " Módulo adicional " + (window.CMNewBadge ? window.CMNewBadge("itsm") : "") + "</span><h2>Central de serviços com ITIL 4 e ITIL 5</h2>" +
       "<p>Portal do solicitante, incidentes, requisições, problemas, mudanças, SLAs, catálogo, base de conhecimento e CMDB, conectados aos seus workspaces e planejamentos.</p></div>" +
       '<button class="pl-btn" id="itHelp">' + IC("help", 15) + " Como funciona</button></section>" +
+      (canCreate.length ? '<h3 class="it-h3">Criar a partir de um modelo</h3><div class="it-cgrid it-tgrid">' + Object.keys(I.CENTRAL_TEMPLATES).map(function (k) {
+        const T = I.CENTRAL_TEMPLATES[k];
+        return '<button class="it-ccard it-tcard' + (k === "blank" ? " blank" : "") + '" data-ctpl="' + k + '"><span class="it-cic">' + IC(T.icon, 22) + "</span><b>" + esc(T.name) + '</b><span class="muted small">' + esc(T.desc) + "</span></button>";
+      }).join("") + "</div>" : "") +
       (ids.length ? '<h3 class="it-h3">Minhas centrais <span class="it-count">' + ids.length + '</span></h3><div class="it-cgrid">' + ids.map(function (c) {
         const x = cards[c];
         return '<a class="it-ccard" href="./?id=' + encodeURIComponent(c) + '"><span class="it-cic">' + IC("itsm", 22) + '</span><b class="no-i18n">' + esc(x.title || c) + '</b><span class="muted small">' + esc(x.ws || "") + (x.home === false ? " · conectada" : "") + "</span></a>";
@@ -227,19 +231,22 @@
       (owned.length && canCreate.length < owned.length && canCreate.length ? '<p class="muted small">Alguns dos seus workspaces não têm o módulo ITSM na licença: ' + esc(owned.filter(function (o) { return !o.lic; }).map(function (o) { return o.name; }).join(", ")) + ".</p>" : "") +
       "</main>";
     const nb = document.getElementById("newC"); if (nb) nb.onclick = function () { createCentral(canCreate); };
+    app.querySelectorAll("[data-ctpl]").forEach(function (b) { b.onclick = function () { createCentral(canCreate, Q.get("new") || Q.get("ws"), b.dataset.ctpl); }; });
     document.getElementById("itHelp").onclick = helpDialog;
     const rq = document.getElementById("itReq"); if (rq) rq.onclick = function () { rq.disabled = true; window.CMModules.request("itsm", owned[0].id).then(function () { rq.textContent = "Pedido enviado ✓"; }, function (e) { rq.disabled = false; fail(e); }); };
     const wsPre = Q.get("ws"); /* from "Add-on modules" on My boards: open the create dialog only when there is nothing yet */
     if (pre && canCreate.some(function (o) { return o.id === pre; })) createCentral(canCreate, pre);
     else if (wsPre && !ids.length && canCreate.some(function (o) { return o.id === wsPre; })) createCentral(canCreate, wsPre);
   }
-  function createCentral(owned, preWs) {
-    modal('<h2>' + IC("itsm", 20) + ' Nova central de serviços</h2><p class="muted small">A central pertence a um workspace (licença do módulo) e pode ser conectada depois a outros workspaces e planejamentos.</p>' +
-      '<form class="pl-form" id="ncF"><label>Nome<input name="title" required maxlength="80" placeholder="ex.: Central de serviços de TI" autocomplete="off"></label>' +
+  function createCentral(owned, preWs, tpl) {
+    const CT = I.CENTRAL_TEMPLATES[tpl || "ti"] || I.CENTRAL_TEMPLATES.ti;
+    if (preWs && !owned.some(function (o) { return o.id === preWs; })) preWs = "";
+    modal('<h2>' + IC("itsm", 20) + ' Nova central de serviços</h2>' + (tpl ? '<p class="it-banner small">Modelo: <b>' + esc(CT.name) + "</b>. " + esc(CT.desc) + "</p>" : "") + '<p class="muted small">A central pertence a um workspace (licença do módulo) e pode ser conectada depois a outros workspaces e planejamentos.</p>' +
+      '<form class="pl-form" id="ncF"><label>Nome<input name="title" required maxlength="80" placeholder="ex.: Central de serviços de TI" autocomplete="off" value="' + esc(tpl && tpl !== "blank" ? CT.name : "") + '"></label>' +
       "<label>Workspace (dono da licença)<select name=\"ws\">" + owned.map(function (o) { return opt(o.id, o.name, preWs || owned[0].id); }).join("") + "</select></label>" +
       '<label>Referência ITIL exibida<select name="fw">' + opt("both", "ITIL 4 e ITIL 5 (recomendado)", "both") + opt("itil4", "Só ITIL 4", "") + opt("itil5", "Só ITIL 5", "") + "</select></label>" +
-      '<fieldset class="it-areasel"><legend>Áreas de atendimento (modelos – dá para mudar depois em Administração)</legend>' + Object.keys(I.AREA_TEMPLATES).map(function (k) { const T = I.AREA_TEMPLATES[k]; return '<label class="chk"><input type="checkbox" name="ar_' + k + '"' + (k === "ti" ? " checked" : "") + "> " + esc(T.name) + ' <span class="muted small">' + T.offerings.length + " ofertas · " + Object.keys(T.groups).length + " grupos" + (T.soc ? " · SLA 24×7" : "") + "</span></label>"; }).join("") + "</fieldset>" +
-      '<label class="chk"><input type="checkbox" name="seed" checked> Incluir exemplos: um artigo de conhecimento e itens de configuração (CMDB)</label>' +
+      '<fieldset class="it-areasel"><legend>Áreas de atendimento (modelos – dá para mudar depois em Administração)</legend>' + Object.keys(I.AREA_TEMPLATES).map(function (k) { const T = I.AREA_TEMPLATES[k]; return '<label class="chk"><input type="checkbox" name="ar_' + k + '"' + (CT.areas.indexOf(k) >= 0 ? " checked" : "") + "> " + esc(T.name) + ' <span class="muted small">' + T.offerings.length + " ofertas · " + Object.keys(T.groups).length + " grupos" + (T.soc ? " · SLA 24×7" : "") + "</span></label>"; }).join("") + "</fieldset>" +
+      '<label class="chk"><input type="checkbox" name="seed"' + (CT.seed ? " checked" : "") + '> Incluir exemplos: um artigo de conhecimento e itens de configuração (CMDB)</label>' +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>Cancelar</button><button class="pl-btn primary">Criar central</button></div></form>', function (w, close) {
       const f = w.querySelector("#ncF");
       const qa = Q.get("area"); if (qa && f["ar_" + qa]) { Object.keys(I.AREA_TEMPLATES).forEach(function (k) { if (f["ar_" + k]) f["ar_" + k].checked = k === qa; }); if (!f.title.value) f.title.value = "Central de serviços – " + I.AREA_TEMPLATES[qa].name; } // area chosen on My boards
@@ -266,7 +273,9 @@
     if ((chosen || []).indexOf("soc") >= 0) settings.boards.push({ id: "b5", kind: "security", name: "SOC", lane: "group" });
     const out = { settings: settings, counters: { INC: 0, REQ: 0, TSK: 0, PRB: 0, CHG: 0, IMP: 0, SEC: 0 }, sla: { defaults: I.SLA_DEFAULT, soc: I.SOC_SLA_DEFAULT }, catalog: {} };
     /* apply each chosen area template into this object */
-    (chosen && chosen.length ? chosen : ["ti"]).forEach(function (k, i) {
+    if (!chosen || !chosen.length) settings.groups = { sd: { name: "Central de serviço" } };
+    out.areas = {};
+    (chosen || []).forEach(function (k, i) {
       const u = areaFromTemplate(k, k, out.settings, out.catalog);
       Object.keys(u).forEach(function (path) {
         const ps = path.split("/").slice(1); let n = out;
@@ -1521,8 +1530,8 @@
   }
   function excelSection() {
     return '<section class="it-scard" data-sec="excel"><h3>' + IC("upload", 16) + ' Carregar parametrização pelo Excel</h3>' +
-      '<p class="muted small">Baixe o nosso modelo, preencha as abas que quiser e importe. Abas lidas: <b>Áreas</b>, <b>SLA Incidentes</b>, <b>SLA SOC</b>, <b>Calendários</b> e <b>Usuários</b>. Antes de gravar, mostramos o que vai mudar.</p>' +
-      '<div class="it-acts"><a class="pl-btn" href="./modelo-itsm.xlsx" download>' + IC("export", 14) + ' Baixar modelo (Excel)</a><label class="pl-btn primary it-file">' + IC("upload", 14) + ' Importar planilha<input type="file" id="xlsIn" accept=".xlsx,.xls" hidden></label></div><div id="xlsOut"></div></section>';
+      '<p class="muted small">Baixe o nosso modelo, preencha as abas que quiser e importe. Abas lidas: <b>Áreas</b>, <b>SLA Incidentes</b>, <b>SLA SOC</b>, <b>Calendários</b> e <b>Usuários</b>. Antes de gravar, mostramos o que vai mudar. Para carregar só os SLAs, use o modelo CSV.</p>' +
+      '<div class="it-acts"><a class="pl-btn" href="./modelo-itsm.xlsx" download>' + IC("export", 14) + ' Baixar modelo (Excel)</a><a class="pl-btn" href="./modelo-sla.csv" download>' + IC("export", 14) + ' Modelo CSV de SLAs</a><label class="pl-btn primary it-file">' + IC("upload", 14) + ' Importar planilha<input type="file" id="xlsIn" accept=".xlsx,.csv" hidden></label></div><div id="xlsOut"></div></section>';
   }
   function areasSection() {
     const as = areas(), used = function (a) { return recs().filter(function (r) { return r.area === a; }).length; };
@@ -1591,6 +1600,49 @@
     if (window.XLSXLite) return Promise.resolve(window.XLSXLite);
     return new Promise(function (res, rej) { const sc = document.createElement("script"); sc.src = "../assets/js/xlsx-lite.js"; sc.onload = function () { res(window.XLSXLite); }; sc.onerror = function () { rej(new Error("Não foi possível carregar o leitor de Excel")); }; document.head.appendChild(sc); });
   }
+  /* CSV of SLAs (our template): Tipo;Área;Serviço;Prioridade;1ª resposta ou triagem;Contenção;Resolução;Unidade;Nome */
+  function csvBook(text) {
+    text = String(text || "").replace(/^\ufeff/, "").split(/\r?\n/).filter(function (l) { return !/^\s*(#|©)/.test(l); }).join("\n");
+    const first = text.split(/\r?\n/)[0] || "", d = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ";" : ",";
+    const rows = []; let row = [], cur = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; continue; }
+      if (c === '"') q = true; else if (c === d) { row.push(cur); cur = ""; } else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cur); rows.push(row); row = []; cur = ""; } else cur += c;
+      if (rows.length > 3000) break;
+    }
+    if (cur || row.length) { row.push(cur); rows.push(row); }
+    const head = (rows[0] || []).map(normKey), idx = function (names) { for (let i = 0; i < head.length; i++) if (names.some(function (n) { return head[i].indexOf(n) === 0; })) return i; return -1; };
+    const cT = idx(["tipo"]), cA = idx(["area"]), cS = idx(["servico"]), cP = idx(["prioridade", "severidade"]), cR = idx(["1a resposta", "primeira resposta", "triagem", "resposta"]), cC = idx(["contencao"]), cX = idx(["resolucao"]), cU = idx(["unidade"]), cN = idx(["nome"]);
+    const inc = [], soc = [], bad = [];
+    rows.slice(1).forEach(function (r, i) {
+      const g = function (c) { return c < 0 ? "" : String(r[c] == null ? "" : r[c]).trim(); };
+      if (!r.some(function (x) { return String(x).trim(); })) return;
+      const t = normKey(g(cT)), o = { __line: i + 2, area: g(cA), servico: g(cS), prioridade: g(cP), unidade: g(cU) || "minutos", nome: g(cN), resolucao: g(cX).replace(",", ".") };
+      if (t.indexOf("soc") === 0 || t.indexOf("seg") === 0 || t.indexOf("ciber") === 0) { o.triagem = g(cR).replace(",", "."); o.contencao = g(cC).replace(",", "."); soc.push(o); }
+      else if (!t || t.indexOf("inc") === 0 || t.indexOf("req") === 0 || t.indexOf("infra") === 0) { o["1a resposta"] = g(cR).replace(",", "."); inc.push(o); }
+      else bad.push(i + 2);
+    });
+    if (cP < 0 || cX < 0) throw new Error("CSV fora do modelo: faltam as colunas Prioridade e Resolução. Baixe o modelo CSV de SLAs.");
+    const book = { "SLA Incidentes": inc, "SLA SOC": soc };
+    return { SheetNames: Object.keys(book), rows: function (n) { return book[n] || []; }, badTypes: bad };
+  }
+  /* current SLAs in the same CSV layout as the template (so they can be edited and loaded back) */
+  function exportSlaCsv() {
+    const brand = window.CMCOLLAB_BRAND || "CM Collaborator", sla = data.sla || {}, L = [];
+    const q = function (v) { v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    L.push("# " + brand + " · ITSM – SLAs da central “" + info.title + "” (exportado em " + new Date().toLocaleString("pt-BR") + ")");
+    L.push("# © " + new Date().getFullYear() + " Digital Agile Technology. Todos os direitos reservados. Uso exclusivo de clientes do " + brand + ".");
+    L.push("# Edite e carregue de volta em Administração → SLAs e calendários → Importar CSV. Linhas que começam com # são ignoradas.");
+    L.push(["Tipo", "Área", "Serviço", "Prioridade", "1ª resposta ou triagem", "Contenção", "Resolução", "Unidade", "Nome"].join(";"));
+    const d = sla.defaults || I.SLA_DEFAULT, sc = sla.soc || I.SOC_SLA_DEFAULT;
+    ["P1", "P2", "P3", "P4"].forEach(function (p) { const x = d[p] || I.SLA_DEFAULT[p]; L.push(["Incidente", "", "", p, x.resp, "", x.res, "minutos", "Padrão " + p].map(q).join(";")); });
+    ["P1", "P2", "P3", "P4"].forEach(function (p) { const x = sc[p] || I.SOC_SLA_DEFAULT[p]; L.push(["SOC", "", "", p, x.resp, x.contain, x.res, "minutos", "SOC " + p].map(q).join(";")); });
+    list(sla.policies).forEach(function (p) { L.push([p.soc ? "SOC" : "Incidente", p.area ? areaName(p.area) || p.area : "", p.service ? svcName(p.service) : "", p.priority, p.resp, p.soc ? p.contain : "", p.res, "minutos", p.name || ""].map(q).join(";")); });
+    const blob = new Blob(["\ufeff" + L.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "sla-" + slug(info.title || "central") + ".csv"; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
   function normKey(s) { return String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
   function toMin(v, unit) {
     if (v == null || v === "") return null;
@@ -1606,8 +1658,10 @@
   function importExcel(file, out) {
     out.innerHTML = '<p class="muted small">Lendo a planilha…</p>';
     if (file.size > 5 * 1024 * 1024) { out.innerHTML = '<p class="it-banner red small">Planilha maior que 5 MB. Use o modelo sem dados extras.</p>'; return; }
-    Promise.all([loadXLSX(), file.arrayBuffer()]).then(function (x) { return x[0].read(x[1]); }).then(function (wb) {
+    const isCsv = /\.csv$/i.test(file.name || "") || /csv/.test(file.type || "");
+    (isCsv ? file.text().then(csvBook) : Promise.all([loadXLSX(), file.arrayBuffer()]).then(function (x) { return x[0].read(x[1]); })).then(function (wb) {
       const errs = [], u = {}, sum = [];
+      (wb.badTypes || []).forEach(function (l) { errs.push("CSV, linha " + l + ": Tipo deve ser Incidente ou SOC."); });
       const areaByName = {}; areas().forEach(function (a) { areaByName[normKey(a.name)] = a.id; areaByName[normKey(a.id)] = a.id; });
       const newAreas = {};
       /* Áreas */
@@ -1617,7 +1671,7 @@
         if (!nm) return;
         const tid = Object.keys(I.AREA_TEMPLATES).find(function (k) { return normKey(I.AREA_TEMPLATES[k].name) === tpl || k === tpl || normKey(I.AREA_TEMPLATES[k].name).indexOf(tpl) === 0; });
         if (areaByName[normKey(nm)]) return;
-        if (!tid) { errs.push("Áreas, linha " + (r.__line || i + 2) + ": modelo “" + (r["modelo"] || "") + "” não existe (use TI, SOC, RH, Facilities, Financeiro ou Jurídico)."); return; }
+        if (!tid) { errs.push("Áreas, linha " + (r.__line || i + 2) + ": modelo “" + (r["modelo"] || "") + "” não existe (use TI, Infraestrutura, SOC, RH, Facilities, Financeiro ou Jurídico)."); return; }
         let aid = tid, n = 2; while ((data.areas || {})[aid] || newAreas[aid]) aid = tid + n++;
         newAreas[aid] = 1; areaByName[normKey(nm)] = aid;
         Object.assign(u, areaFromTemplate(tid, aid, S(), data.catalog)); u["data/areas/" + aid].name = String(nm).slice(0, 40);
@@ -1641,7 +1695,9 @@
           const sv = r["servico"] ? svcByName[normKey(r["servico"])] : null;
           if (r["servico"] && !sv) { errs.push((cfg[1] ? "SLA SOC" : "SLA Incidentes") + ", linha " + line + ": serviço “" + r["servico"] + "” não está no catálogo."); return; }
           if (!a && !sv) { defs[p] = cfg[1] ? { resp: resp, contain: cont, res: res } : { resp: resp, res: res }; nDef++; }
-          else { const pid = "x" + (cfg[1] ? "s" : "i") + "_" + (a || "all") + "_" + (sv || "all") + "_" + p; const pol = { name: String(r["nome"] || r["politica"] || (areaName(a) || "Área") + " " + p).slice(0, 40), priority: p, resp: resp, res: res, area: a || null, service: sv || null }; if (cfg[1]) { pol.soc = true; pol.contain = cont; } u["data/sla/policies/" + pid] = pol; nPol++; }
+          else { const pid = "x" + (cfg[1] ? "s" : "i") + "_" + (a || "all") + "_" + (sv || "all") + "_" + p; const pol = { name: String(r["nome"] || r["politica"] || (areaName(a) || "Área") + " " + p).slice(0, 40), priority: p, resp: resp, res: res, area: a || null, service: sv || null }; if (cfg[1]) { pol.soc = true; pol.contain = cont; }
+            list((data.sla || {}).policies).forEach(function (o) { if (o.id !== pid && (o.area || null) === pol.area && (o.service || null) === pol.service && o.priority === p && !!o.soc === !!cfg[1]) u["data/sla/policies/" + o.id] = null; });
+            u["data/sla/policies/" + pid] = pol; nPol++; }
         });
         if (Object.keys(defs).length) { const base = Object.assign({}, cfg[1] ? (data.sla || {}).soc || I.SOC_SLA_DEFAULT : (data.sla || {}).defaults || I.SLA_DEFAULT, defs); u["data/sla/" + (cfg[1] ? "soc" : "defaults")] = base; }
         if (nDef || nPol) sum.push((cfg[1] ? "SLA do SOC" : "SLA de incidentes e requisições") + ": " + nDef + " padrão(ões) e " + nPol + " política(s) por área ou serviço");
@@ -1730,8 +1786,9 @@
       '<div class="pl-2"><label>Calendário' + sel("mode", [["business", "Horário comercial"], ["24x7", "24 × 7"]], cl.mode) + '</label><span class="it-iu"><label>Início<input type="time" name="start" value="' + esc(cl.start) + '"></label><label>Fim<input type="time" name="end" value="' + esc(cl.end) + '"></label></span></div>' +
       '<div class="day-chips it-days">' + [[1, "seg"], [2, "ter"], [3, "qua"], [4, "qui"], [5, "sex"], [6, "sáb"], [0, "dom"]].map(function (d) { return '<label><input type="checkbox" name="d' + d[0] + '"' + (cl.days.indexOf(d[0]) >= 0 ? " checked" : "") + "> " + d[1] + "</label>"; }).join("") + '</div><p class="muted small">Fuso: Brasília (UTC−3). O relógio pausa em “Aguardando cliente” e “Aguardando aprovação”.</p>' +
       '<div class="pl-row-end"><button class="pl-btn primary sm">Salvar SLAs</button></div></form>' +
-      "<b class=\"small\">Políticas por serviço</b><ul class=\"it-tasks\">" + list((data.sla || {}).policies).map(function (p) { return "<li><b>" + esc(p.name || "Política") + "</b> · " + esc(svcName(p.service) || "todos os serviços") + (p.area ? " · área " + esc(areaName(p.area) || p.area) : "") + (p.soc ? " · SOC" : "") + " · " + esc(p.priority) + " · resposta " + esc(p.resp) + " min · resolução " + esc(p.res) + ' min <button class="link" data-delpol="' + esc(p.id) + '">remover</button></li>'; }).join("") + "</ul>" +
-      '<form class="it-inlf" id="polF"><input name="name" maxlength="40" placeholder="Nome (ex.: Ouro)" required>' + areaSelect("area", "", false) + '<select name="service">' + opt("", "Todos", "") + svcs.map(function (x) { return opt(x.id, x.name, ""); }).join("") + '</select><select name="priority">' + ["P1", "P2", "P3", "P4"].map(function (p) { return opt(p, p, "P1"); }).join("") + '</select><input name="resp" type="number" min="1" placeholder="resp. (min)" required><input name="res" type="number" min="1" placeholder="resol. (min)" required><button class="pl-btn sm">Adicionar</button></form></section>' +
+      "<b class=\"small\">Políticas por área ou serviço (prevalecem sobre a tabela; serviço > área > padrão)</b><ul class=\"it-tasks\">" + list((data.sla || {}).policies).map(function (p) { return "<li><b>" + esc(p.name || "Política") + "</b> · " + esc(svcName(p.service) || "todos os serviços") + (p.area ? " · área " + esc(areaName(p.area) || p.area) : "") + (p.soc ? " · SOC" : "") + " · " + esc(p.priority) + " · " + (p.soc ? "triagem " : "resposta ") + esc(minTxt(p.resp)) + (p.soc ? " · contenção " + esc(minTxt(p.contain)) : "") + " · resolução " + esc(minTxt(p.res)) + ' <button class="link" data-delpol="' + esc(p.id) + '">remover</button></li>'; }).join("") + "</ul>" +
+      '<form class="it-inlf" id="polF"><input name="name" maxlength="40" placeholder="Nome (ex.: Ouro)" required>' + areaSelect("area", "", false) + '<select name="service">' + opt("", "Todos", "") + svcs.map(function (x) { return opt(x.id, x.name, ""); }).join("") + '</select><select name="priority">' + ["P1", "P2", "P3", "P4"].map(function (p) { return opt(p, p, "P1"); }).join("") + '</select>' + sel("tp", [["inc", "Incidente / requisição"], ["soc", "SOC (segurança)"]], "inc") + '<input name="resp" type="number" min="0.01" step="any" placeholder="1ª resposta / triagem" required><input name="contain" type="number" min="0.01" step="any" placeholder="contenção (SOC)"><input name="res" type="number" min="0.01" step="any" placeholder="resolução" required>' + sel("un", [["1", "minutos"], ["60", "horas"], ["1440", "dias"]], "1") + '<button class="pl-btn sm">Adicionar</button></form>' +
+      '<div class="it-acts it-csvrow"><span class="muted small">Ou carregue uma planilha simples:</span><a class="pl-btn sm" href="./modelo-sla.csv" download>' + IC("export", 14) + ' Modelo CSV de SLAs</a><label class="pl-btn sm it-file">' + IC("upload", 14) + ' Importar CSV<input type="file" id="csvIn" accept=".csv,text/csv" hidden></label><button class="pl-btn sm" id="csvExp">' + IC("export", 14) + ' Exportar SLAs atuais (CSV)</button></div><div id="csvOut"></div></section>' +
 
       '<section class="it-scard" data-sec="change"><h3>Autoridade de mudança</h3><form class="pl-form" id="cabF"><div class="pl-2"><label>CAB (mudanças normais)' + multi("normal", cab.normal) + "</label><label>Autoridade emergencial (ECAB)" + multi("emergency", cab.emergency) + '</label></div><div class="pl-row-end"><button class="pl-btn primary sm">Salvar</button></div></form></section>' +
 
@@ -1776,7 +1833,16 @@
       const u = {}; u["sla/defaults"] = d; u["settings/calendar"] = { mode: sf.mode.value, start: sf.start.value || "08:00", end: sf.end.value || "18:00", days: days.length ? days : [1, 2, 3, 4, 5], tz: -180 };
       db.ref("itsm/" + ID + "/data").update(u).then(function () { toast("SLAs salvos (valem para os novos chamados e mudanças de prioridade)"); }, fail);
     };
-    const pf = el.querySelector("#polF"); pf.onsubmit = function (e) { e.preventDefault(); db.ref("itsm/" + ID + "/data/sla/policies").push({ name: pf.name.value.trim(), service: pf.service.value || null, area: pf.area ? pf.area.value || null : null, priority: pf.priority.value, resp: Number(pf.resp.value), res: Number(pf.res.value) }).catch(fail); };
+    const pf = el.querySelector("#polF"); pf.onsubmit = function (e) {
+      e.preventDefault(); const m = Number(pf.un.value) || 1, soc = pf.tp.value === "soc", resp = Math.round(Number(pf.resp.value) * m), res = Math.round(Number(pf.res.value) * m), ct = Math.round(Number(pf.contain.value) * m);
+      if (!(resp > 0 && res > 0) || resp > res) return toast("A 1ª resposta precisa ser menor que a resolução.");
+      if (soc && !(ct > 0)) return toast("Informe o prazo de contenção da política do SOC.");
+      const pol = { name: pf.name.value.trim(), service: pf.service.value || null, area: pf.area ? pf.area.value || null : null, priority: pf.priority.value, resp: resp, res: res };
+      if (soc) { pol.soc = true; pol.contain = ct; }
+      db.ref("itsm/" + ID + "/data/sla/policies").push(pol).then(function () { toast("Política adicionada"); }, fail);
+    };
+    const ce = el.querySelector("#csvExp"); if (ce) ce.onclick = exportSlaCsv;
+    const ci = el.querySelector("#csvIn"); if (ci) ci.onchange = function () { const f = ci.files && ci.files[0]; if (f) importExcel(f, el.querySelector("#csvOut")); ci.value = ""; };
     el.querySelectorAll("[data-delpol]").forEach(function (b) { b.onclick = function () { db.ref("itsm/" + ID + "/data/sla/policies/" + b.dataset.delpol).remove().catch(fail); }; });
     const cf = el.querySelector("#cabF"); cf.onsubmit = function (e) { e.preventDefault(); const pick = function (s3) { const o = {}; Array.prototype.forEach.call(s3.selectedOptions, function (x) { o[x.value] = true; }); return Object.keys(o).length ? o : null; }; db.ref("itsm/" + ID + "/data/settings/cab").set({ normal: pick(cf.normal), emergency: pick(cf.emergency) }).then(function () { toast("Autoridade de mudança salva"); }, fail); };
     const dc = el.querySelector("#delC"); if (dc) dc.onclick = deleteCentral;

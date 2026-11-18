@@ -299,6 +299,11 @@
       categories: ["Phishing", "Malware", "Acesso indevido", "Vazamento de dados", "Vulnerabilidade"],
       services: [["Monitoramento de segurança (SOC)", "Detecção e resposta a incidentes 24×7.", "soc1"], ["Gestão de vulnerabilidades", "Varreduras, correções e exceções.", "soc2"]],
       offerings: [["Reportar e-mail suspeito (phishing)", "security", 0, "Recebeu um e-mail estranho? Encaminhe para análise.", false, "Remetente do e-mail|text|1\nVocê clicou em algum link ou abriu anexo?|text|1", ""], ["Reportar incidente de segurança", "security", 0, "Suspeita de vírus, invasão, vazamento ou acesso indevido.", false, "O que aconteceu?|textarea|1", ""], ["Solicitar exceção de segurança", "request", 1, "Liberação de site, porta ou software bloqueado.", true, "O que precisa ser liberado|text|1\nJustificativa|textarea|1\nPrazo|date|0", "soc2: Avaliar o risco\nsoc2: Aplicar a exceção"]] },
+    infra: { name: "Infraestrutura (NOC)", icon: "cmdb", color: "#0b7285", calendar: "24x7",
+      groups: { noc: "NOC – Monitoramento 24×7", srv: "Servidores e nuvem", rede: "Redes e telecom" },
+      categories: ["Servidores", "Rede", "Datacenter", "Backup", "Nuvem", "Banco de dados"],
+      services: [["Datacenter e servidores", "Servidores físicos e virtuais, armazenamento.", "srv"], ["Rede e telecom", "LAN, Wi-Fi, links, VPN e firewall.", "rede"], ["Backup e recuperação", "Rotinas de backup e restauração.", "srv"], ["Nuvem", "Contas, assinaturas e recursos em nuvem.", "srv"]],
+      offerings: [["Relatar indisponibilidade de sistema ou rede", "incident", "", "Servidor, link, VPN ou sistema fora do ar.", false, "Sistema ou equipamento afetado|text|1", ""], ["Solicitar servidor ou máquina virtual", "request", 0, "Novo servidor, VM ou ambiente.", true, "Finalidade|text|1\nCPU / memória / disco|text|1\nAmbiente (produção, homologação)|text|1", "srv: Provisionar a máquina\nnoc: Incluir no monitoramento"], ["Liberar regra de firewall", "request", 1, "Abertura de porta ou acesso entre redes.", true, "Origem|text|1\nDestino e porta|text|1\nJustificativa|textarea|1", "rede: Analisar o risco\nrede: Aplicar a regra"], ["Restaurar arquivo ou sistema do backup", "request", 2, "Recuperar dados de uma data anterior.", false, "O que restaurar|text|1\nData desejada|date|1", "srv: Restaurar e conferir"]] },
     rh: { name: "RH", icon: "people", color: "#7c5cff", calendar: "business",
       groups: { rh1: "Atendimento de RH", dp: "Departamento pessoal" },
       categories: ["Folha e benefícios", "Férias", "Admissão e desligamento", "Documentos"],
@@ -321,7 +326,17 @@
       offerings: [["Revisão de contrato", "request", 0, "Contrato com cliente ou fornecedor.", false, "Contraparte|text|1\nPrazo|date|0", "jur: Revisar o contrato"], ["Consulta jurídica", "request", 0, "Dúvida jurídica da área de negócio.", false, "", "jur: Responder a consulta"]] }
   };
 
-  const API = { KINDS: KINDS, FLOWS: FLOWS, VC4: VC4, VC5: VC5, PRINCIPLES: PRINCIPLES, LEVELS: LEVELS, LEVELN: LEVELN, URGN: URGN, MATRIX: MATRIX, PRIO: PRIO, SLA_DEFAULT: SLA_DEFAULT, CAL_DEFAULT: CAL_DEFAULT,
+  /* ready-made service centres: which area templates each one starts with ([] = from scratch) */
+  const CENTRAL_TEMPLATES = {
+    blank: { name: "Central do zero", desc: "Sem áreas nem catálogo: você monta tudo na Administração ou pelo Excel/CSV.", icon: "plus", areas: [], seed: false },
+    ti: { name: "Service desk de TI", desc: "Portal, incidentes, requisições de acesso, senha e equipamentos.", icon: "itsm", areas: ["ti"], seed: true },
+    infra: { name: "Infraestrutura (NOC)", desc: "Servidores, redes, backup e nuvem, atendimento 24×7.", icon: "cmdb", areas: ["infra"], seed: true },
+    soc: { name: "SOC – Cibersegurança", desc: "Incidentes de segurança, contenção, MITRE ATT&CK e prazos LGPD.", icon: "shield", areas: ["soc"], seed: false },
+    tisoc: { name: "TI, Infraestrutura e SOC", desc: "Central completa de tecnologia com segurança integrada.", icon: "layers", areas: ["ti", "infra", "soc"], seed: true },
+    csc: { name: "Serviços compartilhados", desc: "RH, Facilities, Financeiro e Jurídico no mesmo portal.", icon: "people", areas: ["rh", "facilities", "financeiro", "juridico"], seed: false }
+  };
+
+  const API = { CENTRAL_TEMPLATES: CENTRAL_TEMPLATES, KINDS: KINDS, FLOWS: FLOWS, VC4: VC4, VC5: VC5, PRINCIPLES: PRINCIPLES, LEVELS: LEVELS, LEVELN: LEVELN, URGN: URGN, MATRIX: MATRIX, PRIO: PRIO, SLA_DEFAULT: SLA_DEFAULT, CAL_DEFAULT: CAL_DEFAULT,
     RISK_Q: RISK_Q, RISKN: RISKN, CHANGE_TYPES: CHANGE_TYPES, SEV: SEV, SOC_SLA_DEFAULT: SOC_SLA_DEFAULT, SOC_CATS: SOC_CATS, MITRE: MITRE, AREA_TEMPLATES: AREA_TEMPLATES, addBizDays: addBizDays, lgpdDue: lgpdDue,
     flow: flow, status: status, canMove: canMove, isDone: isDone, valueChain: valueChain, priority: priority,
     bizBetween: bizBetween, bizAdd: bizAdd, targets: targets, clock: clock, slaOnStatus: slaOnStatus, fmtLeft: fmtLeft, risk: risk, trends: trends, metrics: metrics };

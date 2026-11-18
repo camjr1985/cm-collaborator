@@ -340,3 +340,9 @@
   .it-admnav button { white-space: nowrap; flex: 0 0 auto; }
 }
 .it-set > section[hidden] { display: none; }
+.it-tgrid .it-tcard { text-align: left; font: inherit; cursor: pointer; border: 1px solid var(--line); background: #fff; }
+.it-tgrid .it-tcard:hover { border-color: #2cc4b3; }
+.it-tgrid .it-tcard.blank { border-style: dashed; }
+.it-csvrow { margin-top: 6px; }
+#polF { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; }
+#polF input, #polF select { min-width: 0; width: 100%; }

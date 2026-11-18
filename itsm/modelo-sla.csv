@@ -1,0 +1,14 @@
+﻿# CM Collaborator · ITSM – modelo de SLAs (incidentes, infraestrutura e cibersegurança/SOC)
+# © 2026 Digital Agile Technology. Todos os direitos reservados. Uso exclusivo de clientes do CM Collaborator.
+# Preencha uma linha por prazo. Tipo: Incidente ou SOC. Área e Serviço em branco = padrão da central. Unidade: minutos, horas ou dias. Linhas que começam com # são ignoradas.
+Tipo;Área;Serviço;Prioridade;1ª resposta ou triagem;Contenção;Resolução;Unidade;Nome
+Incidente;;;P1;15;;240;minutos;Padrão P1
+Incidente;;;P2;30;;480;minutos;Padrão P2
+Incidente;;;P3;4;;24;horas;Padrão P3
+Incidente;;;P4;8;;72;horas;Padrão P4
+Incidente;Infraestrutura;;P1;5;;120;minutos;Infra crítica
+Incidente;Infraestrutura;;P2;15;;240;minutos;Infra alta
+SOC;;;P1;15;60;1440;minutos;SOC crítica
+SOC;;;P2;30;240;4320;minutos;SOC alta
+SOC;;;P3;2;24;120;horas;SOC média
+SOC;;;P4;8;72;360;horas;SOC baixa
