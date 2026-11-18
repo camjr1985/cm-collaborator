@@ -395,7 +395,10 @@
         recs["r" + (i + 1)] = o;
       });
       const hht = {}; for (let m = 0; m < 12; m++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - m); hht[d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")] = sp.id === "demo-she" ? 38000 : 52000; }
-      u["sst/" + sp.id] = { settings: { places: sp.id === "demo-she" ? ["Tancagem", "Central de resíduos", "Expedição", "Utilidades", "Prédio B"] : ["Produção – linha 1", "Produção – linha 2", "Almoxarifado", "Expedição", "Marcenaria", "Ambulatório"], invDays: 7, reqDays: 5, hht: hht }, counter: rs.length, records: recs };
+      // the rules grant write on settings / counter / records (not on sst/<ws> itself)
+      u["sst/" + sp.id + "/settings"] = { places: sp.id === "demo-she" ? ["Tancagem", "Central de resíduos", "Expedição", "Utilidades", "Prédio B"] : ["Produção – linha 1", "Produção – linha 2", "Almoxarifado", "Expedição", "Marcenaria", "Ambulatório"], invDays: 7, reqDays: 5, hht: hht };
+      u["sst/" + sp.id + "/counter"] = rs.length;
+      Object.keys(recs).forEach(function (rk) { u["sst/" + sp.id + "/records/" + rk] = recs[rk]; });
     });
     return db.ref().update(u).then(function () { return ["sst licences", "modules", "itsm demo centres removed", "sst records"]; });
   };
