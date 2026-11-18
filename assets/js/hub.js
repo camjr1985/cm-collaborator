@@ -62,7 +62,7 @@
     return '<section class="hub-sec plan-sec"><div class="hub-sec-head"><h2>' + (window.CMModules && window.CMModules.icon ? '<span class="mod-tile-ic" data-m="planning">' + window.CMModules.icon("planning", 18) + "</span>" : (window.CMIcon ? window.CMIcon("planning", 20) : "")) + " " + esc(LL("Planning", "Planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</h2><span class="muted small">' + esc(LL("Roadmaps, schedules, sprints and Kanban – with OKRs, e-mail alerts and Jira, Azure DevOps and Kanbanize integration.", "Roadmaps, cronogramas, sprints e Kanban – com OKRs, alertas por e-mail e integração com Jira, Azure DevOps e Kanbanize.")) + "</span></div>" +
       '<div class="tpl-strip">' + window.PLAN_ORDER.map(function (k) {
         const m = M[k];
-        return '<button class="tpl-tile plan-tile" data-newplanm="' + k + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + '</span><b class="no-i18n">' + (window.CMIcon ? window.CMIcon(m.icon, 15) : "") + " " + esc(m.name) + "</b></button>";
+        return '<button class="tpl-tile plan-tile" data-newplanm="' + k + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + '</span><b class="no-i18n">' + (window.CMIcon3D ? window.CMIcon3D(m.icon, 28, k) : "") + " " + esc(m.name) + "</b></button>";
       }).join("") + "</div></section>";
   }
   /* module views reached from the top-bar "Módulos" switcher: #colaboracao · #planejamento · #business-game */
@@ -88,7 +88,7 @@
   }
   function planCard(id, p, wsName) {
     const m = (window.PLAN_METHODS || {})[p.method] || {};
-    return '<a class="board-card is-plan" href="../planning/?id=' + encodeURIComponent(id) + '" data-title="' + esc((p.title || "").toLowerCase()) + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(p.method) : "") + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("planning", 12) : "") + " Planning</span></span>" +
+    return '<a class="board-card is-plan" href="../planning/?id=' + encodeURIComponent(id) + '" data-title="' + esc((p.title || "").toLowerCase()) + '"><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(p.method) : "") + '<span class="pv-tag">' + (window.CMIcon3D ? window.CMIcon3D("planning", 22) : "") + "<span>Planning</span></span></span>" +
       '<span class="bc-t"><b class="no-i18n">' + esc(p.title || id) + '</b><span class="muted small no-i18n">' + esc(wsName ? wsName + " · " : "") + esc(m.name || "Planning") + "</span></span></a>";
   }
   /* Business Game (add-on module) cards */
@@ -100,7 +100,7 @@
       '<g fill="#c9d2e3"><rect x="16" y="14" width="40" height="6" rx="3"/><rect x="16" y="24" width="26" height="5" rx="2.5" opacity=".6"/></g><circle cx="144" cy="30" r="5" fill="#2cc4b3"/></svg>';
   }
   function gameCard(id, g, sub) {
-    return '<a class="board-card is-game" href="../game/?id=' + encodeURIComponent(id) + '" data-title="' + esc((g.title || "").toLowerCase()) + '"><span class="tpl-pv">' + gamePreview() + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("game", 12) : "") + " Business Game</span></span>" +
+    return '<a class="board-card is-game" href="../game/?id=' + encodeURIComponent(id) + '" data-title="' + esc((g.title || "").toLowerCase()) + '"><span class="tpl-pv">' + gamePreview() + '<span class="pv-tag">' + (window.CMIcon3D ? window.CMIcon3D("game", 22) : "") + "<span>Business Game</span></span></span>" +
       '<span class="bc-t"><b class="no-i18n">' + esc(g.title || id) + '</b><span class="muted small no-i18n">' + esc(sub || LL("Business simulation", "Simulação empresarial")) + "</span></span></a>";
   }
   /* ITSM (add-on module) – service-centre cards */
@@ -109,7 +109,7 @@
       '<rect x="19" y="24" width="30" height="14" rx="3" fill="#e5484d"/><rect x="19" y="42" width="30" height="14" rx="3" fill="#c9d2e3"/><rect x="65" y="24" width="30" height="14" rx="3" fill="#2cc4b3"/><rect x="111" y="24" width="30" height="14" rx="3" fill="#e8c468"/><rect x="111" y="42" width="30" height="14" rx="3" fill="#2cc4b3"/></svg>';
   }
   function itsmCard(id, x) {
-    return '<a class="board-card is-itsm" href="../itsm/?id=' + encodeURIComponent(id) + '" data-title="' + esc((x.title || "").toLowerCase()) + '"><span class="tpl-pv">' + itsmPreview() + '<span class="pv-tag">' + (window.CMIcon ? window.CMIcon("itsm", 12) : "") + " ITSM</span></span>" +
+    return '<a class="board-card is-itsm" href="../itsm/?id=' + encodeURIComponent(id) + '" data-title="' + esc((x.title || "").toLowerCase()) + '"><span class="tpl-pv">' + itsmPreview() + '<span class="pv-tag">' + (window.CMIcon3D ? window.CMIcon3D("itsm", 22) : "") + "<span>ITSM</span></span></span>" +
       '<span class="bc-t"><b class="no-i18n">' + esc(x.title || id) + '</b><span class="muted small no-i18n">' + esc(LL("Service centre", "Central de serviços")) + (x.home === false ? " · " + esc(LL("connected", "conectada")) : "") + "</span></span></a>";
   }
   function myGamesSlot(user, wss) {
@@ -154,7 +154,7 @@
       '<div class="pn-cols"><div class="pa-chips pa-list no-i18n" role="radiogroup" aria-label="' + esc(LL("Area", "Área")) + '">' + AO.map(function (k) { return '<button type="button" data-area="' + k + '">' + esc(AR[k].name) + "</button>"; }).join("") + "</div>" +
       '<div class="pn-right"><div id="paTpl"></div>' +
       '<h3 class="pm-h no-i18n">' + esc(LL("Or start from a method", "Ou comece por um método")) + "</h3>" +
-      '<div class="pm-grid pm-list">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="start" value="m:' + k + '"' + ((presetMethod ? k === presetMethod : i === 0) ? " checked" : "") + '><span class="pm-ic">' + ic(m.icon) + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div></div></div>" +
+      '<div class="pm-grid pm-list">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="start" value="m:' + k + '"' + ((presetMethod ? k === presetMethod : i === 0) ? " checked" : "") + '><span class="pm-ic">' + (window.CMIcon3D ? window.CMIcon3D(m.icon, 26, k) : ic(m.icon)) + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div></div></div>" +
       '<div class="pl-2"><label class="lbl-f">' + esc(LL("Name", "Nome")) + '<input name="title" required autocomplete="off" placeholder="' + esc(LL("e.g. Product roadmap 2027", "ex.: Roadmap do produto 2027")) + '"></label>' +
       '<label class="lbl-f">Workspace<select name="ws">' + wsIds.map(function (id) { return '<option value="' + id + '"' + (id === presetWs ? " selected" : "") + ">" + esc(wss[id].info.name) + "</option>"; }).join("") + "</select></label></div>" +
       '<label class="lbl-f">' + esc(LL("Kanban board workflow", "Fluxo do quadro Kanban")) + '<select name="wf"><option value="">' + esc(LL("Model default", "Padrão do modelo")) + "</option>" + Object.keys(W).map(function (k) { return '<option value="' + k + '">' + esc(W[k].name) + "</option>"; }).join("") + "</select></label>" +
@@ -165,7 +165,7 @@
       d.querySelectorAll("[data-area]").forEach(function (b) { b.classList.toggle("on", b.dataset.area === area); });
       const list = AP.filter(function (p) { return p.area === area; });
       d.querySelector("#paTpl").innerHTML = list.length ? '<h3 class="pm-h no-i18n">' + esc(LL("Ready-made models for ", "Modelos prontos para ") + AR[area].name) + '</h3><div class="pm-grid pm-list pa-grid">' + list.map(function (p) {
-        const m = M[p.method] || {}; return '<label class="pm-opt pa-opt"><input type="radio" name="start" value="t:' + p.id + '"><span class="pm-ic">' + ic(m.icon) + '</span><b class="no-i18n">' + esc(p.name) + '</b><span class="muted small no-i18n">' + esc(p.desc) + '</span><span class="pa-tag no-i18n">' + esc(m.name || "") + (W[p.workflow] ? " · " + esc(W[p.workflow].name) : "") + "</span></label>";
+        const m = M[p.method] || {}; return '<label class="pm-opt pa-opt"><input type="radio" name="start" value="t:' + p.id + '"><span class="pm-ic">' + (window.CMIcon3D ? window.CMIcon3D(m.icon, 26, p.method) : ic(m.icon)) + '</span><b class="no-i18n">' + esc(p.name) + '</b><span class="muted small no-i18n">' + esc(p.desc) + '</span><span class="pa-tag no-i18n">' + esc(m.name || "") + (W[p.workflow] ? " · " + esc(W[p.workflow].name) : "") + "</span></label>";
       }).join("") + "</div>" : "";
       if (!f.querySelector('[name=start]:checked')) { const fst = f.querySelector('[name=start]'); if (fst) fst.checked = true; }
     }

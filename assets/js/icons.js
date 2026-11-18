@@ -64,6 +64,13 @@
     const s = size || 18;
     return '<svg class="cm-ic' + (cls ? " " + cls : "") + '" viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || P.task) + "</svg>";
   };
+  /* 3D "clay" icon tile: gradient body, top highlight, bottom bevel and a soft coloured shadow.
+     tone: planning | itsm | game | collab | roadmap | gantt | sprint | kanban | teal | gold | violet | blue | coral */
+  const TONE3D = { planning: "blue", itsm: "violet", game: "gold", collab: "teal", roadmap: "coral", hybrid: "coral", gantt: "blue", waterfall: "blue", sprint: "teal", scrum: "teal", kanban: "violet" };
+  window.CMIcon3D = function (name, size, tone) {
+    const s = size || 36, t = TONE3D[tone || name] || tone || "blue";
+    return '<span class="ic3d" data-t="' + t + '" style="--s:' + s + 'px" aria-hidden="true">' + window.CMIcon(name, Math.round(s * 0.56)) + "</span>";
+  };
   /* card thumbnails for planning methods (same 16:10 box as board template previews) */
   window.CMPlanPreview = function (m) {
     const bg = '<rect width="160" height="100" rx="6" fill="#f7f8fb"/>';

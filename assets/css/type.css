@@ -98,3 +98,23 @@ code, kbd, pre { font-family: var(--font-mono); }
   .tpl-pick .tpl-tile b, .tpl-pick .tpl-card b { font-size: var(--fs-12); }
   .tpl-pick .tpl-card small { display: none; }
 }
+
+/* ---------- 3D "clay" icon tiles (CMIcon3D) ---------- */
+.ic3d { --s: 36px; --a: #5b8cff; --b: #2f55d4; --sh: 47,85,212; position: relative; display: inline-grid; place-items: center; flex: none; width: var(--s); height: var(--s); border-radius: calc(var(--s) * .3); color: #fff; vertical-align: middle;
+  background: radial-gradient(120% 90% at 30% 15%, rgba(255,255,255,.55), rgba(255,255,255,0) 45%), linear-gradient(150deg, var(--a), var(--b));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.65), inset 0 -3px 0 rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.12), 0 calc(var(--s) * .12) calc(var(--s) * .3) rgba(var(--sh),.42);
+  transform: perspective(120px) rotateX(8deg); transition: transform .2s ease, box-shadow .2s ease; }
+.ic3d svg { width: 56% !important; height: 56% !important; stroke-width: 2.1; filter: drop-shadow(0 1px 1px rgba(0,0,0,.28)); }
+.ic3d::after { content: ""; position: absolute; left: 14%; right: 14%; top: 6%; height: 32%; border-radius: 999px; background: linear-gradient(rgba(255,255,255,.38), rgba(255,255,255,0)); pointer-events: none; }
+.ic3d[data-t="teal"]   { --a: #3fe0cc; --b: #0b8f80; --sh: 11,143,128; }
+.ic3d[data-t="violet"] { --a: #a98bff; --b: #5a35c4; --sh: 90,53,196; }
+.ic3d[data-t="gold"]   { --a: #ffd77a; --b: #c98a0b; --sh: 201,138,11; color: #3b2a00; }
+.ic3d[data-t="coral"]  { --a: #ff9a76; --b: #d9482b; --sh: 217,72,43; }
+.ic3d[data-t="blue"]   { --a: #6f9bff; --b: #2f55d4; --sh: 47,85,212; }
+:is(a, button, label):hover > * > .ic3d, :is(a, button, label):hover .ic3d { transform: perspective(120px) rotateX(0deg) translateY(-1px); }
+/* card tag on planning / ITSM / game previews */
+.pv-tag { gap: 6px !important; padding: 3px 9px 3px 3px !important; font-size: var(--fs-11) !important; backdrop-filter: blur(6px); background: rgba(14,26,51,.82) !important; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.pv-tag .ic3d { transform: none; }
+.pv-tag > svg { width: 12px !important; height: 12px !important; }
+.plan-tile b { display: inline-flex; align-items: center; gap: 8px; }
+.board-card .tpl-pv { position: relative; }
