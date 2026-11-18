@@ -10,6 +10,7 @@
  *   key(email)                  database key for an e-mail ("a.b@x.com" -> "a,b@x,com")
  *   isAdmin()                   Promise<boolean>
  *   signInGoogle()              Promise
+ *   signInMicrosoft()           Promise (Office 365; rejects with NEEDS_VERIFICATION after sending the verification e-mail)
  *   sendLink(email)             Promise – sends a passwordless sign-in link
  *   signOut()                   Promise
  *   db()                        firebase.database()
@@ -84,6 +85,25 @@
         p.setCustomParameters({ prompt: "select_account" });
         return window.firebase.auth().signInWithPopup(p);
       }).then(function () { location.reload(); });
+    },
+    /* Microsoft (Office 365 / Entra ID). Needs the Microsoft provider enabled in Firebase Auth (CMCOLLAB_MS_LOGIN = true).
+       Firebase marks Microsoft e-mails as unverified: on the first sign-in we send a verification link, because the database
+       rules only accept verified e-mails. Optional CMCOLLAB_MS_TENANT restricts sign-in to one company's tenant. */
+    signInMicrosoft: function () {
+      return ready().then(function () {
+        const p = new window.firebase.auth.OAuthProvider("microsoft.com");
+        const prm = { prompt: "select_account" }; if (window.CMCOLLAB_MS_TENANT) prm.tenant = window.CMCOLLAB_MS_TENANT;
+        p.setCustomParameters(prm);
+        return window.firebase.auth().signInWithPopup(p);
+      }).then(function (res) {
+        const u = res && res.user;
+        if (u && !u.emailVerified) {
+          return u.sendEmailVerification({ url: location.href.split("#")[0] }).then(function () {
+            const e = new Error("NEEDS_VERIFICATION"); e.email = u.email; throw e;
+          });
+        }
+        location.reload();
+      });
     },
     sendLink: function (email) {
       return ready().then(function () {

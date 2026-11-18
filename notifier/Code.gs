@@ -910,10 +910,11 @@ function itsmSlaCheck() {
   Object.keys(all).forEach(function (id) {
     var C = all[id] || {}, info = C.info || {}, D = C.data || {}, settings = D.settings || {};
     if (settings.emails === false || !D.records) return;
-    var ws = null, ppl = null, cal = settings.calendar || {};
+    var ws = null, ppl = null, cal0 = settings.calendar || {};
     Object.keys(D.records).forEach(function (rid) {
       var r = D.records[rid], s = r && r.sla;
-      if (!s || !s.start || !s.res || s.stopAt || (r.kind !== "incident" && r.kind !== "request")) return;
+      if (!s || !s.start || !s.res || s.stopAt || (r.kind !== "incident" && r.kind !== "request" && r.kind !== "security")) return;
+      var cal = ((D.areas || {})[r.area] || {}).calendar || cal0;
       var paused = (Number(s.pausedMs) || 0) + (s.pausedAt ? itsmBiz(s.pausedAt, now, cal) : 0);
       if (s.pausedAt) return; // clock stopped while waiting for the customer
       var pct = (itsmBiz(s.start, now, cal) - paused) / s.res, level = pct >= 1 ? "breach" : pct >= 0.75 ? "risk" : "";
@@ -941,4 +942,148 @@ function installItsmSla() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === "itsmSlaCheck") ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger("itsmSlaCheck").timeBased().everyMinutes(15).create();
   return itsmSlaCheck();
+}
+
+/* ---------------- ITSM: incidents by e-mail (Gmail of the platform account) ----------------
+ * Each central (and each area) has an address on this account: digitalagiletechnology+itsm_<central>[_<area>]@gmail.com
+ * Companies on Office 365 redirect their support mailbox to it with a mail-flow rule.
+ * itsmMailIn (time trigger, every 5 min – install once with installItsmMailIn) reads new messages to those addresses and:
+ *  - "[INC-0001]" in the subject and a sender who is the requester or an agent  -> comment on that record;
+ *  - otherwise -> new record (area SOC: security incident; else incident), SLA from the central's tables, confirmation to the sender.
+ * Who may open: settings.mailIn.accept = members (default) | domains | any. Loops are blocked (auto-replies, bulk, own address).
+ * Writes go to the database with this account's OAuth token, so the account needs a role that can write the Realtime Database. */
+var ITSM_ADDR = /digitalagiletechnology\+itsm_([a-z0-9-]{3,90}?)(?:_([a-z0-9]{1,30}))?@gmail\.com/i;
+function adminWrite(method, path, body, headers) {
+  var o = { method: method, muteHttpExceptions: true, contentType: "application/json", headers: headers || {} };
+  if (body !== undefined) o.payload = JSON.stringify(body);
+  var r = UrlFetchApp.fetch(CFG.db + "/" + path + ".json?access_token=" + encodeURIComponent(ScriptApp.getOAuthToken()), o);
+  return r;
+}
+function adminPatch(path, obj) {
+  var r = adminWrite("patch", path, obj);
+  if (r.getResponseCode() !== 200) throw new Error("database write failed (" + r.getResponseCode() + "): " + r.getContentText().slice(0, 200));
+}
+function itsmNextKey(id, pre) { // counter with optimistic locking (ETag), same counter as the site
+  for (var i = 0; i < 6; i++) {
+    var path = "itsm/" + id + "/data/counters/" + pre;
+    var g = UrlFetchApp.fetch(CFG.db + "/" + path + ".json?access_token=" + encodeURIComponent(ScriptApp.getOAuthToken()), { headers: { "X-Firebase-ETag": "true" }, muteHttpExceptions: true });
+    var etag = g.getHeaders()["ETag"] || g.getHeaders()["etag"], n = Number(JSON.parse(g.getContentText() || "null")) || 0;
+    var r = adminWrite("put", path, n + 1, { "if-match": etag });
+    if (r.getResponseCode() === 200) return pre + "-" + ("000" + (n + 1)).slice(-Math.max(4, String(n + 1).length));
+    Utilities.sleep(300);
+  }
+  throw new Error("counter busy");
+}
+function itsmPushId() { var c = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz", t = Date.now(), id = ""; for (var i = 0; i < 8; i++) { id = c.charAt(t % 64) + id; t = Math.floor(t / 64); } for (var j = 0; j < 12; j++) id += c.charAt(Math.floor(Math.random() * 64)); return id; }
+function itsmTargets(rec, sla) { // same precedence as assets/js/itsm-core.js targets(): service > area > default
+  var soc = rec.kind === "security", pol = (sla && sla.policies) || {}, p = rec.priority || "P3", best = null, rank = 0;
+  var DEF = soc ? { P1: { resp: 15, contain: 60, res: 1440 }, P2: { resp: 30, contain: 240, res: 4320 }, P3: { resp: 120, contain: 1440, res: 7200 }, P4: { resp: 480, contain: 4320, res: 21600 } }
+    : { P1: { resp: 15, res: 240 }, P2: { resp: 30, res: 480 }, P3: { resp: 240, res: 1440 }, P4: { resp: 480, res: 4320 } };
+  Object.keys(pol).forEach(function (k) { var x = pol[k]; if (!x || x.priority !== p || (!!x.soc) !== soc) return; if (x.area && x.area !== rec.area) return; if (x.service && x.service !== rec.service) return; var r = x.service ? 3 : x.area ? 2 : 1; if (r > rank) { best = x; rank = r; } });
+  var d = ((soc ? sla && sla.soc : sla && sla.defaults) || DEF)[p] || DEF[p];
+  var o = { start: Date.now(), resp: Number(best ? best.resp : d.resp) || 0, res: Number(best ? best.res : d.res) || 0, policy: best ? best.name || null : null };
+  if (soc) o.contain = Number(best && best.contain ? best.contain : d.contain) || 0;
+  return o;
+}
+function itsmLicensed(ws) {
+  var now = Date.now(), e = adminGet("entitlements/ws/" + ws + "/itsm") || {};
+  return e.on === true && (!e.until || e.until > now);
+}
+function mailBody(m) {
+  var t = m.getPlainBody() || "";
+  t = t.split(/\r?\n(?:-- ?\r?\n|_{5,}|De: |From: |Em .{5,80} escreveu:|On .{5,80} wrote:)/)[0]; // drop quoted history and signatures
+  return t.replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 3800);
+}
+function itsmMailIn() {
+  var lock = LockService.getScriptLock(); if (!lock.tryLock(1000)) return 0;
+  try {
+    var label = GmailApp.getUserLabelByName("itsm-lido") || GmailApp.createLabel("itsm-lido");
+    var threads = GmailApp.search("in:inbox newer_than:3d -label:itsm-lido", 0, 60), cache = {}, done = 0, me = Session.getEffectiveUser().getEmail().toLowerCase();
+    threads.forEach(function (th) {
+      var handled = false;
+      th.getMessages().forEach(function (m) {
+        if (!m.isUnread()) return;
+        var to = [m.getTo(), m.getCc(), m.getHeader("Delivered-To"), m.getHeader("X-Original-To")].join(","), hit = ITSM_ADDR.exec(to);
+        if (!hit) return;
+        handled = true; m.markRead();
+        try { if (itsmMailOne(m, hit[1].toLowerCase(), (hit[2] || "").toLowerCase(), cache, me)) done++; } catch (e) { console.warn("itsm mail-in: " + e.message); }
+      });
+      if (handled) th.addLabel(label);
+    });
+    Object.keys(cache).forEach(function (id) { var c = cache[id]; if (c && c.touched) try { adminPatch("itsm/" + id + "/data/settings/mailIn", { lastRun: Date.now(), lastCount: c.touched }); } catch (e) { /* ignore */ } });
+    console.log("itsm mail-in: " + done);
+    return done;
+  } finally { lock.releaseLock(); }
+}
+function itsmMailOne(m, id, area, cache, me) {
+  var fromRaw = m.getFrom(), em = ((/<([^>]+)>/.exec(fromRaw) || [])[1] || fromRaw).trim().toLowerCase(), name = fromRaw.replace(/<[^>]+>/, "").replace(/"/g, "").trim() || em.split("@")[0];
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em) || em === me || /mailer-daemon|postmaster|no-?reply/.test(em)) return false;
+  var auto = String(m.getHeader("Auto-Submitted") || "").toLowerCase(), prec = String(m.getHeader("Precedence") || "").toLowerCase();
+  if ((auto && auto !== "no") || /bulk|junk|list|auto_reply/.test(prec) || m.getHeader("X-Autoreply") || m.getHeader("X-Autorespond")) return false;
+  if (!cache[id]) {
+    var info = adminGet("itsm/" + id + "/info"); if (!info) { cache[id] = null; return false; }
+    cache[id] = { info: info, settings: adminGet("itsm/" + id + "/data/settings") || {}, areas: adminGet("itsm/" + id + "/data/areas") || {}, ws: adminGet("workspaces/" + info.ws) || {}, lic: itsmLicensed(info.ws), touched: 0 };
+  }
+  var C = cache[id]; if (!C || !C.lic) return false;
+  var mi = C.settings.mailIn || {}; if (mi.enabled === false) return false;
+  var ppl = itsmPeople(C.info, C.ws), k = key(em), dom = em.split("@")[1], person = ppl[k];
+  var okDomain = !!(C.info.domains || {})[dom.replace(/\./g, ",")];
+  var accept = mi.accept || "members";
+  if (!person && !(accept === "domains" && okDomain) && accept !== "any") return false;
+  if (area && !C.areas[area]) area = "";
+  var subj = String(m.getSubject() || "(sem assunto)").replace(/^\s*((re|res|fw|fwd|enc|rv)\s*:\s*)+/i, "").trim().slice(0, 140) || "(sem assunto)";
+  var link0 = CFG.site + "itsm/?id=" + encodeURIComponent(id);
+  var ref = /\[([A-Z]{2,6}-\d{4,7})\]/.exec(m.getSubject() || "");
+  if (ref) { // reply on an existing record -> comment
+    var recs = adminGet("itsm/" + id + "/data/records") || {}, rid = Object.keys(recs).filter(function (x) { return recs[x] && recs[x].key === ref[1]; })[0];
+    if (rid) {
+      var r0 = recs[rid], isReq = r0.requester && (r0.requester.k === k || String(r0.requester.email || "").toLowerCase() === em);
+      if (!isReq && !(person && person.agent)) return false;
+      var u0 = {}; u0["data/comments/" + rid + "/" + itsmPushId()] = { by: em, t: Date.now(), text: mailBody(m) || "(mensagem vazia)", via: "email" };
+      u0["data/records/" + rid + "/updated"] = Date.now();
+      adminPatch("itsm/" + id, u0); C.touched++;
+      return true;
+    }
+  }
+  var soc = !!(area && C.areas[area] && C.areas[area].soc), kind = soc ? "security" : "incident", pre = ((C.settings.prefixes || {})[kind]) || (soc ? "SEC" : "INC");
+  var mx = C.settings.matrix || {}, prio = soc ? "P3" : (mx["medium|medium"] || "P3");
+  var sla = adminGet("itsm/" + id + "/data/sla") || {};
+  var groups = C.settings.groups || {}, gid = Object.keys(groups).filter(function (g) { return area && groups[g] && groups[g].area === area; })[0] || (groups.sd ? "sd" : "");
+  var atts = m.getAttachments({ includeInlineImages: false }).length;
+  var rec = { kind: kind, status: "new", title: subj, desc: mailBody(m) + (atts ? "\n\n(" + atts + " anexo(s) no e-mail original não foram importados.)" : ""), priority: prio, source: "email",
+    created: Date.now(), updated: Date.now(), by: em, area: area || null, group: gid || null,
+    requester: { k: k, email: em, name: name.slice(0, 60), ws: C.info.ws, external: person ? null : true } };
+  if (!soc) { rec.impact = "medium"; rec.urgency = "medium"; } else { rec.detectedAt = Date.now(); rec.soc = { src: "E-mail" }; }
+  rec.sla = itsmTargets(rec, sla);
+  rec.key = itsmNextKey(id, pre);
+  var rid2 = itsmPushId(), u = {};
+  Object.keys(rec).forEach(function (x) { if (rec[x] === null || rec[x] === "") delete rec[x]; });
+  Object.keys(rec.requester).forEach(function (x) { if (rec.requester[x] == null) delete rec.requester[x]; });
+  u["data/records/" + rid2] = rec;
+  u["data/history/" + rid2 + "/" + itsmPushId()] = { by: em, t: Date.now(), field: "created", to: "new", via: "email" };
+  u["mine/" + k + "/" + rid2] = true;
+  adminPatch("itsm/" + id, u); C.touched++;
+  var link = link0 + "&rec=" + encodeURIComponent(rid2), brand = CFG.brand;
+  var g = groups[gid] || {}, agents = Object.keys(g.members || {}).filter(function (x) { return ppl[x] && ppl[x].agent; });
+  if (!agents.length) agents = Object.keys(ppl).filter(function (x) { return ppl[x].mgr; });
+  var list = agents.slice(0, 10), reply = mi.autoReply !== false;
+  if (MailApp.getRemainingDailyQuota() > list.length + 6 && itsmCap(id, C.settings, list.length + (reply ? 1 : 0))) {
+    list.forEach(function (x) { itsmMail(brand, ppl[x], (soc ? "Incidente de segurança por e-mail: " : "Chamado por e-mail: ") + rec.key + " · " + rec.title, soc ? "SOC" : "Central de serviços", "Um chamado chegou por e-mail de <b>" + esc(name) + "</b> (" + esc(em) + ")" + (person ? "" : " – remetente externo") + ".", rec, link, ""); });
+    if (reply) {
+      var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:620px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
+        '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + " · " + esc(C.info.title || "Central de serviços") + '</div><div style="padding:22px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
+        "<p>Olá, " + esc(name.split(" ")[0]) + "!</p><p>Recebemos sua mensagem e registramos o chamado <b>" + esc(rec.key) + "</b>. Para acrescentar informações, responda a este e-mail mantendo <b>[" + esc(rec.key) + "]</b> no assunto.</p>" +
+        '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:12px 0;background:#f7f8fb;border-radius:10px"><tr><td style="padding:10px 12px"><b>' + esc(rec.key) + "</b> " + esc(rec.title) + "</td></tr></table>" +
+        (person ? '<p style="text-align:center;margin:20px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">Acompanhar o chamado</a></p>' : "") +
+        "</div>" + brandSig(brand, true) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Resposta automática da central de serviços · ' + esc(brand) + " · " + CFG.company + "</div></div></div>";
+      var addr = "digitalagiletechnology+itsm_" + id + (area ? "_" + area : "") + "@gmail.com";
+      MailApp.sendEmail(em, "[" + rec.key + "] " + rec.title, "Recebemos sua mensagem e registramos o chamado " + rec.key + ". Responda mantendo [" + rec.key + "] no assunto.", { name: brand, htmlBody: html, replyTo: addr });
+    }
+  }
+  return true;
+}
+function installItsmMailIn() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === "itsmMailIn") ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger("itsmMailIn").timeBased().everyMinutes(5).create();
+  return itsmMailIn();
 }

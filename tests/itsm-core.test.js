@@ -48,3 +48,26 @@ assert.equal(I.valueChain({kind:"incident", status:"new"}).n4, "Engajar");
 const m = I.metrics({ a: Object.assign({}, rec, { created: t0, resolvedAt: t0 + 700*MIN, csat: { score: 5 } }) }, t0 + 5000*MIN);
 assert.equal(m.sla, 1); assert.equal(m.csat, 5);
 console.log("itsm-core: all tests passed");
+// ---- SOC, areas, LGPD (18/11)
+{
+  const t0 = Date.UTC(2026,10,16,12,0);
+  const r = { kind: "security", status: "new", priority: "P1", area: "soc" };
+  const tg = I.targets(r, null); assert.equal(tg.contain, 60); assert.equal(tg.resp, 15);
+  r.sla = { start: t0, resp: tg.resp, contain: tg.contain, res: tg.res };
+  let p = I.slaOnStatus(r, "triage", t0 + 5*MIN); Object.assign(r.sla, p); r.status = "triage";
+  p = I.slaOnStatus(r, "contain", t0 + 20*MIN); Object.assign(r.sla, p); r.status = "contain";
+  let k = I.clock(r, t0 + 50*MIN); assert.equal(k.contain.color, "amber");
+  p = I.slaOnStatus(r, "eradicate", t0 + 55*MIN); assert.equal(p.containAt, t0 + 55*MIN); Object.assign(r.sla, p);
+  k = I.clock(r, t0 + 500*MIN); assert.ok(k.contain.finished && !k.contain.breached);
+  assert.ok(!I.canMove("security", "new", "closed"));
+  // area policy precedence
+  const sla = { policies: { a: { priority: "P1", resp: 99, res: 999, area: "rh" }, b: { priority: "P1", resp: 5, res: 50, soc: true, area: "soc" } } };
+  assert.equal(I.targets({ kind: "incident", priority: "P1", area: "rh" }, sla).resp, 99);
+  assert.equal(I.targets({ kind: "incident", priority: "P1", area: "ti" }, sla).resp, 15);
+  assert.equal(I.targets({ kind: "security", priority: "P1", area: "soc" }, sla).resp, 5);
+  // LGPD: Friday 2026-11-20 → +3 business days = Wednesday 2026-11-25
+  const fri = Date.UTC(2026,10,20,12,0), due = I.lgpdDue(fri);
+  assert.equal(new Date(due.notify).toISOString().slice(0,10), "2026-11-25");
+  assert.ok(I.AREA_TEMPLATES.soc.soc && Object.keys(I.AREA_TEMPLATES).length >= 6);
+  console.log("itsm-core SOC/areas/LGPD: ok");
+}

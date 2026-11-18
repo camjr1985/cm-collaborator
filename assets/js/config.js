@@ -42,6 +42,10 @@ window.CMCOLLAB_VOTES_PER_USER = 5;
 window.CMCOLLAB_NOTIFY = "carlosalexandrejunior@gmail.com";
 /* Product name shown in the interface – change here when the system is renamed. */
 /* Platform e-mail notifier (Google Apps Script web app under the platform account – see notifier/README.md). Empty = off. */
+/* Sign in with Microsoft (Office 365 / Entra ID): switch on after enabling the Microsoft provider in Firebase Auth.
+   Optional tenant id restricts sign-in to one company (leave empty for any work/school account). */
+window.CMCOLLAB_MS_LOGIN = false;
+window.CMCOLLAB_MS_TENANT = "";
 window.CMCOLLAB_MAILER = "https://script.google.com/macros/s/AKfycbzwjTYTJqWeThRA-2guI4E_uNTIF6eKv-0qc_-WikxwbBIYaxlZ3ygh4ZDLczIRmNI/exec";
 window.CMCOLLAB_BRAND = "CM Collaborator";
 /* Embedded AI (Firebase AI Logic · Gemini Developer API, protected by App Check / reCAPTCHA Enterprise). */

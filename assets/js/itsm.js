@@ -33,7 +33,7 @@
     clearTimeout(toast._t); toast._t = setTimeout(function () { n.classList.remove("show"); }, 3000);
   }
   function fail(e) { console.warn(e); toast((e && e.message) || "Algo deu errado"); }
-  function slug(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); }
+  function slug(s) { return String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); }
   function rnd() { return Math.random().toString(36).slice(2, 6); }
   function pushId() { return db.ref().push().key; }
   function fmtDT(t) { if (!t) return ""; return new Date(t).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }); }
@@ -100,6 +100,35 @@
   function avatar(e) { return e ? '<span class="it-av" title="' + esc(nameOf(e)) + '">' + esc(initials(e)) + "</span>" : '<span class="it-av none" title="Sem responsável">–</span>'; }
   function groups() { return list(S().groups).sort(byName); }
   function groupName(g) { return ((S().groups || {})[g] || {}).name || ""; }
+  /* service areas (TI, SOC, RH, Facilities…) created from templates (ITSM.AREA_TEMPLATES) – data/areas/<id> */
+  function areas() { return list(data.areas).sort(function (a, b) { return (a.order || 0) - (b.order || 0) || byName(a, b); }); }
+  function areaName(a) { const x = (data.areas || {})[a]; return x ? x.name : ""; }
+  function inArea(r) { return !filter.area || (r.area || "") === filter.area; }
+  function areaCal(a) { const x = (data.areas || {})[a]; return x && x.calendar ? x.calendar : cal(); }
+  function isTicket(r) { return r.kind === "incident" || r.kind === "request" || r.kind === "security"; }
+  function areaSelect(name, cur, withAll) {
+    const as = areas(); if (!as.length) return "";
+    return '<select name="' + name + '">' + (withAll ? opt("", "Todas as áreas", cur || "") : opt("", "Geral", cur || "")) + as.map(function (a) { return opt(a.id, a.name, cur || ""); }).join("") + "</select>";
+  }
+  /* build the database update that adds an area from a template (groups, categories, services, offerings, calendar) */
+  function areaFromTemplate(tid, aid, settingsNow, catalogNow) {
+    const T = I.AREA_TEMPLATES[tid]; if (!T) return {};
+    const u = {}, G = (settingsNow && settingsNow.groups) || {}, gmap = {};
+    aid = aid || tid;
+    Object.keys(T.groups).forEach(function (g) { const gid = G[g] && G[g].area !== aid ? aid + "_" + g : g; gmap[g] = gid; u["data/settings/groups/" + gid] = { name: T.groups[g], area: aid }; });
+    const fixTasks = function (t) { return String(t || "").split("\n").map(function (l) { const m = l.match(/^([\w-]+)\s*:\s*(.+)$/); return m && gmap[m[1]] ? gmap[m[1]] + ": " + m[2] : l; }).join("\n"); };
+    T.categories.forEach(function (c, i) { u["data/catalog/categories/" + aid + "_c" + i] = { name: c, area: aid }; });
+    const svcIds = [];
+    T.services.forEach(function (x, i) { const sid = aid + "_s" + i; svcIds.push(sid); u["data/catalog/services/" + sid] = { name: x[0], desc: x[1], group: gmap[x[2]] || null, status: "live", kind: "service", area: aid }; });
+    T.offerings.forEach(function (x, i) {
+      const o = { name: x[0], kind: x[1], service: x[2] === "" ? null : svcIds[x[2]] || null, desc: x[3], approval: !!x[4], form: x[5] || null, tasks: fixTasks(x[6]) || null, area: aid, order: (i + 1) * 10 };
+      u["data/catalog/offerings/" + aid + "_o" + i] = o;
+    });
+    const calObj = T.calendar === "24x7" ? { mode: "24x7", days: [0, 1, 2, 3, 4, 5, 6], start: "00:00", end: "23:59", tz: -180 } : { mode: "business", days: [1, 2, 3, 4, 5], start: "08:00", end: "18:00", tz: -180 };
+    u["data/areas/" + aid] = { name: T.name, template: tid, icon: T.icon, color: T.color, calendar: calObj, soc: !!T.soc, order: Date.now() % 100000 };
+    void catalogNow;
+    return u;
+  }
   function svcName(s) { const x = ((data.catalog || {}).services || {})[s] || ((data.catalog || {}).products || {})[s]; return x ? x.name : ""; }
   function ciName(c) { const x = ((data.cmdb || {}).cis || {})[c]; return x ? x.name : ""; }
 
@@ -122,18 +151,18 @@
     return out.join("");
   }
   function slaChip(r, which) {
-    const k = I.clock(r, now(), cal()); if (!k) return "";
-    const x = which === "resp" ? k.resp : k.res; if (!x) return "";
-    const lbl = which === "resp" ? "1ª resposta" : "Resolução";
+    const k = I.clock(r, now(), areaCal(r.area)); if (!k) return "";
+    const x = k[which]; if (!x) return "";
+    const lbl = which === "resp" ? (r.kind === "security" ? "Triagem" : "1ª resposta") : which === "contain" ? "Contenção" : "Resolução";
     let txt;
     if (x.finished) txt = x.breached ? "violado" : "cumprido";
-    else if (k.paused && which !== "resp") txt = "pausado";
+    else if (k.paused && which === "res") txt = "pausado";
     else txt = x.breached ? "violado " + I.fmtLeft(x.left) : I.fmtLeft(x.left);
-    return '<span class="it-sla s-' + (k.paused && !x.finished && which !== "resp" ? "pause" : x.color) + '" title="SLA de ' + lbl + '">' + IC("clock", 12) + " " + esc(lbl) + ": " + esc(txt) + "</span>";
+    return '<span class="it-sla s-' + (k.paused && !x.finished && which === "res" ? "pause" : x.color) + '" title="SLA de ' + lbl + '">' + IC("clock", 12) + " " + esc(lbl) + ": " + esc(txt) + "</span>";
   }
   function slaDot(r) {
-    if (r.kind !== "incident" && r.kind !== "request") return "";
-    const k = I.clock(r, now(), cal()); if (!k || !k.res) return "";
+    if (!isTicket(r)) return "";
+    const k = I.clock(r, now(), areaCal(r.area)); if (!k || !k.res) return "";
     const c = k.res.finished ? (k.res.breached ? "red" : "green") : k.paused ? "pause" : k.res.color;
     return '<span class="it-dot s-' + c + '" title="SLA: ' + (k.res.finished ? (k.res.breached ? "violado" : "cumprido") : k.paused ? "pausado" : I.fmtLeft(k.res.left)) + '"></span>';
   }
@@ -209,50 +238,50 @@
       '<form class="pl-form" id="ncF"><label>Nome<input name="title" required maxlength="80" placeholder="ex.: Central de serviços de TI" autocomplete="off"></label>' +
       "<label>Workspace (dono da licença)<select name=\"ws\">" + owned.map(function (o) { return opt(o.id, o.name, preWs || owned[0].id); }).join("") + "</select></label>" +
       '<label>Referência ITIL exibida<select name="fw">' + opt("both", "ITIL 4 e ITIL 5 (recomendado)", "both") + opt("itil4", "Só ITIL 4", "") + opt("itil5", "Só ITIL 5", "") + "</select></label>" +
-      '<label class="chk"><input type="checkbox" name="seed" checked> Começar com exemplo: catálogo de serviços, grupos de suporte, SLAs, categorias, um artigo e itens de configuração</label>' +
+      '<fieldset class="it-areasel"><legend>Áreas de atendimento (modelos – dá para mudar depois em Administração)</legend>' + Object.keys(I.AREA_TEMPLATES).map(function (k) { const T = I.AREA_TEMPLATES[k]; return '<label class="chk"><input type="checkbox" name="ar_' + k + '"' + (k === "ti" ? " checked" : "") + "> " + esc(T.name) + ' <span class="muted small">' + T.offerings.length + " ofertas · " + Object.keys(T.groups).length + " grupos" + (T.soc ? " · SLA 24×7" : "") + "</span></label>"; }).join("") + "</fieldset>" +
+      '<label class="chk"><input type="checkbox" name="seed" checked> Incluir exemplos: um artigo de conhecimento e itens de configuração (CMDB)</label>' +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>Cancelar</button><button class="pl-btn primary">Criar central</button></div></form>', function (w, close) {
       const f = w.querySelector("#ncF");
       f.onsubmit = function (e) {
         e.preventDefault();
         const title = f.title.value.trim(), ws = f.ws.value; if (!title) return;
         const id = (slug(title) || "itsm") + "-" + rnd(), u = {};
-        u["itsm/" + id] = { info: { title: title, ws: ws, area: "service", owner: MEK, created: TS(), createdBy: me.email, framework: f.fw.value }, data: initialData(f.seed.checked) };
+        const chosen = Object.keys(I.AREA_TEMPLATES).filter(function (k) { return f["ar_" + k].checked; });
+        u["itsm/" + id] = { info: { title: title, ws: ws, area: "service", owner: MEK, created: TS(), createdBy: me.email, framework: f.fw.value }, data: initialData(f.seed.checked, chosen) };
         u["workspaces/" + ws + "/itsm/" + id] = { title: title, created: TS(), home: true };
         f.querySelector(".primary").disabled = true;
         db.ref().update(u).then(function () { location.href = "./?id=" + encodeURIComponent(id); }, function (err) { f.querySelector(".primary").disabled = false; fail(err); });
       };
     });
   }
-  function initialData(seed) {
+  function initialData(seed, chosen) {
     const settings = {
-      prefixes: { incident: "INC", request: "REQ", task: "TSK", problem: "PRB", change: "CHG", improvement: "IMP" },
+      prefixes: { incident: "INC", request: "REQ", task: "TSK", problem: "PRB", change: "CHG", improvement: "IMP", security: "SEC" },
       matrix: I.MATRIX, calendar: { mode: "business", days: [1, 2, 3, 4, 5], start: "08:00", end: "18:00", tz: -180 },
-      autoCloseDays: 3, trend: { n: 3, days: 7 }, ai: true, emails: true, approvalRule: "all",
-      groups: { sd: { name: "Central de serviço (N1)" }, n2: { name: "Suporte técnico (N2)" }, infra: { name: "Infraestrutura" } },
+      autoCloseDays: 3, trend: { n: 3, days: 7 }, ai: true, emails: true, approvalRule: "all", groups: {},
+      mailIn: { accept: "members", autoReply: true },
       boards: [{ id: "b1", kind: "incident", name: "Incidentes", lane: "group" }, { id: "b2", kind: "request", name: "Requisições", lane: "" }, { id: "b3", kind: "change", name: "Mudanças", lane: "" }, { id: "b4", kind: "problem", name: "Problemas", lane: "" }]
     };
-    const out = { settings: settings, counters: { INC: 0, REQ: 0, TSK: 0, PRB: 0, CHG: 0, IMP: 0 }, sla: { defaults: I.SLA_DEFAULT } };
-    if (!seed) { out.catalog = { categories: { c1: { name: "Hardware" }, c2: { name: "Software" }, c3: { name: "Rede" }, c4: { name: "Acesso" }, c5: { name: "Outros" } } }; return out; }
-    out.catalog = {
-      categories: { c1: { name: "Hardware" }, c2: { name: "Software" }, c3: { name: "Rede e internet" }, c4: { name: "Acesso e senha" }, c5: { name: "E-mail" }, c6: { name: "Outros" } },
-      services: {
-        s1: { name: "E-mail e colaboração", desc: "Correio, agenda e reuniões on-line.", group: "n2", status: "live", kind: "service" },
-        s2: { name: "Acesso e identidade", desc: "Contas, senhas e permissões nos sistemas.", group: "sd", status: "live", kind: "service" },
-        s3: { name: "Estações de trabalho", desc: "Notebooks, monitores, periféricos e softwares.", group: "sd", status: "live", kind: "service" },
-        s4: { name: "Aplicativo do cliente", desc: "Produto digital usado pelos clientes.", group: "n2", status: "live", kind: "product", owner: me.email }
-      },
-      offerings: {
-        o1: { service: "", name: "Relatar um problema", kind: "incident", desc: "Algo parou de funcionar ou está com erro.", order: 1 },
-        o2: { service: "s2", name: "Redefinir senha", kind: "request", desc: "Nova senha para um sistema.", approval: false, order: 2, tasks: "sd: Redefinir a senha e informar o solicitante" },
-        o3: { service: "s2", name: "Novo acesso a sistema", kind: "request", desc: "Permissão para usar um sistema.", approval: true, order: 3, form: "Sistema|text|1\nPerfil de acesso|text|1\nJustificativa|textarea|1", tasks: "sd: Validar o perfil\nn2: Conceder o acesso" },
-        o4: { service: "s3", name: "Novo equipamento", kind: "request", desc: "Notebook, monitor ou periférico.", approval: true, order: 4, form: "Equipamento|text|1\nMotivo|textarea|0", tasks: "infra: Separar o equipamento\nsd: Configurar e entregar" }
-      }
-    };
-    out.kb = { a1: { title: "Como redefinir sua senha", body: "1. Acesse o portal de senhas.\n2. Informe o seu e-mail corporativo.\n3. Siga o link recebido e crie uma senha com 12 caracteres ou mais.\n\nSe não receber o e-mail em 5 minutos, abra uma requisição “Redefinir senha”.", category: "c4", service: "s2", status: "published", created: now(), by: me.email } };
-    out.cmdb = {
-      cis: { ci1: { name: "Servidor de e-mail", type: "server", status: "live", service: "s1" }, ci2: { name: "Diretório de usuários (SSO)", type: "application", status: "live", service: "s2" }, ci3: { name: "Rede Wi-Fi do escritório", type: "network", status: "live" } },
-      rels: { r1: { from: "ci1", type: "depends", to: "ci2" } }
-    };
+    if ((chosen || []).indexOf("soc") >= 0) settings.boards.push({ id: "b5", kind: "security", name: "SOC", lane: "group" });
+    const out = { settings: settings, counters: { INC: 0, REQ: 0, TSK: 0, PRB: 0, CHG: 0, IMP: 0, SEC: 0 }, sla: { defaults: I.SLA_DEFAULT, soc: I.SOC_SLA_DEFAULT }, catalog: {} };
+    /* apply each chosen area template into this object */
+    (chosen && chosen.length ? chosen : ["ti"]).forEach(function (k, i) {
+      const u = areaFromTemplate(k, k, out.settings, out.catalog);
+      Object.keys(u).forEach(function (path) {
+        const ps = path.split("/").slice(1); let n = out;
+        for (let x = 0; x < ps.length - 1; x++) { n[ps[x]] = n[ps[x]] || {}; n = n[ps[x]]; }
+        n[ps[ps.length - 1]] = u[path];
+      });
+      out.areas[k].order = i;
+    });
+    if (seed) {
+      const acc = Object.keys(out.catalog.services || {}).find(function (k) { return /acesso/i.test(out.catalog.services[k].name); });
+      out.kb = { a1: { title: "Como redefinir sua senha", body: "1. Acesse o portal de senhas.\n2. Informe o seu e-mail corporativo.\n3. Siga o link recebido e crie uma senha com 12 caracteres ou mais.\n\nSe não receber o e-mail em 5 minutos, abra uma requisição “Redefinir senha”.", service: acc || null, area: acc ? "ti" : null, status: "published", created: now(), by: me.email } };
+      out.cmdb = {
+        cis: { ci1: { name: "Servidor de e-mail", type: "server", status: "live" }, ci2: { name: "Diretório de usuários (SSO)", type: "application", status: "live" }, ci3: { name: "Rede Wi-Fi do escritório", type: "network", status: "live" }, ci4: { name: "Firewall de borda", type: "network", status: "live" } },
+        rels: { r1: { from: "ci1", type: "depends", to: "ci2" }, r2: { from: "ci3", type: "connects", to: "ci4" } }
+      };
+    }
     return out;
   }
 
@@ -260,30 +289,51 @@
   function openCentral() {
     /* agents read the whole info; requesters only the public parts (rules hide the member list) */
     const readInfo = db.ref("itsm/" + ID + "/info").once("value").then(function (s) { return s.val(); }, function () {
-      const one = function (k) { return db.ref("itsm/" + ID + "/info/" + k).once("value").then(function (x) { return x.val(); }); };
+      const one = function (k) { return db.ref("itsm/" + ID + "/info/" + k).once("value").then(function (x) { return x.val(); }, function () { return null; }); };
       return Promise.all([one("title"), one("ws"), one("framework"), one("members/" + MEK)]).then(function (v) {
         if (!v[0]) return null; const o = { title: v[0], ws: v[1], framework: v[2], members: {} }; if (v[3]) o.members[MEK] = v[3]; return o;
       });
     });
     return readInfo.then(function (val) {
       info = val;
-      if (!info) return gate("Central não encontrada", "Ela pode ter sido excluída, ou você não tem acesso.", '<a class="pl-btn primary" href="./">Ver minhas centrais</a>');
+      if (!info || !info.title) return domainJoin();
       return db.ref("workspaces/" + info.ws).once("value").then(function (x) { const w = x.val() || {}; wsInfo = w.info || {}; wsMembers = w.members || {}; }, function () { wsInfo = {}; wsMembers = {}; }).then(function () {
         const wm = wsMembers[MEK], im = (info.members || {})[MEK];
         if (isAdm || wsInfo.owner === MEK || info.owner === MEK || (active(im) && im.role === "manager")) role = "manager";
         else if ((active(wm) && wm.role === "editor") || (active(im) && im.role === "agent")) role = "agent";
         else if (active(wm) || active(im)) role = "requester";
-        else return gate("Sem acesso", "Seu e-mail não participa desta central de serviços, ou o acesso terminou.", '<a class="pl-btn primary" href="./">Ver minhas centrais</a>');
+        else return domainJoin();
         const homeMember = isAdm || wsInfo.owner === MEK || active(wm);
         const lic = homeMember && window.CMModules ? window.CMModules.gate("itsm", info.ws, app) : Promise.resolve(true);
         return lic.then(function (ok) { if (!ok) return; boot(); });
       });
     }, function () { gate("Sem acesso", "Seu acesso a esta central de serviços pode ter terminado, ou a licença do módulo ITSM expirou.", '<a class="pl-btn primary" href="./">Ver minhas centrais</a>'); });
   }
+  /* people from a company domain registered by the managers can join as requesters by themselves */
+  function domainJoin() {
+    const none = function () { gate("Sem acesso", "Seu e-mail não participa desta central de serviços, ou o acesso terminou.", '<a class="pl-btn primary" href="./">Ver minhas centrais</a>'); };
+    const em = String(me.email || "").toLowerCase(), dom = em.split("@")[1] || "", dk = dom.replace(/\./g, ",");
+    if (!dom || !me.emailVerified) return none();
+    return db.ref("itsm/" + ID + "/info/domains/" + dk).once("value").then(function (s) {
+      if (s.val() !== true) return none();
+      gate("Central de serviços da sua empresa", "O seu domínio @" + dom + " está liberado nesta central. Entre como solicitante para abrir e acompanhar chamados.", '<button class="pl-btn primary" id="djoin">Entrar na central</button>');
+      const b = document.getElementById("djoin"); if (!b) return;
+      b.onclick = function () {
+        b.disabled = true;
+        const m = { email: em, name: me.displayName || em.split("@")[0], role: "requester", domain: dk, joinedAt: now() };
+        db.ref("itsm/" + ID + "/info/members/" + MEK).set(m).then(function () {
+          return db.ref("itsm/" + ID + "/info/title").once("value");
+        }).then(function (t) {
+          return db.ref("userItsm/" + MEK + "/" + ID).set({ title: t.val() || "Central de serviços", role: "requester" });
+        }).then(function () { location.reload(); }, function (e) { b.disabled = false; fail(e); });
+      };
+    }, none);
+  }
   function boot() {
     document.title = info.title + " · ITSM · " + (window.CMCOLLAB_BRAND || "CM Collaborator");
     if (window.CMMarkSeen) window.CMMarkSeen("itsm");
     try { let r = JSON.parse(localStorage.getItem("cmcollab:recent")) || []; r = r.filter(function (x) { return x.id !== ID; }); r.unshift({ id: ID, title: info.title, t: now(), kind: "itsm" }); localStorage.setItem("cmcollab:recent", JSON.stringify(r.slice(0, 12))); } catch (e) { /* ignore */ }
+    try { filter.area = localStorage.getItem("cmcollab:itsm:area:" + ID) || ""; } catch (e) { /* ignore */ }
     view = (location.hash || "").slice(1) || (isAgent() ? "queue" : "portal");
     if (!isAgent() && view !== "portal") view = "portal";
     const noAccess = function (e) { console.warn(e); gate("Sem acesso", "Não foi possível ler a central. A licença do módulo ITSM pode ter expirado ou seu acesso terminou.", '<a class="pl-btn primary" href="./">Ver minhas centrais</a>'); };
@@ -291,7 +341,8 @@
       db.ref("itsm/" + ID + "/info").on("value", function (s) { if (s.val()) { info = s.val(); } }, function () { /* ignore */ });
       db.ref("itsm/" + ID + "/data").on("value", function (snap) {
         data = Object.assign({ settings: {}, records: {}, comments: {}, notes: {}, history: {}, catalog: {}, kb: {}, cmdb: {}, sla: {}, counters: {} }, snap.val() || {});
-        if (!document.getElementById("view")) shell(); else if (dragging) pendingRender = true; else renderView();
+        const sig = tabs().map(function (t) { return t[0]; }).join() + "|" + areas().length;
+        if (!document.getElementById("view") || (sig !== boot._sig && !dragging && !document.querySelector(".pl-modal"))) { boot._sig = sig; shell(); } else if (dragging) pendingRender = true; else renderView();
         refreshDrawer();
         const want = Q.get("rec"); if (want && !boot._opened && data.records[want]) { boot._opened = 1; setTimeout(function () { openDrawer(want); }, 60); }
         autoClose();
@@ -332,33 +383,35 @@
   /* ---------------- shell ---------------- */
   const TABS = [
     ["portal", "Portal", "portal"], ["queue", "Fila", "list"], ["boards", "Quadros", "kanban"], ["incident", "Incidentes", "incident"], ["request", "Requisições", "request"],
-    ["problem", "Problemas", "problem"], ["change", "Mudanças", "change"], ["improvement", "Melhorias", "improvement"], ["catalog", "Catálogo", "catalog"],
-    ["kb", "Conhecimento", "kb"], ["cmdb", "CMDB", "cmdb"], ["dash", "Painel", "dashboard"], ["settings", "Configurações", "settings"]
+    ["problem", "Problemas", "problem"], ["change", "Mudanças", "change"], ["improvement", "Melhorias", "improvement"], ["security", "SOC", "shield"], ["catalog", "Catálogo", "catalog"],
+    ["kb", "Conhecimento", "kb"], ["cmdb", "CMDB", "cmdb"], ["dash", "Painel", "dashboard"], ["settings", "Administração", "settings"]
   ];
-  function tabs() { return TABS.filter(function (t) { if (!isAgent()) return t[0] === "portal"; if (t[0] === "settings") return isMgr(); return true; }); }
+  function hasSoc() { return areas().some(function (a) { return a.soc; }) || recs().some(function (r) { return r.kind === "security"; }); }
+  function tabs() { return TABS.filter(function (t) { if (!isAgent()) return t[0] === "portal"; if (t[0] === "settings") return isMgr(); if (t[0] === "security") return hasSoc(); return true; }); }
   function shell() {
     const roleN = { manager: "Gestor", agent: "Agente", requester: "Solicitante" }[role];
     app.innerHTML = '<header class="pl-top it-top"><a class="pl-back" href="./" aria-label="Minhas centrais">' + IC("back", 18) + '</a><span class="pl-logo">CM</span><div class="pl-title"><h1 class="no-i18n">' + esc(info.title) + '</h1><span class="pl-ws">ITSM · ' + esc(wsInfo.name || "") + " · " + roleN + "</span></div>" +
-      '<div class="pl-actions">' + (isAgent() ? '<button class="pl-btn primary" id="itNew">' + IC("plus", 15) + '<span class="hide-s"> Novo</span></button>' : "") + '<button class="pl-btn icon" id="itHelp" aria-label="Ajuda">' + IC("help", 16) + "</button></div></header>" +
+      '<div class="pl-actions">' + (isAgent() && areas().length > 1 ? '<label class="it-areaf" title="Filtrar por área">' + IC("layers", 15) + areaSelect("af", filter.area, true) + "</label>" : "") + (isAgent() ? '<button class="pl-btn primary" id="itNew">' + IC("plus", 15) + '<span class="hide-s"> Novo</span></button>' : "") + '<button class="pl-btn icon" id="itHelp" aria-label="Ajuda">' + IC("help", 16) + "</button></div></header>" +
       (tabs().length > 1 ? '<nav class="it-tabs" aria-label="Seções">' + tabs().map(function (t) { return '<button data-v="' + t[0] + '"' + (t[0] === view ? ' class="on" aria-current="page"' : "") + ">" + IC(t[2], 15) + "<span>" + t[1] + "</span></button>"; }).join("") + "</nav>" : "") +
       '<main id="view" class="it-main"></main>';
     app.querySelectorAll(".it-tabs [data-v]").forEach(function (b) { b.onclick = function () { view = b.dataset.v; history.replaceState(null, "", "#" + view); shell(); }; });
     const on = app.querySelector(".it-tabs .on"); if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest", inline: "center" });
     document.getElementById("itHelp").onclick = helpDialog;
     const nb = document.getElementById("itNew"); if (nb) nb.onclick = function () { newMenu(nb); };
+    const af = app.querySelector(".it-areaf select"); if (af) af.onchange = function () { filter.area = af.value; try { localStorage.setItem("cmcollab:itsm:area:" + ID, af.value); } catch (e) { /* ignore */ } renderView(); };
     renderView();
   }
   function renderView() {
     const el = document.getElementById("view"); if (!el) return;
     const keep = el.scrollTop;
-    const V = { portal: portalView, queue: queueView, boards: boardsView, incident: kindView, request: kindView, problem: kindView, change: kindView, improvement: kindView, catalog: catalogView, kb: kbView, cmdb: cmdbView, dash: dashView, settings: settingsView };
+    const V = { portal: portalView, queue: queueView, boards: boardsView, incident: kindView, request: kindView, problem: kindView, change: kindView, improvement: kindView, security: kindView, catalog: catalogView, kb: kbView, cmdb: cmdbView, dash: dashView, settings: settingsView };
     (V[view] || (isAgent() ? queueView : portalView))(el);
     el.scrollTop = keep;
   }
   function newMenu(anchor) {
     const old = document.getElementById("itMenu"); if (old) { old.remove(); return; }
     const m = document.createElement("div"); m.id = "itMenu"; m.className = "cr-menu it-menu no-i18n";
-    m.innerHTML = '<div class="cr-h">Criar</div>' + ["incident", "request", "problem", "change", "improvement"].map(function (k) {
+    m.innerHTML = '<div class="cr-h">Criar</div>' + ["incident", "request", "problem", "change", "improvement"].concat(hasSoc() ? ["security"] : []).map(function (k) {
       const x = KN[k]; return '<button data-k="' + k + '"><span class="ti" style="color:' + x.color + '">' + IC(x.icon, 18) + "</span><span><b>" + esc(x.name) + "</b><small>" + esc(x.practice) + "</small></span></button>";
     }).join("") + '<div class="cr-sep"></div><button data-k="_kb"><span class="ti">' + IC("kb", 18) + "</span><span><b>Artigo de conhecimento</b><small>Gerenciamento do conhecimento</small></span></button>";
     document.body.appendChild(m);
@@ -371,10 +424,10 @@
   function offerings() { return list((data.catalog || {}).offerings).sort(function (a, b) { return (a.order || 99) - (b.order || 99) || byName(a, b); }); }
   function kbPublished() { return list(data.kb).filter(function (a) { return a.status === "published"; }); }
   function kbSearch(q, limit) {
-    const words = String(q || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/\W+/).filter(function (w) { return w.length > 2; });
+    const words = String(q || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").split(/\W+/).filter(function (w) { return w.length > 2; });
     if (!words.length) return [];
     return kbPublished().map(function (a) {
-      const t = ((a.title || "") + " " + (a.body || "")).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+      const t = ((a.title || "") + " " + (a.body || "")).toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
       let sc = 0; words.forEach(function (w) { if (t.indexOf(w) >= 0) sc += (a.title || "").toLowerCase().indexOf(w) >= 0 ? 3 : 1; });
       return { a: a, sc: sc };
     }).filter(function (x) { return x.sc > 0; }).sort(function (a, b) { return b.sc - a.sc; }).slice(0, limit || 4).map(function (x) { return x.a; });
@@ -385,13 +438,21 @@
   }
   function portalView(el) {
     const offs = offerings(), svc = Object.assign({}, (data.catalog || {}).services || {}, (data.catalog || {}).products || {});
-    const bySvc = {}; offs.forEach(function (o) { const k = o.service || "_"; (bySvc[k] = bySvc[k] || []).push(o); });
+    const bySvc = {}; offs.forEach(function (o) { const k = (o.area || "") + "|" + (o.service || "_"); (bySvc[k] = bySvc[k] || []).push(o); });
+    const svcOf = function (k) { return k.split("|")[1]; }, areaOf = function (k) { return k.split("|")[0]; };
     const mine = myRecords();
     el.innerHTML = '<div class="it-portal"><section class="it-phero"><h2>Como podemos ajudar?</h2><div class="it-search">' + IC("search", 18) + '<input id="pq" type="search" placeholder="Descreva o que você precisa ou o que aconteceu" autocomplete="off"></div><div id="pqr" class="it-kbres"></div></section>' +
       '<div class="it-pgrid"><section class="it-psec"><h3 class="it-h3">Catálogo de serviços</h3>' +
-      (offs.length ? Object.keys(bySvc).sort(function (a, b) { return a === "_" ? -1 : b === "_" ? 1 : String((svc[a] || {}).name).localeCompare(String((svc[b] || {}).name)); }).map(function (k) {
-        return '<div class="it-svc"><h4>' + esc(k === "_" ? "Suporte" : (svc[k] || {}).name || "Serviço") + (svc[k] && svc[k].kind === "product" ? ' <span class="it-tag">produto digital</span>' : "") + '</h4><div class="it-offs">' + bySvc[k].map(function (o) {
-          return '<button class="it-off" data-off="' + esc(o.id) + '"><span class="it-oic" style="--c:' + KN[o.kind === "incident" ? "incident" : "request"].color + '">' + IC(o.kind === "incident" ? "incident" : "request", 18) + '</span><span><b>' + esc(o.name) + "</b><small>" + esc(o.desc || "") + (o.approval ? " · exige aprovação" : "") + "</small></span></button>";
+      (offs.length ? Object.keys(bySvc).sort(function (a, b) {
+        const ao = ((data.areas || {})[areaOf(a)] || {}).order || 0, bo = ((data.areas || {})[areaOf(b)] || {}).order || 0;
+        if (areaOf(a) !== areaOf(b)) return ao - bo;
+        return svcOf(a) === "_" ? -1 : svcOf(b) === "_" ? 1 : String((svc[svcOf(a)] || {}).name).localeCompare(String((svc[svcOf(b)] || {}).name));
+      }).map(function (k, i, arr) {
+        const sk = svcOf(k), ak = areaOf(k), newArea = areas().length > 1 && (i === 0 || areaOf(arr[i - 1]) !== ak);
+        return (newArea ? '<h3 class="it-parea" style="--c:' + esc(((data.areas || {})[ak] || {}).color || "#0e1a33") + '">' + IC(((data.areas || {})[ak] || {}).icon || "layers", 16) + " " + esc(areaName(ak) || "Geral") + "</h3>" : "") +
+          '<div class="it-svc"><h4>' + esc(sk === "_" ? "Atendimento" : (svc[sk] || {}).name || "Serviço") + (svc[sk] && svc[sk].kind === "product" ? ' <span class="it-tag">produto digital</span>' : "") + '</h4><div class="it-offs">' + bySvc[k].map(function (o) {
+          const ok = o.kind === "security" ? "security" : o.kind === "incident" ? "incident" : "request";
+          return '<button class="it-off" data-off="' + esc(o.id) + '"><span class="it-oic" style="--c:' + KN[ok].color + '">' + IC(KN[ok].icon, 18) + '</span><span><b>' + esc(o.name) + "</b><small>" + esc(o.desc || "") + (o.approval ? " · exige aprovação" : "") + "</small></span></button>";
         }).join("") + "</div></div>";
       }).join("") : '<p class="muted">O catálogo ainda está vazio.' + (isAgent() ? " Cadastre serviços e ofertas na aba Catálogo." : "") + "</p>") +
       '</section><section class="it-psec"><h3 class="it-h3">Meus chamados <span class="it-count">' + mine.length + "</span></h3>" +
@@ -411,13 +472,14 @@
   function parseForm(spec) { return String(spec || "").split("\n").map(function (l) { const p = l.split("|"); return { label: (p[0] || "").trim(), type: (p[1] || "text").trim(), req: (p[2] || "0").trim() === "1" }; }).filter(function (f) { return f.label; }); }
   function openOffering(oid, preText) {
     const o = ((data.catalog || {}).offerings || {})[oid]; if (!o) return;
-    const inc = o.kind === "incident", fields = parseForm(o.form), cats = list((data.catalog || {}).categories).sort(byName);
+    const sec = o.kind === "security", inc = o.kind === "incident" || sec, fields = parseForm(o.form), cats = list((data.catalog || {}).categories).filter(function (c) { return !c.area || !o.area || c.area === o.area; }).sort(byName);
     const svcs = list(Object.assign({}, (data.catalog || {}).services || {}, (data.catalog || {}).products || {})).sort(byName);
-    modal("<h2>" + IC(inc ? "incident" : "request", 20) + " " + esc(o.name) + '</h2><p class="muted small">' + esc(o.desc || "") + "</p>" +
+    modal("<h2>" + IC(sec ? "shield" : inc ? "incident" : "request", 20) + " " + esc(o.name) + '</h2><p class="muted small">' + esc(o.desc || "") + "</p>" +
       '<form class="pl-form" id="ofF"><label>' + (inc ? "O que aconteceu?" : "Resumo do pedido") + '<input name="title" required maxlength="140" value="' + esc(preText || (inc ? "" : o.name)) + '" autocomplete="off"></label><div id="ofKb" class="it-kbres"></div>' +
       "<label>Detalhes<textarea name=\"desc\" rows=\"4\" maxlength=\"4000\" placeholder=\"" + (inc ? "Desde quando, o que você tentou, mensagem de erro…" : "Informações que ajudam a atender") + '"></textarea></label>' +
       fields.map(function (f, i) { return "<label>" + esc(f.label) + (f.req ? " *" : "") + (f.type === "textarea" ? '<textarea name="f' + i + '" rows="2"' + (f.req ? " required" : "") + "></textarea>" : '<input name="f' + i + '" type="' + (f.type === "date" ? "date" : "text") + '"' + (f.req ? " required" : "") + ">") + "</label>"; }).join("") +
-      (inc ? '<div class="pl-2"><label>Quanto isso afeta o trabalho?<select name="impact">' + opt("low", "Só a mim", "medium") + opt("medium", "Minha equipe ou área", "medium") + opt("high", "Muitas pessoas ou clientes", "medium") + "</select></label>" +
+      (sec ? '<p class="it-banner small">' + IC("shield", 14) + " Não apague o e-mail ou arquivo suspeito e não clique em mais nada. A equipe de segurança vai analisar.</p>" : "") +
+      (inc && !sec ? '<div class="pl-2"><label>Quanto isso afeta o trabalho?<select name="impact">' + opt("low", "Só a mim", "medium") + opt("medium", "Minha equipe ou área", "medium") + opt("high", "Muitas pessoas ou clientes", "medium") + "</select></label>" +
         '<label>Qual a urgência?<select name="urgency">' + opt("low", "Posso esperar", "medium") + opt("medium", "Atrapalha, mas consigo trabalhar", "medium") + opt("high", "Estou parado(a)", "medium") + "</select></label></div>" +
         (!o.service && svcs.length ? '<label>Serviço ou produto afetado<select name="service">' + opt("", "Não sei", "") + svcs.map(function (s) { return opt(s.id, s.name, ""); }).join("") + "</select></label>" : "") +
         (cats.length ? '<label>Categoria<select name="category">' + opt("", "Não sei", "") + cats.map(function (c) { return opt(c.id, c.name, ""); }).join("") + "</select></label>" : "") : "") +
@@ -428,8 +490,8 @@
       f.onsubmit = function (e) {
         e.preventDefault();
         const answers = {}; fields.forEach(function (x, i) { const v = (f["f" + i].value || "").trim(); if (v) answers[x.label.replace(/[.#$\/\[\]]/g, " ").slice(0, 60)] = v.slice(0, 1000); });
-        const r = { kind: inc ? "incident" : "request", title: f.title.value.trim().slice(0, 140), desc: f.desc.value.trim().slice(0, 4000), offering: oid, service: o.service || (f.service ? f.service.value : "") || "", category: f.category ? f.category.value : "", form: answers };
-        if (inc) { r.impact = f.impact.value; r.urgency = f.urgency.value; } else { r.impact = "low"; r.urgency = "medium"; }
+        const r = { kind: sec ? "security" : inc ? "incident" : "request", area: o.area || "", title: f.title.value.trim().slice(0, 140), desc: f.desc.value.trim().slice(0, 4000), offering: oid, service: o.service || (f.service ? f.service.value : "") || "", category: f.category ? f.category.value : "", form: answers };
+        if (sec) { r.priority = "P3"; } else if (inc) { r.impact = f.impact.value; r.urgency = f.urgency.value; } else { r.impact = "low"; r.urgency = "medium"; }
         f.querySelector(".primary").disabled = true;
         createRecord(r, true).then(function (rid) { close(); toast("Chamado registrado: " + (createdKeys[rid] || "")); openDrawer(rid); }, function (err) { f.querySelector(".primary").disabled = false; fail(err); });
       };
@@ -442,11 +504,18 @@
       const n = res.snapshot.val();
       const o = Object.assign({ status: I.flow(r.kind)[0].id, created: t, updated: t, by: me.email, key: pre + "-" + String(n).padStart(4, "0") }, r);
       if (!o.requester) o.requester = { k: MEK, email: me.email, name: me.displayName || me.email.split("@")[0], ws: info.ws };
-      if (o.kind === "incident" || o.kind === "request") {
+      const off0 = ((data.catalog || {}).offerings || {})[o.offering], sv0 = ((data.catalog || {}).services || {})[o.service] || ((data.catalog || {}).products || {})[o.service];
+      if (!o.area) o.area = (off0 && off0.area) || (sv0 && sv0.area) || (o.kind === "security" ? (areas().find(function (a) { return a.soc; }) || {}).id : "") || "";
+      if (o.kind === "security") {
+        o.priority = o.priority || "P3";
+        const tg = I.targets(o, data.sla); o.sla = { start: t, resp: tg.resp, contain: tg.contain, res: tg.res, policy: tg.policy || null };
+        if (!o.group) { o.group = (sv0 && sv0.group) || (groups().find(function (g) { return g.area === o.area; }) || {}).id || ""; }
+        o.detectedAt = o.detectedAt || t;
+      } else if (o.kind === "incident" || o.kind === "request") {
         o.priority = I.priority(o.impact, o.urgency, S().matrix);
         const tg = I.targets(o, data.sla); o.sla = { start: t, resp: tg.resp, res: tg.res, policy: tg.policy || null };
         const off = ((data.catalog || {}).offerings || {})[o.offering];
-        if (!o.group) { const sv = ((data.catalog || {}).services || {})[o.service] || ((data.catalog || {}).products || {})[o.service]; o.group = (sv && sv.group) || (S().groups && S().groups.sd ? "sd" : "") || ""; }
+        if (!o.group) { o.group = (sv0 && sv0.group) || (groups().find(function (g) { return o.area && g.area === o.area; }) || {}).id || (S().groups && S().groups.sd ? "sd" : "") || ""; }
         if (o.kind === "request" && off && off.approval) o.status = "approval";
       } else if (r.kind !== "task") o.priority = o.priority || I.priority(o.impact || "medium", o.urgency || "medium", S().matrix);
       Object.keys(o).forEach(function (k) { if (o[k] === undefined || o[k] === "") delete o[k]; });
@@ -458,7 +527,7 @@
       if (!isAgent()) mineRecs[rid] = o;
       return db.ref("itsm/" + ID).update(u).then(function () {
         if (o.kind === "request" && o.status !== "approval") spawnTasks(rid, o);
-        if (o.kind === "incident" || o.kind === "request") notify("itsm-opened", { rec: rid });
+        if (isTicket(o)) notify("itsm-opened", { rec: rid });
         if (o.kind === "change" && o.approvers) notify("itsm-change-approval", { rec: rid });
         return rid;
       });
@@ -480,9 +549,9 @@
   function recRow(r) {
     return '<tr data-open="' + esc(r.id) + '" tabindex="0"><td class="it-key" data-l="Chave">' + esc(r.key || "") + '</td><td class="it-ttl" data-l="Título"><b>' + esc(r.title) + "</b>" + (r.major ? ' <span class="it-major">Incidente grave</span>' : "") + "</td>" +
       '<td data-l="Tipo">' + kindChip(r.kind) + '</td><td data-l="Prioridade">' + prioChip(r.priority) + '</td><td data-l="Status">' + stChip(r) + "</td>" +
-      '<td data-l="Grupo">' + esc(groupName(r.group)) + '</td><td data-l="Responsável">' + avatar(r.assignee) + ' <span class="hide-s">' + esc(r.assignee ? nameOf(r.assignee) : "") + '</span></td><td data-l="SLA">' + slaDot(r) + " " + ((r.kind === "incident" || r.kind === "request") ? esc(slaText(r)) : "") + '</td><td data-l="Atualizado" class="muted small">' + esc(ago(r.updated || r.created)) + "</td></tr>";
+      '<td data-l="Grupo">' + esc(groupName(r.group)) + '</td><td data-l="Responsável">' + avatar(r.assignee) + ' <span class="hide-s">' + esc(r.assignee ? nameOf(r.assignee) : "") + '</span></td><td data-l="SLA">' + slaDot(r) + " " + (isTicket(r) ? esc(slaText(r)) : "") + '</td><td data-l="Atualizado" class="muted small">' + esc(ago(r.updated || r.created)) + "</td></tr>";
   }
-  function slaText(r) { const k = I.clock(r, now(), cal()); if (!k || !k.res) return ""; if (k.res.finished) return k.res.breached ? "violado" : "cumprido"; if (k.paused) return "pausado"; return I.fmtLeft(k.res.left); }
+  function slaText(r) { const k = I.clock(r, now(), areaCal(r.area)); if (!k || !k.res) return ""; if (k.res.finished) return k.res.breached ? "violado" : "cumprido"; if (k.paused) return "pausado"; return I.fmtLeft(k.res.left); }
   function table(rows, empty) {
     return rows.length ? '<div class="it-tablewrap"><table class="it-table"><thead><tr><th>Chave</th><th>Título</th><th>Tipo</th><th>Prior.</th><th>Status</th><th>Grupo</th><th>Responsável</th><th>SLA</th><th>Atualizado</th></tr></thead><tbody>' + rows.map(recRow).join("") + "</tbody></table></div>" : '<div class="it-empty">' + IC("list", 26) + "<p>" + esc(empty) + "</p></div>";
   }
@@ -490,16 +559,16 @@
   function matchQ(r) { if (!filter.q) return true; const q = filter.q.toLowerCase(); return (r.title || "").toLowerCase().indexOf(q) >= 0 || (r.key || "").toLowerCase().indexOf(q) >= 0 || ((r.requester || {}).name || "").toLowerCase().indexOf(q) >= 0; }
   function prioRank(p) { return { P1: 1, P2: 2, P3: 3, P4: 4 }[p] || 5; }
   function sortQueue(a, b) {
-    const ka = I.clock(a, now(), cal()), kb = I.clock(b, now(), cal());
+    const ka = I.clock(a, now(), areaCal(a.area)), kb = I.clock(b, now(), areaCal(b.area));
     return prioRank(a.priority) - prioRank(b.priority) || ((ka && ka.res ? ka.res.left : 1e9) - (kb && kb.res ? kb.res.left : 1e9)) || (b.created || 0) - (a.created || 0);
   }
   function queueView(el) {
-    const mg = myGroups(), open = recs().filter(function (r) { return !I.isDone(r) && r.kind !== "improvement"; });
+    const mg = myGroups(), open = recs().filter(function (r) { return !I.isDone(r) && r.kind !== "improvement" && inArea(r); });
     const Qs = {
       mine: ["Atribuídos a mim", function (r) { return r.assignee === me.email; }],
       groups: ["Meus grupos", function (r) { return mg.indexOf(r.group) >= 0; }],
       none: ["Sem responsável", function (r) { return !r.assignee && r.kind !== "change"; }],
-      sla: ["SLA em risco ou violado", function (r) { const k = I.clock(r, now(), cal()); return k && k.res && !k.paused && k.res.color !== "green"; }],
+      sla: ["SLA em risco ou violado", function (r) { const k = I.clock(r, now(), areaCal(r.area)); return k && k.res && !k.paused && k.res.color !== "green"; }],
       approval: ["Aguardando minha aprovação", function (r) { return (r.approvers || {})[MEK] && !((r.approvals || {})[MEK]) && (r.status === "approval" || r.status === "assess"); }],
       major: ["Incidentes graves", function (r) { return r.major; }],
       all: ["Todos abertos", function () { return true; }]
@@ -515,7 +584,7 @@
     bindRows(el);
   }
   function kindView(el) {
-    const k = view, x = KN[k], all = recs().filter(function (r) { return r.kind === k; });
+    const k = view, x = KN[k], all = recs().filter(function (r) { return r.kind === k && inArea(r); });
     const st = filter["st_" + k] || "open";
     const rows = all.filter(function (r) { return st === "all" || (st === "open" ? !I.isDone(r) : I.isDone(r)); }).filter(matchQ).sort(sortQueue);
     const sub = filter["sub_" + k] || "list";
@@ -572,7 +641,7 @@
   function boardsView(el) {
     const bs = boardsList(), cur = bs.find(function (b) { return b.id === filter.board; }) || bs[0];
     filter.board = cur.id;
-    const fl = I.flow(cur.kind), items = recs().filter(function (r) { return r.kind === cur.kind; }).filter(matchQ).filter(function (r) { const s = I.status(r.kind, r.status); return s.cat !== "done" || !r.closedAt || now() - (r.closedAt || r.updated || 0) < 14 * DAY; });
+    const fl = I.flow(cur.kind), items = recs().filter(function (r) { return r.kind === cur.kind && inArea(r); }).filter(matchQ).filter(function (r) { const s = I.status(r.kind, r.status); return s.cat !== "done" || !r.closedAt || now() - (r.closedAt || r.updated || 0) < 14 * DAY; });
     const lanesBy = cur.lane || "";
     let lanes = [{ id: "_all", name: "" }];
     if (lanesBy === "group") lanes = groups().map(function (g) { return { id: g.id, name: g.name }; }).concat([{ id: "", name: "Sem grupo" }]);
@@ -826,8 +895,8 @@
   }
   function dashView(el) {
     const days = filter.dashDays || 30, since = now() - days * DAY;
-    const R = {}; recs().forEach(function (r) { if ((r.created || 0) >= since || !I.isDone(r)) R[r.id] = data.records[r.id]; });
-    const m = I.metrics(R, now(), cal()), all = list(R), tickets = all.filter(function (r) { return r.kind === "incident" || r.kind === "request"; });
+    const R = {}; recs().forEach(function (r) { if (inArea(r) && ((r.created || 0) >= since || !I.isDone(r))) R[r.id] = data.records[r.id]; });
+    const m = I.metrics(R, now(), cal()), all = list(R), tickets = all.filter(isTicket);
     const byStatus = {}, byPrio = {}, bySvc = {};
     tickets.forEach(function (r) { const s = I.status(r.kind, r.status); byStatus[s.name] = (byStatus[s.name] || 0) + 1; byPrio[r.priority || "–"] = (byPrio[r.priority || "–"] || 0) + 1; const sv = svcName(r.service) || "Sem serviço"; bySvc[sv] = (bySvc[sv] || 0) + 1; });
     const topP = recs().filter(function (r) { return r.kind === "problem"; }).map(function (p) { return { p: p, n: Object.keys(p.incidents || {}).length }; }).filter(function (x) { return x.n; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 5);
@@ -862,13 +931,13 @@
     const r = rec(id); if (!r) return Promise.resolve();
     const u = {};
     Object.keys(patch).forEach(function (k) { u["records/" + id + "/" + k] = patch[k] === undefined ? null : patch[k]; });
-    if (("impact" in patch || "urgency" in patch) && r.kind !== "task") {
+    if (("impact" in patch || "urgency" in patch) && r.kind !== "task" && r.kind !== "security") {
       const p = I.priority(patch.impact || r.impact, patch.urgency || r.urgency, S().matrix);
       if (p !== r.priority) { u["records/" + id + "/priority"] = p; const h = hist(id, "priority", r.priority, p); u[h[0]] = h[1]; patch.priority = p; }
     }
-    if ("priority" in patch && r.sla && r.sla.start && (r.kind === "incident" || r.kind === "request")) {
-      const tg = I.targets(Object.assign({}, r, { priority: patch.priority, service: patch.service || r.service }), data.sla);
-      u["records/" + id + "/sla/resp"] = tg.resp; u["records/" + id + "/sla/res"] = tg.res;
+    if (("priority" in patch || "area" in patch) && r.sla && r.sla.start && isTicket(r)) {
+      const tg = I.targets(Object.assign({}, r, { priority: patch.priority || r.priority, service: patch.service || r.service, area: "area" in patch ? patch.area : r.area }), data.sla);
+      u["records/" + id + "/sla/resp"] = tg.resp; u["records/" + id + "/sla/res"] = tg.res; if (tg.contain) u["records/" + id + "/sla/contain"] = tg.contain;
     }
     u["records/" + id + "/updated"] = now();
     if (field) { const h = hist(id, field, r[field], patch[field]); u[h[0]] = h[1]; }
@@ -922,8 +991,8 @@
     const t = now(), u = {}, P = "records/" + r.id + "/";
     u[P + "status"] = to; u[P + "updated"] = t;
     const cat = I.status(r.kind, to).cat;
-    if (r.sla && r.sla.start) { const sp = I.slaOnStatus(r, to, t, cal()); Object.keys(sp || {}).forEach(function (k) { u[P + "sla/" + k] = sp[k]; }); }
-    if (cat === "done" && ["resolved", "done", "reviewed"].indexOf(to) >= 0 && !r.resolvedAt) u[P + "resolvedAt"] = t;
+    if (r.sla && r.sla.start) { const sp = I.slaOnStatus(r, to, t, areaCal(r.area)); Object.keys(sp || {}).forEach(function (k) { u[P + "sla/" + k] = sp[k]; }); }
+    if (cat === "done" && ["resolved", "done", "reviewed", "lessons", "false"].indexOf(to) >= 0 && !r.resolvedAt) u[P + "resolvedAt"] = t;
     if (to === "closed") u[P + "closedAt"] = t;
     if (cat !== "done") { u[P + "resolvedAt"] = null; u[P + "closedAt"] = null; if (I.status(r.kind, r.status).cat === "done") u[P + "reopened"] = (r.reopened || 0) + 1; }
     if (extra.resolution) { u[P + "resolution"] = extra.resolution; u[P + "closeCode"] = extra.closeCode; }
@@ -957,7 +1026,7 @@
     /* requester answering while "waiting for customer" puts the ticket back in progress (clock restarts) */
     if (!isAgent() && r.status === "waiting") {
       u["records/" + rid + "/status"] = "doing";
-      const sp = I.slaOnStatus(r, "doing", t, cal()) || {};
+      const sp = I.slaOnStatus(r, "doing", t, areaCal(r.area)) || {};
       if ("pausedMs" in sp) u["records/" + rid + "/sla/pausedMs"] = sp.pausedMs;
       if ("pausedAt" in sp) u["records/" + rid + "/sla/pausedAt"] = null;
       const h = hist(rid, "status", "waiting", "doing", "Resposta do solicitante"); u[h[0]] = h[1];
@@ -969,12 +1038,14 @@
   function newRecord(kind) {
     const x = KN[kind], ppl = Object.keys(people()).map(function (k) { return people()[k]; }).sort(byName);
     const svcs = list(Object.assign({}, (data.catalog || {}).services || {}, (data.catalog || {}).products || {})).sort(byName), cats = list((data.catalog || {}).categories).sort(byName);
-    const ticket = kind === "incident" || kind === "request";
+    const ticket = kind === "incident" || kind === "request" || kind === "security";
     modal("<h2>" + IC(x.icon, 20) + " Novo " + esc(x.name.toLowerCase()) + '</h2><p class="muted small">' + esc(x.practice) + '</p><form class="pl-form" id="nrF"><label>Título<input name="title" required maxlength="140" autocomplete="off"></label><label>Descrição<textarea name="desc" rows="3" maxlength="4000"></textarea></label>' +
       (ticket ? '<label>Solicitante<select name="req">' + ppl.map(function (p) { return opt(p.k, p.name + " · " + p.email, MEK); }).join("") + "</select></label>" : "") +
       (kind === "request" ? '<label>Oferta do catálogo<select name="offering">' + offerings().filter(function (o) { return o.kind !== "incident"; }).map(function (o) { return opt(o.id, o.name, ""); }).join("") + "</select></label>" : "") +
+      (areas().length ? "<label>Área" + areaSelect("area", kind === "security" ? (areas().find(function (a) { return a.soc; }) || {}).id : filter.area) + "</label>" : "") +
+      (kind === "security" ? '<div class="pl-2"><label>Severidade<select name="sev">' + ["P1", "P2", "P3", "P4"].map(function (p) { return opt(p, p + " · " + I.SEV[p], "P3"); }).join("") + '</select></label><label>Categoria<select name="socCat">' + opt("", "–", "") + Object.keys(I.SOC_CATS).map(function (k) { return opt(k, I.SOC_CATS[k], ""); }).join("") + "</select></label></div>" : "") +
       (kind === "change" ? '<label>Tipo de mudança<select name="ctype">' + Object.keys(I.CHANGE_TYPES).map(function (k) { return opt(k, I.CHANGE_TYPES[k], "normal"); }).join("") + "</select></label>" : "") +
-      (kind !== "improvement" ? '<div class="pl-2"><label>Impacto<select name="impact">' + I.LEVELS.map(function (l) { return opt(l, I.LEVELN[l], "medium"); }).join("") + '</select></label><label>Urgência<select name="urgency">' + I.LEVELS.map(function (l) { return opt(l, I.URGN[l], "medium"); }).join("") + "</select></label></div>" : "") +
+      (kind !== "improvement" && kind !== "security" ? '<div class="pl-2"><label>Impacto<select name="impact">' + I.LEVELS.map(function (l) { return opt(l, I.LEVELN[l], "medium"); }).join("") + '</select></label><label>Urgência<select name="urgency">' + I.LEVELS.map(function (l) { return opt(l, I.URGN[l], "medium"); }).join("") + "</select></label></div>" : "") +
       '<div class="pl-2"><label>Serviço ou produto<select name="service">' + opt("", "–", "") + svcs.map(function (s) { return opt(s.id, s.name, ""); }).join("") + "</select></label>" +
       (kind !== "change" && kind !== "improvement" ? '<label>Categoria<select name="category">' + opt("", "–", "") + cats.map(function (c) { return opt(c.id, c.name, ""); }).join("") + "</select></label>" : "<span></span>") + "</div>" +
       (kind === "improvement" ? '<label>Origem<select name="origin">' + opt("idea", "Ideia ou sugestão", "idea") + opt("problem", "Problema", "") + opt("sla", "Resultado de SLA", "") + opt("dashboard", "Indicador do painel", "") + opt("csat", "Pesquisa de satisfação", "") + "</select></label>" : "") +
@@ -988,6 +1059,8 @@
         if (f.offering) r.offering = f.offering.value;
         if (f.ctype) { r.changeType = f.ctype.value; const cab = (S().cab || {})[f.ctype.value === "emergency" ? "emergency" : "normal"]; if (cab && f.ctype.value !== "standard") r.approvers = cab; }
         if (f.origin) r.origin = f.origin.value;
+        if (f.area) r.area = f.area.value;
+        if (f.sev) { r.priority = f.sev.value; r.socCat = f.socCat.value || null; }
         f.querySelector(".primary").disabled = true;
         createRecord(r).then(function (rid) { close(); openDrawer(rid); }, function (err) { f.querySelector(".primary").disabled = false; fail(err); });
       };
@@ -1060,18 +1133,19 @@
   function sel(name, options, cur, attrs) { return '<select name="' + name + '"' + (attrs || "") + ">" + options.map(function (o) { return opt(o[0], o[1], cur == null ? "" : cur); }).join("") + "</select>"; }
   function agentDrawer(r) {
     const s = I.status(r.kind, r.status), fl = I.flow(r.kind), svcs = list(Object.assign({}, (data.catalog || {}).services || {}, (data.catalog || {}).products || {})).sort(byName), cats = list((data.catalog || {}).categories).sort(byName);
-    const ticket = r.kind === "incident" || r.kind === "request", cis = list((data.cmdb || {}).cis).sort(byName), ag = agents(), grp = groups();
+    const ticket = isTicket(r), soc = r.kind === "security", cis = list((data.cmdb || {}).cis).sort(byName), ag = agents(), grp = groups();
     const moves = [[r.status, s.name + " (atual)"]].concat(s.next.map(function (n) { return [n, "→ " + I.status(r.kind, n).name]; }));
     const groupAgents = r.group && (S().groups || {})[r.group] && Object.keys((S().groups[r.group].members) || {}).length ? ag.filter(function (a) { return (S().groups[r.group].members || {})[a.k]; }) : ag;
     let h = '<header><span class="it-key">' + esc(r.key) + "</span>" + kindChip(r.kind) + (r.major ? '<span class="it-major">Incidente grave</span>' : "") + '<span class="sp"></span><button class="pl-btn icon ghost" id="dCopy" aria-label="Copiar link">' + IC("link", 16) + '</button><button class="pl-btn icon ghost" id="dClose" aria-label="Fechar">' + IC("close", 16) + '</button></header><div class="it-dbody">' +
       '<input class="it-dtitle" name="title" maxlength="140" value="' + esc(r.title) + '" aria-label="Título">' +
-      '<div class="it-chips">' + stChip(r) + prioChip(r.priority) + vcChips(r) + (ticket ? slaChip(r, "resp") + slaChip(r, "res") : "") + "</div>" +
+      '<div class="it-chips">' + stChip(r) + prioChip(r.priority) + vcChips(r) + (ticket ? slaChip(r, "resp") + (soc ? slaChip(r, "contain") : "") + slaChip(r, "res") : "") + (r.area ? '<span class="it-tag gray">' + IC("layers", 12) + " " + esc(areaName(r.area)) + "</span>" : "") + (r.viaMail ? '<span class="it-tag gray">' + IC("mail", 12) + " por e-mail</span>" : "") + "</div>" +
       '<div class="pl-form it-df"><div class="pl-2"><label>Status' + sel("status", moves, r.status) + "</label>" +
-      (r.kind !== "improvement" && r.kind !== "task" ? '<label>Impacto × urgência<span class="it-iu">' + sel("impact", I.LEVELS.map(function (l) { return [l, "Impacto " + I.LEVELN[l].toLowerCase()]; }), r.impact || "medium") + sel("urgency", I.LEVELS.map(function (l) { return [l, "Urgência " + I.URGN[l].toLowerCase()]; }), r.urgency || "medium") + "</span></label>" : "<span></span>") + "</div>" +
+      (soc ? "<label>Severidade" + sel("severity", ["P1", "P2", "P3", "P4"].map(function (p) { return [p, p + " · " + I.SEV[p]]; }), r.priority || "P3") + "</label>" : r.kind !== "improvement" && r.kind !== "task" ? '<label>Impacto × urgência<span class="it-iu">' + sel("impact", I.LEVELS.map(function (l) { return [l, "Impacto " + I.LEVELN[l].toLowerCase()]; }), r.impact || "medium") + sel("urgency", I.LEVELS.map(function (l) { return [l, "Urgência " + I.URGN[l].toLowerCase()]; }), r.urgency || "medium") + "</span></label>" : "<span></span>") + "</div>" +
+      (areas().length ? "<label>Área" + areaSelect("area", r.area) + "</label>" : "") +
       '<div class="pl-2"><label>Grupo' + sel("group", [["", "–"]].concat(grp.map(function (g) { return [g.id, g.name]; })), r.group || "") + "</label>" +
       "<label>Responsável" + sel("assignee", [["", "Sem responsável"]].concat(groupAgents.map(function (a) { return [a.email, a.name]; })), r.assignee || "") + "</label></div>" +
       '<div class="pl-2"><label>Serviço ou produto' + sel("service", [["", "–"]].concat(svcs.map(function (x) { return [x.id, x.name]; })), r.service || "") + "</label>" +
-      (r.kind !== "change" && r.kind !== "improvement" ? "<label>Categoria" + sel("category", [["", "–"]].concat(cats.map(function (c) { return [c.id, c.name]; })), r.category || "") + "</label>" : "<span></span>") + "</div>" +
+      (r.kind !== "change" && r.kind !== "improvement" ? "<label>Categoria" + sel("category", [["", "–"]].concat(cats.filter(function (c) { return !c.area || !r.area || c.area === r.area; }).map(function (c) { return [c.id, c.name]; })), r.category || "") + "</label>" : "<span></span>") + "</div>" +
       (r.kind !== "improvement" ? '<label>Itens de configuração (CMDB)<select name="cis" multiple size="' + Math.min(4, Math.max(2, cis.length)) + '">' + cis.map(function (c) { return '<option value="' + esc(c.id) + '"' + ((r.cis || {})[c.id] ? " selected" : "") + ">" + esc(c.name) + "</option>"; }).join("") + "</select></label>" : "") +
       '<label>Descrição<textarea name="desc" rows="4" maxlength="4000">' + esc(r.desc || "") + "</textarea></label></div>";
     if (r.requester) h += '<p class="small it-req">' + IC("people", 14) + " Solicitante: <b>" + esc(r.requester.name || r.requester.email) + "</b> · " + esc(r.requester.email || "") + " · aberto " + esc(fmtDT(r.created)) + "</p>";
@@ -1080,7 +1154,7 @@
     if (r.parent) { const p = rec(r.parent); if (p) h += '<p class="small">Tarefa de <button class="link" data-open="' + esc(p.id) + '">' + esc(p.key + " " + p.title) + "</button></p>"; }
     h += kindSection(r);
     if (["problem", "change", "improvement"].indexOf(r.kind) >= 0) h += planSection(r);
-    h += '<div class="it-acts it-aiacts">' + (r.kind === "incident" || r.kind === "request" ? '<button class="pl-btn sm" id="aiTriage">' + IC("spark", 14) + " IA: sugerir categoria e prioridade</button>" : "") + "</div>";
+    h += '<div class="it-acts it-aiacts">' + (r.kind === "incident" || r.kind === "request" || r.kind === "security" ? '<button class="pl-btn sm" id="aiTriage">' + IC("spark", 14) + " IA: sugerir categoria e prioridade</button>" : "") + "</div>";
     h += '<h3 class="it-h3">Atividade</h3>' + thread(r.id, true) +
       '<div class="it-compose"><textarea id="cmTxt" rows="3" maxlength="4000" placeholder="Responder ao solicitante ou registrar uma nota interna"></textarea><div class="pl-row-end"><label class="chk small"><input type="checkbox" id="cmInt"' + (r.requester && r.requester.k !== MEK ? "" : " checked") + "> Nota interna</label>" +
       (ticket ? '<button class="pl-btn sm" id="aiReply">' + IC("spark", 14) + " IA: sugerir resposta</button>" : "") + '<span class="sp"></span><button class="pl-btn primary" id="cmSend">' + IC("send", 14) + " Enviar</button></div></div>" +
@@ -1145,6 +1219,24 @@
         (["implemented", "failed", "reviewed", "closed"].indexOf(r.status) >= 0 ? '<div class="pl-form it-pir"><b>Revisão pós-implementação (PIR)</b><label>Resultado' + sel("pir_result", [["", "–"], ["success", "Bem-sucedida"], ["partial", "Parcial"], ["failed", "Falhou (retornada)"]], pir.result || "") + '</label><label>Lições aprendidas<textarea name="pir_notes" rows="2" maxlength="2000">' + esc(pir.notes || "") + "</textarea></label></div>" : "") +
         (r.problem ? '<p class="small">Problema: <button class="link" data-open="' + esc(r.problem) + '">' + esc((rec(r.problem) || {}).key || "") + "</button></p>" : "") + "</section>";
     }
+    if (r.kind === "security") {
+      const lg = r.lgpd || {}, due = lg.personal && lg.knownAt ? I.lgpdDue(lg.knownAt, lg.small) : null;
+      const dueChip = function (t, done, label) { if (!t) return ""; const left = Math.ceil((t - now()) / DAY); const cls = done ? "c-done" : left < 0 ? "c-red" : left <= 1 ? "c-wait" : "c-doing"; return '<span class="it-st ' + cls + '">' + esc(label) + ": " + esc(fmtD(t)) + (done ? " ✓" : left < 0 ? " (vencido)" : " (" + left + (left === 1 ? " dia)" : " dias)")) + "</span>"; };
+      h += '<section class="it-sec it-soc"><h3>' + IC("shield", 16) + ' Resposta a incidente de segurança (SOC)</h3><div class="pl-form">' +
+        '<div class="pl-2"><label>Categoria' + sel("soc_cat", [["", "–"]].concat(Object.keys(I.SOC_CATS).map(function (k) { return [k, I.SOC_CATS[k]]; })), r.socCat || "") + "</label>" +
+        "<label>Tática (MITRE ATT&CK)" + sel("soc_mitre", [["", "–"]].concat(I.MITRE.map(function (m) { return [m, m]; })), r.mitre || "") + "</label></div>" +
+        '<div class="pl-2"><label>Origem da detecção' + sel("soc_src", [["", "–"], ["siem", "SIEM / alerta"], ["edr", "EDR / antivírus"], ["user", "Usuário"], ["mail", "Gateway de e-mail"], ["third", "Terceiro / fornecedor"], ["threat", "Inteligência de ameaças"]], r.detection || "") + "</label>" +
+        '<label>Detectado em<input type="datetime-local" name="soc_detected" value="' + esc(toLocalInput(r.detectedAt || r.created)) + '"></label></div>' +
+        '<label>Indicadores de comprometimento (IoCs)<textarea name="soc_iocs" rows="3" maxlength="4000" placeholder="IPs, domínios, hashes, remetentes…">' + esc(r.iocs || "") + "</textarea></label>" +
+        '<label>Ações de contenção e erradicação<textarea name="soc_actions" rows="3" maxlength="4000">' + esc(r.actions || "") + "</textarea></label></div>" +
+        '<div class="it-lgpd"><label class="chk"><input type="checkbox" name="lg_personal"' + (lg.personal ? " checked" : "") + "> Envolve dados pessoais com risco ou dano relevante aos titulares (LGPD)</label>" +
+        (lg.personal ? '<div class="pl-form"><div class="pl-2"><label>Ciência do incidente com dados pessoais<input type="datetime-local" name="lg_known" value="' + esc(toLocalInput(lg.knownAt || r.created)) + '"></label>' +
+          '<label class="chk it-chkpad"><input type="checkbox" name="lg_small"' + (lg.small ? " checked" : "") + "> Agente de pequeno porte (prazo em dobro)</label></div>" +
+          '<div class="it-chips">' + dueChip(due && due.notify, lg.anpdAt && lg.subjectsAt, "Comunicar ANPD e titulares") + dueChip(due && due.complement, lg.complementAt, "Complemento") + "</div>" +
+          '<div class="it-pick it-lgck">' + [["anpdAt", "Comunicação à ANPD enviada"], ["subjectsAt", "Titulares comunicados"], ["complementAt", "Complemento enviado à ANPD"]].map(function (x) { return '<label class="chk"><input type="checkbox" data-lg="' + x[0] + '"' + (lg[x[0]] ? " checked" : "") + "> " + esc(x[1]) + (lg[x[0]] ? ' <span class="muted small">' + esc(fmtDT(lg[x[0]])) + "</span>" : "") + "</label>"; }).join("") + "</div>" +
+          '<p class="muted small">Resolução CD/ANPD nº 15/2024: 3 dias úteis a partir da ciência (6 para agente de pequeno porte); complemento em até 20 dias úteis. Feriados não são descontados.</p></div>' : "") + "</div>" +
+        (r.problem ? '<p class="small">Problema: <button class="link" data-open="' + esc(r.problem) + '">' + esc((rec(r.problem) || {}).key || "") + "</button></p>" : '<div class="it-acts"><button class="pl-btn sm" id="newPrb">Criar problema (causa raiz)</button></div>') + "</section>";
+    }
     if (r.kind === "improvement") {
       h += '<section class="it-sec"><h3>Registro de melhoria (melhoria contínua)</h3><div class="pl-form"><label>Origem' + sel("origin", [["idea", "Ideia ou sugestão"], ["problem", "Problema"], ["sla", "Resultado de SLA"], ["dashboard", "Indicador do painel"], ["csat", "Pesquisa de satisfação"]], r.origin || "idea") + "</label>" +
         '<label>Benefício esperado<textarea name="benefit" rows="2" maxlength="1000">' + esc(r.benefit || "") + '</textarea></label><div class="pl-2"><label>Medida de sucesso (indicador)<input name="measure" maxlength="140" value="' + esc(r.measure || "") + '"></label><label>Meta<input name="target" maxlength="80" value="' + esc(r.target || "") + '"></label></div>' +
@@ -1187,6 +1279,8 @@
     const ti = d.querySelector(".it-dtitle"); ti.onchange = function () { if (ti.value.trim()) save({ title: ti.value.trim() }); };
     const f = d.querySelector(".it-df");
     f.querySelector("[name=status]").onchange = function () { const v = this.value; this.value = r.status; changeStatus(r, v); };
+    const sevSel = f.querySelector("[name=severity]"); if (sevSel) sevSel.onchange = function () { save({ priority: sevSel.value }, "priority"); };
+    const arSel = f.querySelector("[name=area]"); if (arSel) arSel.onchange = function () { save({ area: arSel.value || null }, "area"); };
     const im = f.querySelector("[name=impact]"); if (im) { im.onchange = function () { save({ impact: im.value }); }; f.querySelector("[name=urgency]").onchange = function () { save({ urgency: this.value }); }; }
     f.querySelector("[name=group]").onchange = function () { save({ group: this.value || null }, "group"); };
     f.querySelector("[name=assignee]").onchange = function () { assign(r, this.value || null); };
@@ -1222,6 +1316,13 @@
     d.querySelectorAll("[name^=p_]").forEach(function (x) { x.onchange = function () { const u = {}; u[P + "plan/" + x.name.slice(2)] = x.value.trim() || null; db.ref("itsm/" + ID + "/data").update(u).catch(fail); }; });
     ["devLinked", "acquire", "onRoadmap"].forEach(function (n) { const x = d.querySelector("[name=" + n + "]"); if (x) x.onchange = function () { const p = {}; p[n] = x.checked || null; save(p).then(function () { if (n === "onRoadmap") syncPlans(rec(r.id)); }); }; });
     d.querySelectorAll("[name^=pir_]").forEach(function (x) { x.onchange = function () { const u = {}; u[P + "pir/" + x.name.slice(4)] = x.value.trim() || null; db.ref("itsm/" + ID + "/data").update(u).catch(fail); }; });
+    /* SOC */
+    [["soc_cat", "socCat"], ["soc_mitre", "mitre"], ["soc_src", "detection"], ["soc_iocs", "iocs"], ["soc_actions", "actions"]].forEach(function (x) { const e = d.querySelector("[name=" + x[0] + "]"); if (e) e.onchange = function () { const p = {}; p[x[1]] = e.value.trim() || null; save(p); }; });
+    const sd = d.querySelector("[name=soc_detected]"); if (sd) sd.onchange = function () { save({ detectedAt: fromLocalInput(sd.value) }); };
+    const lgp = d.querySelector("[name=lg_personal]"); if (lgp) lgp.onchange = function () { const lg = Object.assign({}, r.lgpd || {}, { personal: lgp.checked }); if (lgp.checked && !lg.knownAt) lg.knownAt = now(); save({ lgpd: lg }); };
+    const lk = d.querySelector("[name=lg_known]"); if (lk) lk.onchange = function () { save({ lgpd: Object.assign({}, r.lgpd || {}, { knownAt: fromLocalInput(lk.value) }) }); };
+    const ls = d.querySelector("[name=lg_small]"); if (ls) ls.onchange = function () { save({ lgpd: Object.assign({}, r.lgpd || {}, { small: ls.checked }) }); };
+    d.querySelectorAll("[data-lg]").forEach(function (c) { c.onchange = function () { const lg = Object.assign({}, r.lgpd || {}); lg[c.dataset.lg] = c.checked ? now() : null; save({ lgpd: lg }); }; });
     /* improvement */
     ["origin", "benefit", "measure", "target", "result"].forEach(function (n) { const x = d.querySelector(".it-sec [name=" + n + "]"); if (x) x.onchange = function () { const p = {}; p[n] = x.value.trim() || null; save(p); }; });
     /* planning */
@@ -1408,6 +1509,186 @@
   }
 
   /* ---------------- settings (managers) ---------------- */
+  /* ---------- Administração: SOC SLA, Excel, areas, domains / Office 365, e-mail intake ---------- */
+  function minTxt(m) { m = Number(m) || 0; return m >= 1440 && m % 1440 === 0 ? m / 1440 + " d" : m >= 60 && m % 60 === 0 ? m / 60 + " h" : m + " min"; }
+  function socSlaSection() {
+    if (!hasSoc()) return "";
+    const t = (data.sla || {}).soc || I.SOC_SLA_DEFAULT;
+    return '<section class="it-scard" data-sec="sla"><h3>' + IC("shield", 16) + ' SLAs do SOC – incidentes de segurança</h3><p class="muted small">Por severidade, em minutos. A área SOC usa calendário 24×7 por padrão.</p><form id="socF" class="pl-form"><div class="it-tablewrap"><table class="it-mx"><thead><tr><th>Severidade</th><th>Triagem (min)</th><th>Contenção (min)</th><th>Resolução (min)</th></tr></thead><tbody>' +
+      ["P1", "P2", "P3", "P4"].map(function (p) { const x = t[p] || I.SOC_SLA_DEFAULT[p]; return "<tr><th>" + p + " · " + esc(I.SEV[p]) + '</th><td><input type="number" min="1" name="sr_' + p + '" value="' + esc(x.resp) + '"></td><td><input type="number" min="1" name="sc_' + p + '" value="' + esc(x.contain) + '"></td><td><input type="number" min="1" name="ss_' + p + '" value="' + esc(x.res) + '"></td></tr>'; }).join("") +
+      '</tbody></table></div><div class="pl-row-end"><button class="pl-btn primary sm">Salvar SLAs do SOC</button></div></form></section>';
+  }
+  function excelSection() {
+    return '<section class="it-scard" data-sec="excel"><h3>' + IC("upload", 16) + ' Carregar parametrização pelo Excel</h3>' +
+      '<p class="muted small">Baixe o nosso modelo, preencha as abas que quiser e importe. Abas lidas: <b>Áreas</b>, <b>SLA Incidentes</b>, <b>SLA SOC</b>, <b>Calendários</b> e <b>Usuários</b>. Antes de gravar, mostramos o que vai mudar.</p>' +
+      '<div class="it-acts"><a class="pl-btn" href="./modelo-itsm.xlsx" download>' + IC("export", 14) + ' Baixar modelo (Excel)</a><label class="pl-btn primary it-file">' + IC("upload", 14) + ' Importar planilha<input type="file" id="xlsIn" accept=".xlsx,.xls" hidden></label></div><div id="xlsOut"></div></section>';
+  }
+  function areasSection() {
+    const as = areas(), used = function (a) { return recs().filter(function (r) { return r.area === a; }).length; };
+    return '<section class="it-scard" data-sec="areas"><h3>' + IC("layers", 16) + ' Áreas de atendimento</h3><p class="muted small">Cada área vem de um modelo com grupos, categorias, serviços, ofertas do portal, calendário e SLAs. Depois de criada, tudo pode ser editado no Catálogo, em Grupos e em SLAs.</p>' +
+      (as.length ? '<div class="it-tablewrap"><table class="it-table"><thead><tr><th>Área</th><th>Modelo</th><th>Calendário</th><th>E-mail para abrir chamados</th><th>Registros</th><th></th></tr></thead><tbody>' + as.map(function (a) {
+        return '<tr><td data-l="Área"><span class="it-adot" style="--c:' + esc(a.color || "#0e1a33") + '"></span><input class="it-inln" data-arn="' + esc(a.id) + '" value="' + esc(a.name) + '" maxlength="40" aria-label="Nome da área"></td><td data-l="Modelo">' + esc((I.AREA_TEMPLATES[a.template] || {}).name || "Personalizada") + '</td><td data-l="Calendário">' + sel("cal_" + a.id, [["business", "Horário comercial"], ["24x7", "24 × 7"]], (a.calendar || {}).mode || "business", ' data-arc="' + esc(a.id) + '"') + '</td><td data-l="E-mail" class="small"><code>' + esc(mailAddr(a.id)) + '</code></td><td data-l="Registros">' + used(a.id) + '</td><td data-l=""><button class="link" data-ardel="' + esc(a.id) + '">remover</button></td></tr>';
+      }).join("") + "</tbody></table></div>" : '<p class="muted small">Nenhuma área ainda: os registros ficam em “Geral”.</p>') +
+      '<form class="it-inlf" id="arF"><select name="t">' + Object.keys(I.AREA_TEMPLATES).map(function (k) { return opt(k, I.AREA_TEMPLATES[k].name, ""); }).join("") + '</select><input name="n" maxlength="40" placeholder="Nome (opcional, ex.: TI – Filial Sul)"><button class="pl-btn sm primary">Adicionar área</button></form></section>';
+  }
+  function domainsSection() {
+    const dm = Object.keys(info.domains || {}).map(function (k) { return k.replace(/,/g, "."); });
+    return '<section class="it-scard" data-sec="users"><h3>' + IC("lock", 16) + ' Domínios da empresa e Office 365</h3>' +
+      '<p class="muted small">Quem entrar com e-mail de um domínio cadastrado pode se juntar à central como solicitante, sem convite individual. Combine com o login da Microsoft para os usuários do Office 365.</p>' +
+      '<div class="it-cats">' + dm.map(function (d) { return '<span class="it-tag gray">@' + esc(d) + ' <button class="link" data-dmdel="' + esc(d) + '" aria-label="Remover domínio">✕</button></span>'; }).join("") +
+      '<form class="it-inlf" id="dmF"><input name="d" maxlength="80" placeholder="empresa.com.br"><button class="pl-btn sm">Adicionar domínio</button></form></div>' +
+      '<div class="it-banner small">' + (window.CMCOLLAB_MS_LOGIN ? "<b>Login com Microsoft ativo.</b> Os usuários do Office 365 entram com “Entrar com Microsoft” e confirmam o e-mail uma única vez." : "<b>Login com Microsoft (Office 365): aguardando configuração.</b> Passos: 1) registrar o aplicativo no Microsoft Entra (portal.azure.com) com a URL de retorno do Firebase; 2) ativar o provedor Microsoft no Firebase Authentication com o ID e o segredo do aplicativo; 3) ligar <code>CMCOLLAB_MS_LOGIN</code> em config.js (e, se quiser só uma empresa, o tenant em <code>CMCOLLAB_MS_TENANT</code>).") + "</div></section>";
+  }
+  function mailAddr(area) { return "digitalagiletechnology+itsm_" + ID + (area ? "_" + area : "") + "@gmail.com"; }
+  function mailSection() {
+    const m = S().mailIn || {}, last = m.lastRun;
+    return '<section class="it-scard" data-sec="mail"><h3>' + IC("mail", 16) + ' Receber chamados por e-mail</h3>' +
+      '<p class="muted small">Cada e-mail novo vira um chamado (na área SOC, incidente de segurança) e recebe uma confirmação com o número. Respostas com [INC-0001] no assunto viram comentários. No Office 365, crie uma regra que redireciona a caixa de suporte (ex.: suporte@empresa.com.br) para o endereço da área.</p>' +
+      '<ul class="it-tasks"><li><b>Geral:</b> <code>' + esc(mailAddr("")) + "</code></li>" + areas().map(function (a) { return "<li><b>" + esc(a.name) + ":</b> <code>" + esc(mailAddr(a.id)) + "</code></li>"; }).join("") + "</ul>" +
+      '<form class="pl-form" id="miF"><label>Quem pode abrir chamado por e-mail' + sel("accept", [["members", "Só pessoas da central"], ["domains", "Pessoas da central e dos domínios cadastrados"], ["any", "Qualquer remetente (fica marcado como externo)"]], m.accept || "members") + "</label>" +
+      '<label class="chk"><input type="checkbox" name="auto"' + (m.autoReply !== false ? " checked" : "") + '> Responder ao remetente com o número do chamado</label><label class="chk"><input type="checkbox" name="on"' + (m.enabled !== false ? " checked" : "") + "> Receber e-mails nesta central</label>" +
+      '<div class="pl-row-end"><button class="pl-btn primary sm">Salvar</button></div></form>' +
+      '<p class="muted small">Última leitura da caixa: ' + (last ? esc(fmtDT(last)) + (m.lastCount != null ? " · " + m.lastCount + " e-mail(s) processado(s)" : "") : "ainda não houve (o leitor de e-mails precisa ser ativado no notificador da plataforma)") + "</p></section>";
+  }
+  function bindAdminExtras(el) {
+    const sf = el.querySelector("#socF"); if (sf) sf.onsubmit = function (e) {
+      e.preventDefault(); const t = {}; ["P1", "P2", "P3", "P4"].forEach(function (p) { const d = I.SOC_SLA_DEFAULT[p]; t[p] = { resp: Number(sf["sr_" + p].value) || d.resp, contain: Number(sf["sc_" + p].value) || d.contain, res: Number(sf["ss_" + p].value) || d.res }; });
+      db.ref("itsm/" + ID + "/data/sla/soc").set(t).then(function () { toast("SLAs do SOC salvos"); }, fail);
+    };
+    const af = el.querySelector("#arF"); if (af) af.onsubmit = function (e) {
+      e.preventDefault(); const t = af.t.value; let aid = t, n = 2; while ((data.areas || {})[aid]) aid = t + n++;
+      const u = areaFromTemplate(t, aid, S(), data.catalog); const nm = af.n.value.trim(); if (nm) u["data/areas/" + aid].name = nm.slice(0, 40);
+      if (I.AREA_TEMPLATES[t].soc && !(data.sla || {}).soc) u["data/sla/soc"] = I.SOC_SLA_DEFAULT;
+      if (I.AREA_TEMPLATES[t].soc && !boardsList().some(function (b) { return b.kind === "security"; })) u["data/settings/boards"] = boardsList().concat([{ id: "b" + Date.now().toString(36), kind: "security", name: "SOC", lane: "group" }]);
+      db.ref("itsm/" + ID).update(u).then(function () { data.areas = Object.assign({}, data.areas || {}); data.areas[aid] = u["data/areas/" + aid]; toast("Área criada com grupos, catálogo e calendário do modelo"); shell(); }, fail);
+    };
+    el.querySelectorAll("[data-arn]").forEach(function (i) { i.onchange = function () { if (i.value.trim()) db.ref("itsm/" + ID + "/data/areas/" + i.dataset.arn + "/name").set(i.value.trim().slice(0, 40)).catch(fail); }; });
+    el.querySelectorAll("[data-arc]").forEach(function (c) { c.onchange = function () { const v = c.value === "24x7" ? { mode: "24x7", days: [0, 1, 2, 3, 4, 5, 6], start: "00:00", end: "23:59", tz: -180 } : { mode: "business", days: [1, 2, 3, 4, 5], start: "08:00", end: "18:00", tz: -180 }; db.ref("itsm/" + ID + "/data/areas/" + c.dataset.arc + "/calendar").set(v).then(function () { toast("Calendário da área atualizado"); }, fail); }; });
+    el.querySelectorAll("[data-ardel]").forEach(function (b) { b.onclick = function () {
+      const a = b.dataset.ardel, n = recs().filter(function (r) { return r.area === a; }).length;
+      confirmBox("Remover área", "A área sai da lista e das ofertas do portal. " + (n ? n + " registro(s) continuam guardados e passam a aparecer em “Geral”." : "") + " Grupos, serviços e categorias da área são mantidos.", "Remover", true).then(function (ok) {
+        if (!ok) return; const u = {}; u["areas/" + a] = null; list((data.catalog || {}).offerings).forEach(function (o) { if (o.area === a) u["catalog/offerings/" + o.id] = null; });
+        db.ref("itsm/" + ID + "/data").update(u).then(function () { shell(); }, fail);
+      });
+    }; });
+    const dmf = el.querySelector("#dmF"); if (dmf) dmf.onsubmit = function (e) {
+      e.preventDefault(); const d = dmf.d.value.trim().toLowerCase().replace(/^@/, "");
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) return toast("Domínio inválido");
+      if (/^(gmail|outlook|hotmail|yahoo|live|icloud|bol|uol)\./.test(d)) return toast("Use o domínio da empresa, não um provedor de e-mail público.");
+      db.ref("itsm/" + ID + "/info/domains/" + d.replace(/\./g, ",")).set(true).then(function () { info.domains = Object.assign({}, info.domains || {}); info.domains[d.replace(/\./g, ",")] = true; renderView(); }, fail);
+    };
+    el.querySelectorAll("[data-dmdel]").forEach(function (b) { b.onclick = function () { const k = b.dataset.dmdel.replace(/\./g, ","); db.ref("itsm/" + ID + "/info/domains/" + k).remove().then(function () { delete (info.domains || {})[k]; renderView(); }, fail); }; });
+    const mf = el.querySelector("#miF"); if (mf) mf.onsubmit = function (e) {
+      e.preventDefault(); const u = {}; u["settings/mailIn/accept"] = mf.accept.value; u["settings/mailIn/autoReply"] = mf.auto.checked; u["settings/mailIn/enabled"] = mf.on.checked;
+      db.ref("itsm/" + ID + "/data").update(u).then(function () { toast("Recebimento por e-mail salvo"); }, fail);
+    };
+    const xi = el.querySelector("#xlsIn"); if (xi) xi.onchange = function () { const f = xi.files && xi.files[0]; if (f) importExcel(f, el.querySelector("#xlsOut")); xi.value = ""; };
+  }
+
+  /* ---------- Excel import (SheetJS, loaded on demand from /assets/vendor) ---------- */
+  function loadXLSX() {
+    if (window.XLSXLite) return Promise.resolve(window.XLSXLite);
+    return new Promise(function (res, rej) { const sc = document.createElement("script"); sc.src = "../assets/js/xlsx-lite.js"; sc.onload = function () { res(window.XLSXLite); }; sc.onerror = function () { rej(new Error("Não foi possível carregar o leitor de Excel")); }; document.head.appendChild(sc); });
+  }
+  function normKey(s) { return String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
+  function toMin(v, unit) {
+    if (v == null || v === "") return null;
+    const n = Number(String(v).replace(",", ".")); if (!isFinite(n) || n <= 0) return NaN;
+    const u = normKey(unit || "minutos");
+    return Math.round(n * (u.indexOf("dia") === 0 ? 1440 : u.indexOf("hora") === 0 || u === "h" ? 60 : 1));
+  }
+  function sheetRows(wb, names) {
+    const nm = wb.SheetNames.find(function (n) { return names.indexOf(normKey(n)) >= 0; }); if (!nm) return null;
+    return wb.rows(nm).map(function (r) { const o = {}; Object.keys(r).forEach(function (k) { o[k === "__line" ? k : normKey(k)] = r[k]; }); return o; });
+  }
+  function prioOf(v) { const t = normKey(v); const m = t.match(/^p?([1-4])/); if (m) return "P" + m[1]; return { critica: "P1", alta: "P2", media: "P3", baixa: "P4" }[t.split(" ")[0]] || null; }
+  function importExcel(file, out) {
+    out.innerHTML = '<p class="muted small">Lendo a planilha…</p>';
+    if (file.size > 5 * 1024 * 1024) { out.innerHTML = '<p class="it-banner red small">Planilha maior que 5 MB. Use o modelo sem dados extras.</p>'; return; }
+    Promise.all([loadXLSX(), file.arrayBuffer()]).then(function (x) { return x[0].read(x[1]); }).then(function (wb) {
+      const errs = [], u = {}, sum = [];
+      const areaByName = {}; areas().forEach(function (a) { areaByName[normKey(a.name)] = a.id; areaByName[normKey(a.id)] = a.id; });
+      const newAreas = {};
+      /* Áreas */
+      const ar = sheetRows(wb, ["areas"]);
+      if (ar) ar.forEach(function (r, i) {
+        const nm = r["area"] || r["nome"], tpl = normKey(r["modelo"] || "");
+        if (!nm) return;
+        const tid = Object.keys(I.AREA_TEMPLATES).find(function (k) { return normKey(I.AREA_TEMPLATES[k].name) === tpl || k === tpl || normKey(I.AREA_TEMPLATES[k].name).indexOf(tpl) === 0; });
+        if (areaByName[normKey(nm)]) return;
+        if (!tid) { errs.push("Áreas, linha " + (r.__line || i + 2) + ": modelo “" + (r["modelo"] || "") + "” não existe (use TI, SOC, RH, Facilities, Financeiro ou Jurídico)."); return; }
+        let aid = tid, n = 2; while ((data.areas || {})[aid] || newAreas[aid]) aid = tid + n++;
+        newAreas[aid] = 1; areaByName[normKey(nm)] = aid;
+        Object.assign(u, areaFromTemplate(tid, aid, S(), data.catalog)); u["data/areas/" + aid].name = String(nm).slice(0, 40);
+        const cm = normKey(r["calendario"] || ""); if (cm.indexOf("24") === 0) u["data/areas/" + aid].calendar = { mode: "24x7", days: [0, 1, 2, 3, 4, 5, 6], start: "00:00", end: "23:59", tz: -180 };
+        sum.push("Nova área: " + nm + " (modelo " + I.AREA_TEMPLATES[tid].name + ")");
+      });
+      const areaId = function (v, line, sheet) { if (!v || normKey(v) === "todas" || normKey(v) === "geral") return null; const a = areaByName[normKey(v)]; if (!a) errs.push(sheet + ", linha " + line + ": área “" + v + "” não encontrada (cadastre na aba Áreas)."); return a || undefined; };
+      const svcByName = {}; list(Object.assign({}, (data.catalog || {}).services || {}, (data.catalog || {}).products || {})).forEach(function (x) { svcByName[normKey(x.name)] = x.id; });
+      /* SLA Incidentes / SLA SOC */
+      [["sla incidentes", false], ["sla soc", true]].forEach(function (cfg) {
+        const rows = sheetRows(wb, [cfg[0]]); if (!rows) return;
+        const unit = function (r) { return r["unidade"] || "minutos"; };
+        let nDef = 0, nPol = 0; const defs = {};
+        rows.forEach(function (r, i) {
+          const line = r.__line || i + 2, p = prioOf(r["prioridade"] || r["severidade"]);
+          if (!p) { errs.push((cfg[1] ? "SLA SOC" : "SLA Incidentes") + ", linha " + line + ": prioridade/severidade inválida."); return; }
+          const resp = toMin(r["1a resposta"] || r["primeira resposta"] || r["triagem"], unit(r)), res = toMin(r["resolucao"], unit(r)), cont = cfg[1] ? toMin(r["contencao"], unit(r)) : null;
+          if (!resp || !res || isNaN(resp) || isNaN(res) || (cfg[1] && (!cont || isNaN(cont)))) { errs.push((cfg[1] ? "SLA SOC" : "SLA Incidentes") + ", linha " + line + ": prazos precisam ser números maiores que zero."); return; }
+          if (resp > res) { errs.push((cfg[1] ? "SLA SOC" : "SLA Incidentes") + ", linha " + line + ": 1ª resposta maior que a resolução."); return; }
+          const a = areaId(r["area"], line, cfg[1] ? "SLA SOC" : "SLA Incidentes"); if (a === undefined) return;
+          const sv = r["servico"] ? svcByName[normKey(r["servico"])] : null;
+          if (r["servico"] && !sv) { errs.push((cfg[1] ? "SLA SOC" : "SLA Incidentes") + ", linha " + line + ": serviço “" + r["servico"] + "” não está no catálogo."); return; }
+          if (!a && !sv) { defs[p] = cfg[1] ? { resp: resp, contain: cont, res: res } : { resp: resp, res: res }; nDef++; }
+          else { const pid = "x" + (cfg[1] ? "s" : "i") + "_" + (a || "all") + "_" + (sv || "all") + "_" + p; const pol = { name: String(r["nome"] || r["politica"] || (areaName(a) || "Área") + " " + p).slice(0, 40), priority: p, resp: resp, res: res, area: a || null, service: sv || null }; if (cfg[1]) { pol.soc = true; pol.contain = cont; } u["data/sla/policies/" + pid] = pol; nPol++; }
+        });
+        if (Object.keys(defs).length) { const base = Object.assign({}, cfg[1] ? (data.sla || {}).soc || I.SOC_SLA_DEFAULT : (data.sla || {}).defaults || I.SLA_DEFAULT, defs); u["data/sla/" + (cfg[1] ? "soc" : "defaults")] = base; }
+        if (nDef || nPol) sum.push((cfg[1] ? "SLA do SOC" : "SLA de incidentes e requisições") + ": " + nDef + " padrão(ões) e " + nPol + " política(s) por área ou serviço");
+      });
+      /* Calendários */
+      const cr = sheetRows(wb, ["calendarios"]);
+      if (cr) cr.forEach(function (r, i) {
+        const line = r.__line || i + 2, a = areaId(r["area"], line, "Calendários"); if (a === undefined) return;
+        const mode = normKey(r["modo"] || r["tipo"]).indexOf("24") === 0 ? "24x7" : "business";
+        const hm = function (v) { if (typeof v === "number") { const m = Math.round(v * 1440); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); } return /^\d{1,2}:\d{2}$/.test(String(v)) ? String(v).padStart(5, "0") : null; };
+        const DN = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+        const days = String(r["dias"] || "seg,ter,qua,qui,sex").split(/[,;/ ]+/).map(function (d) { return DN[normKey(d).slice(0, 3)]; }).filter(function (d) { return d != null; });
+        const c = mode === "24x7" ? { mode: "24x7", days: [0, 1, 2, 3, 4, 5, 6], start: "00:00", end: "23:59", tz: -180 } : { mode: "business", days: days.length ? days : [1, 2, 3, 4, 5], start: hm(r["inicio"]) || "08:00", end: hm(r["fim"]) || "18:00", tz: -180 };
+        if (a) u["data/areas/" + a + "/calendar"] = c; else u["data/settings/calendar"] = c;
+        sum.push("Calendário " + (a ? areaName(a) || r["area"] : "geral") + ": " + (mode === "24x7" ? "24×7" : c.start + "–" + c.end));
+      });
+      /* Usuários */
+      const ur = sheetRows(wb, ["usuarios"]);
+      if (ur) { let n = 0; const ROLE = { gestor: "manager", agente: "agent", solicitante: "requester" };
+        ur.forEach(function (r, i) {
+          const em = String(r["e mail"] || r["email"] || "").toLowerCase().trim(), line = r.__line || i + 2; if (!em) return;
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { errs.push("Usuários, linha " + line + ": e-mail inválido."); return; }
+          const role = ROLE[normKey(r["papel"]).split(" ")[0]] || "requester", k = A.key(em);
+          if (k === wsInfo.owner || k === info.owner) return;
+          u["info/members/" + k] = Object.assign({}, (info.members || {})[k] || {}, { email: em, name: String(r["nome"] || em.split("@")[0]).slice(0, 60), role: role, invitedBy: me.email, invitedAt: now() });
+          u["userItsm/" + k + "/" + ID] = { title: info.title, role: role };
+          String(r["grupos"] || "").split(/[,;]+/).map(function (g) { return g.trim(); }).filter(Boolean).forEach(function (g) {
+            const gid = groups().find(function (x) { return normKey(x.name) === normKey(g) || x.id === g; }); if (gid && role !== "requester") u["data/settings/groups/" + gid.id + "/members/" + k] = true; else if (!gid) errs.push("Usuários, linha " + line + ": grupo “" + g + "” não existe.");
+          });
+          n++;
+        });
+        if (n) sum.push(n + " usuário(s) cadastrados ou atualizados");
+      }
+      if (!Object.keys(u).length && !errs.length) { out.innerHTML = '<p class="it-banner amber small">Nenhuma aba reconhecida. Use o modelo (abas Áreas, SLA Incidentes, SLA SOC, Calendários, Usuários).</p>'; return; }
+      out.innerHTML = '<div class="it-xprev">' + (sum.length ? "<b>O que vai mudar</b><ul>" + sum.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" : "") +
+        (errs.length ? '<div class="it-banner red small"><b>' + errs.length + " problema(s) – essas linhas serão ignoradas:</b><ul>" + errs.slice(0, 30).map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul></div>" : "") +
+        (Object.keys(u).length ? '<div class="pl-row-end"><button class="pl-btn" id="xlsNo">Cancelar</button><button class="pl-btn primary" id="xlsYes">Aplicar</button></div>' : "") + "</div>";
+      const no = out.querySelector("#xlsNo"); if (no) no.onclick = function () { out.innerHTML = ""; };
+      const yes = out.querySelector("#xlsYes"); if (yes) yes.onclick = function () {
+        yes.disabled = true;
+        const root = {}, itsmU = {};
+        Object.keys(u).forEach(function (k) { if (k.indexOf("userItsm/") === 0) root[k] = u[k]; else itsmU[k] = u[k]; });
+        db.ref("itsm/" + ID).update(itsmU).then(function () { return Object.keys(root).length ? db.ref().update(root) : null; }).then(function () {
+          return db.ref("itsm/" + ID + "/info").once("value").then(function (s2) { if (s2.val()) info = s2.val(); });
+        }).then(function () { out.innerHTML = '<p class="it-banner green small">Parametrização aplicada.</p>'; toast("Planilha importada"); setTimeout(shell, 600); }, function (e2) { yes.disabled = false; fail(e2); });
+      };
+    }).catch(function (e) { out.innerHTML = '<p class="it-banner red small">' + esc(e.message) + "</p>"; });
+  }
   function settingsView(el) {
     if (!isMgr()) { el.innerHTML = '<p class="muted">Só gestores da central alteram as configurações.</p>'; return; }
     const s = S(), ppl = people(), pk = Object.keys(ppl).map(function (k) { return ppl[k]; }).sort(byName), im = info.members || {}, mx = s.matrix || I.MATRIX, cl = cal(), dft = (data.sla || {}).defaults || I.SLA_DEFAULT, cab = s.cab || {};
@@ -1415,8 +1696,11 @@
     const roleOf = function (p) { const m = im[p.k]; if (m && m.role) return m.role; if (p.k === wsInfo.owner || p.k === info.owner) return "manager"; return p.agent ? "agent" : "requester"; };
     const srcOf = function (p) { if (p.k === wsInfo.owner) return "dono do workspace"; const wm = wsMembers[p.k]; if (wm) return wm.role === "editor" ? "editor do workspace" : "leitor do workspace"; if (p.via) return "workspace conectado"; return "convidado na central"; };
     const multi = function (name, cur) { return '<select name="' + name + '" multiple size="' + Math.min(6, Math.max(3, pk.length)) + '">' + pk.map(function (p) { return '<option value="' + esc(p.k) + '"' + ((cur || {})[p.k] ? " selected" : "") + ">" + esc(p.name) + "</option>"; }).join("") + "</select>"; };
-    el.innerHTML = '<div class="it-set">' +
-      '<section class="it-scard"><h3>Geral</h3><form class="pl-form" id="sgF"><label>Nome da central<input name="title" maxlength="80" value="' + esc(info.title) + '"></label>' +
+    const SECS = [["geral", "Geral", "settings"], ["areas", "Áreas", "layers"], ["users", "Usuários e acesso", "people"], ["groups", "Grupos", "people"], ["sla", "SLAs e calendários", "clock"], ["excel", "Importar Excel", "upload"], ["prio", "Prioridade", "alert"], ["change", "Mudanças (CAB)", "change"], ["mail", "E-mail de entrada", "mail"], ["conn", "Conexões", "link"]];
+    const cur = SECS.some(function (x) { return x[0] === filter.adm; }) ? filter.adm : "geral";
+    el.innerHTML = '<div class="it-adm"><nav class="it-admnav" aria-label="Administração">' + SECS.map(function (x) { return '<button data-adm="' + x[0] + '"' + (x[0] === cur ? ' class="on" aria-current="page"' : "") + ">" + IC(x[2], 15) + "<span>" + x[1] + "</span></button>"; }).join("") + "</nav>" +
+      '<div class="it-set" data-cur="' + cur + '">' +
+      '<section class="it-scard" data-sec="geral"><h3>Geral</h3><form class="pl-form" id="sgF"><label>Nome da central<input name="title" maxlength="80" value="' + esc(info.title) + '"></label>' +
       '<label>Referência ITIL exibida' + sel("fw", [["both", "ITIL 4 e ITIL 5"], ["itil4", "Só ITIL 4 (cadeia de valor de serviço)"], ["itil5", "Só ITIL 5 (ciclo de vida de produtos e serviços)"]], fw()) + "</label>" +
       '<div class="pl-2"><label>Fechar resolvidos após (dias)<input name="ac" type="number" min="0" max="30" value="' + esc(s.autoCloseDays == null ? 3 : s.autoCloseDays) + '"></label><label>Regra de aprovação' + sel("ar", [["all", "Todos os aprovadores"], ["majority", "Maioria"], ["any", "Basta um"]], s.approvalRule || "all") + "</label></div>" +
       '<div class="pl-2"><label>Tendência: nº de incidentes<input name="tn" type="number" min="2" max="50" value="' + esc((s.trend || {}).n || 3) + '"></label><label>em quantos dias<input name="td" type="number" min="1" max="90" value="' + esc((s.trend || {}).days || 7) + '"></label></div>' +
@@ -1424,36 +1708,41 @@
       '<label class="chk"><input type="checkbox" name="em"' + (s.emails !== false ? " checked" : "") + "> E-mails automáticos pela conta Digital Agile (chamado aberto, atribuído, comentário, resolvido, SLA, aprovação)</label>" +
       '<div class="pl-row-end"><button class="pl-btn primary">Salvar</button></div></form></section>' +
 
-      '<section class="it-scard"><h3>Pessoas e papéis</h3><p class="muted small">Agentes atendem e veem tudo; solicitantes só abrem e acompanham os próprios chamados. Membros dos workspaces conectados entram como solicitantes.</p>' +
+      '<section class="it-scard" data-sec="users"><h3>Pessoas e papéis</h3><p class="muted small">Agentes atendem e veem tudo; solicitantes só abrem e acompanham os próprios chamados. Membros dos workspaces conectados entram como solicitantes.</p>' +
       '<div class="it-tablewrap"><table class="it-table"><thead><tr><th>Pessoa</th><th>Origem</th><th>Papel</th><th></th></tr></thead><tbody>' + pk.map(function (p) {
         const fixed = p.k === wsInfo.owner || p.k === info.owner;
         return '<tr><td data-l="Pessoa"><b>' + esc(p.name) + '</b><br><span class="muted small">' + esc(p.email) + '</span></td><td data-l="Origem" class="small">' + esc(srcOf(p)) + '</td><td data-l="Papel">' + (fixed ? "Gestor" : sel("role", [["manager", "Gestor"], ["agent", "Agente"], ["requester", "Solicitante"]], roleOf(p), ' data-pk="' + esc(p.k) + '"')) + '</td><td data-l="">' + (im[p.k] && !im[p.k].via && !wsMembers[p.k] ? '<button class="link" data-rmp="' + esc(p.k) + '">remover</button>' : "") + "</td></tr>";
       }).join("") + "</tbody></table></div>" +
       '<form class="it-inlf" id="addP"><input name="email" type="email" required placeholder="e-mail"><input name="name" maxlength="60" placeholder="nome"><select name="role">' + opt("requester", "Solicitante", "requester") + opt("agent", "Agente", "") + opt("manager", "Gestor", "") + '</select><button class="pl-btn sm">Adicionar</button></form></section>' +
 
-      '<section class="it-scard"><h3>Grupos de suporte</h3><p class="muted small">Usados na atribuição, nas raias do quadro, no escalonamento funcional e nos OLAs (prazos internos por grupo).</p>' +
+      '<section class="it-scard" data-sec="groups"><h3>Grupos de suporte</h3><p class="muted small">Usados na atribuição, nas raias do quadro, no escalonamento funcional e nos OLAs (prazos internos por grupo).</p>' +
       groups().map(function (g) {
         return '<form class="pl-form it-grp" data-g="' + esc(g.id) + '"><div class="pl-2"><label>Nome<input name="name" maxlength="60" value="' + esc(g.name) + '"></label><label>Líder' + sel("lead", [["", "–"]].concat(agents().map(function (a) { return [a.email, a.name]; })), g.lead || "") + "</label></div>" +
           '<div class="pl-2"><label>Agentes do grupo<select name="members" multiple size="3">' + agents().map(function (a) { return '<option value="' + esc(a.k) + '"' + ((g.members || {})[a.k] ? " selected" : "") + ">" + esc(a.name) + "</option>"; }).join("") + '</select></label><label>OLA de resolução do grupo (horas)<input name="ola" type="number" min="0" max="720" value="' + esc(g.ola || "") + '" placeholder="sem OLA"></label></div>' +
           '<div class="pl-row-end"><span class="muted small">id: ' + esc(g.id) + '</span><span class="sp"></span><button type="button" class="pl-btn sm ghost danger" data-delg="' + esc(g.id) + '">Remover</button><button class="pl-btn sm primary">Salvar</button></div></form>';
       }).join("") + '<form class="it-inlf" id="addG"><input name="name" maxlength="60" required placeholder="Novo grupo (ex.: Redes)"><button class="pl-btn sm">Adicionar grupo</button></form></section>' +
 
-      '<section class="it-scard"><h3>Prioridade: impacto × urgência</h3><form id="mxF"><div class="it-tablewrap"><table class="it-mx"><thead><tr><th>Impacto ↓ / Urgência →</th>' + I.LEVELS.map(function (u) { return "<th>" + I.URGN[u] + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      '<section class="it-scard" data-sec="prio"><h3>Prioridade: impacto × urgência</h3><form id="mxF"><div class="it-tablewrap"><table class="it-mx"><thead><tr><th>Impacto ↓ / Urgência →</th>' + I.LEVELS.map(function (u) { return "<th>" + I.URGN[u] + "</th>"; }).join("") + "</tr></thead><tbody>" +
       I.LEVELS.map(function (i) { return "<tr><th>" + I.LEVELN[i] + "</th>" + I.LEVELS.map(function (u) { return "<td>" + sel(i + "|" + u, ["P1", "P2", "P3", "P4"].map(function (p) { return [p, p]; }), mx[i + "|" + u]) + "</td>"; }).join("") + "</tr>"; }).join("") + '</tbody></table></div><div class="pl-row-end"><button class="pl-btn primary sm">Salvar matriz</button></div></form></section>' +
 
-      '<section class="it-scard"><h3>Níveis de serviço (SLA)</h3><form id="slF" class="pl-form"><div class="it-tablewrap"><table class="it-mx"><thead><tr><th>Prioridade</th><th>1ª resposta (min)</th><th>Resolução (min)</th></tr></thead><tbody>' + ["P1", "P2", "P3", "P4"].map(function (p) { const x = dft[p] || I.SLA_DEFAULT[p]; return "<tr><th>" + esc(I.PRIO[p].name) + '</th><td><input type="number" min="1" name="r_' + p + '" value="' + esc(x.resp) + '"></td><td><input type="number" min="1" name="s_' + p + '" value="' + esc(x.res) + '"></td></tr>'; }).join("") + "</tbody></table></div>" +
+      '<section class="it-scard" data-sec="sla"><h3>Níveis de serviço (SLA) – incidentes e requisições</h3><form id="slF" class="pl-form"><div class="it-tablewrap"><table class="it-mx"><thead><tr><th>Prioridade</th><th>1ª resposta (min)</th><th>Resolução (min)</th></tr></thead><tbody>' + ["P1", "P2", "P3", "P4"].map(function (p) { const x = dft[p] || I.SLA_DEFAULT[p]; return "<tr><th>" + esc(I.PRIO[p].name) + '</th><td><input type="number" min="1" name="r_' + p + '" value="' + esc(x.resp) + '"></td><td><input type="number" min="1" name="s_' + p + '" value="' + esc(x.res) + '"></td></tr>'; }).join("") + "</tbody></table></div>" +
       '<div class="pl-2"><label>Calendário' + sel("mode", [["business", "Horário comercial"], ["24x7", "24 × 7"]], cl.mode) + '</label><span class="it-iu"><label>Início<input type="time" name="start" value="' + esc(cl.start) + '"></label><label>Fim<input type="time" name="end" value="' + esc(cl.end) + '"></label></span></div>' +
       '<div class="day-chips it-days">' + [[1, "seg"], [2, "ter"], [3, "qua"], [4, "qui"], [5, "sex"], [6, "sáb"], [0, "dom"]].map(function (d) { return '<label><input type="checkbox" name="d' + d[0] + '"' + (cl.days.indexOf(d[0]) >= 0 ? " checked" : "") + "> " + d[1] + "</label>"; }).join("") + '</div><p class="muted small">Fuso: Brasília (UTC−3). O relógio pausa em “Aguardando cliente” e “Aguardando aprovação”.</p>' +
       '<div class="pl-row-end"><button class="pl-btn primary sm">Salvar SLAs</button></div></form>' +
-      "<b class=\"small\">Políticas por serviço</b><ul class=\"it-tasks\">" + list((data.sla || {}).policies).map(function (p) { return "<li><b>" + esc(p.name || "Política") + "</b> · " + esc(svcName(p.service) || "todos os serviços") + " · " + esc(p.priority) + " · resposta " + esc(p.resp) + " min · resolução " + esc(p.res) + ' min <button class="link" data-delpol="' + esc(p.id) + '">remover</button></li>'; }).join("") + "</ul>" +
-      '<form class="it-inlf" id="polF"><input name="name" maxlength="40" placeholder="Nome (ex.: Ouro)" required><select name="service">' + opt("", "Todos", "") + svcs.map(function (x) { return opt(x.id, x.name, ""); }).join("") + '</select><select name="priority">' + ["P1", "P2", "P3", "P4"].map(function (p) { return opt(p, p, "P1"); }).join("") + '</select><input name="resp" type="number" min="1" placeholder="resp. (min)" required><input name="res" type="number" min="1" placeholder="resol. (min)" required><button class="pl-btn sm">Adicionar</button></form></section>' +
+      "<b class=\"small\">Políticas por serviço</b><ul class=\"it-tasks\">" + list((data.sla || {}).policies).map(function (p) { return "<li><b>" + esc(p.name || "Política") + "</b> · " + esc(svcName(p.service) || "todos os serviços") + (p.area ? " · área " + esc(areaName(p.area) || p.area) : "") + (p.soc ? " · SOC" : "") + " · " + esc(p.priority) + " · resposta " + esc(p.resp) + " min · resolução " + esc(p.res) + ' min <button class="link" data-delpol="' + esc(p.id) + '">remover</button></li>'; }).join("") + "</ul>" +
+      '<form class="it-inlf" id="polF"><input name="name" maxlength="40" placeholder="Nome (ex.: Ouro)" required>' + areaSelect("area", "", false) + '<select name="service">' + opt("", "Todos", "") + svcs.map(function (x) { return opt(x.id, x.name, ""); }).join("") + '</select><select name="priority">' + ["P1", "P2", "P3", "P4"].map(function (p) { return opt(p, p, "P1"); }).join("") + '</select><input name="resp" type="number" min="1" placeholder="resp. (min)" required><input name="res" type="number" min="1" placeholder="resol. (min)" required><button class="pl-btn sm">Adicionar</button></form></section>' +
 
-      '<section class="it-scard"><h3>Autoridade de mudança</h3><form class="pl-form" id="cabF"><div class="pl-2"><label>CAB (mudanças normais)' + multi("normal", cab.normal) + "</label><label>Autoridade emergencial (ECAB)" + multi("emergency", cab.emergency) + '</label></div><div class="pl-row-end"><button class="pl-btn primary sm">Salvar</button></div></form></section>' +
+      '<section class="it-scard" data-sec="change"><h3>Autoridade de mudança</h3><form class="pl-form" id="cabF"><div class="pl-2"><label>CAB (mudanças normais)' + multi("normal", cab.normal) + "</label><label>Autoridade emergencial (ECAB)" + multi("emergency", cab.emergency) + '</label></div><div class="pl-row-end"><button class="pl-btn primary sm">Salvar</button></div></form></section>' +
 
-      '<section class="it-scard"><h3>Workspaces conectados</h3><p class="muted small">Membros dos workspaces conectados podem abrir chamados como solicitantes, e a central aparece como atalho no workspace. Conectar exige ser dono do workspace.</p><div id="wsConn" class="it-pick"><p class="muted small">Carregando…</p></div></section>' +
-      '<section class="it-scard"><h3>Planejamentos conectados</h3><p class="muted small">Problemas, mudanças e melhorias podem virar itens destes planejamentos; mudanças aprovadas aparecem como marcos no roadmap.</p><div id="plConn" class="it-pick"><p class="muted small">Carregando…</p></div></section>' +
-      (isAdm || wsInfo.owner === MEK ? '<section class="it-scard danger"><h3>Excluir central</h3><p class="muted small">Apaga todos os registros, catálogo, base de conhecimento e CMDB desta central.</p><button class="pl-btn danger" id="delC">' + IC("trash", 14) + " Excluir central</button></section>" : "") +
-      "</div>";
+      socSlaSection() + excelSection() + areasSection() + domainsSection() + mailSection() +
+      '<section class="it-scard" data-sec="conn"><h3>Workspaces conectados</h3><p class="muted small">Membros dos workspaces conectados podem abrir chamados como solicitantes, e a central aparece como atalho no workspace. Conectar exige ser dono do workspace.</p><div id="wsConn" class="it-pick"><p class="muted small">Carregando…</p></div></section>' +
+      '<section class="it-scard" data-sec="conn"><h3>Planejamentos conectados</h3><p class="muted small">Problemas, mudanças e melhorias podem virar itens destes planejamentos; mudanças aprovadas aparecem como marcos no roadmap.</p><div id="plConn" class="it-pick"><p class="muted small">Carregando…</p></div></section>' +
+      (isAdm || wsInfo.owner === MEK ? '<section class="it-scard danger" data-sec="geral"><h3>Excluir central</h3><p class="muted small">Apaga todos os registros, catálogo, base de conhecimento e CMDB desta central.</p><button class="pl-btn danger" id="delC">' + IC("trash", 14) + " Excluir central</button></section>" : "") +
+      "</div></div>";
+    el.querySelectorAll(".it-set > section").forEach(function (x) { x.hidden = x.dataset.sec !== cur; });
+    el.querySelectorAll("[data-adm]").forEach(function (b) { b.onclick = function () { filter.adm = b.dataset.adm; renderView(); }; });
+    const onb = el.querySelector(".it-admnav .on"); if (onb && window.innerWidth <= 760 && onb.scrollIntoView) onb.scrollIntoView({ block: "nearest", inline: "center" });
+    bindAdminExtras(el);
 
     const sg = el.querySelector("#sgF"); sg.onsubmit = function (e) {
       e.preventDefault(); const u = {};
@@ -1486,7 +1775,7 @@
       const u = {}; u["sla/defaults"] = d; u["settings/calendar"] = { mode: sf.mode.value, start: sf.start.value || "08:00", end: sf.end.value || "18:00", days: days.length ? days : [1, 2, 3, 4, 5], tz: -180 };
       db.ref("itsm/" + ID + "/data").update(u).then(function () { toast("SLAs salvos (valem para os novos chamados e mudanças de prioridade)"); }, fail);
     };
-    const pf = el.querySelector("#polF"); pf.onsubmit = function (e) { e.preventDefault(); db.ref("itsm/" + ID + "/data/sla/policies").push({ name: pf.name.value.trim(), service: pf.service.value || null, priority: pf.priority.value, resp: Number(pf.resp.value), res: Number(pf.res.value) }).catch(fail); };
+    const pf = el.querySelector("#polF"); pf.onsubmit = function (e) { e.preventDefault(); db.ref("itsm/" + ID + "/data/sla/policies").push({ name: pf.name.value.trim(), service: pf.service.value || null, area: pf.area ? pf.area.value || null : null, priority: pf.priority.value, resp: Number(pf.resp.value), res: Number(pf.res.value) }).catch(fail); };
     el.querySelectorAll("[data-delpol]").forEach(function (b) { b.onclick = function () { db.ref("itsm/" + ID + "/data/sla/policies/" + b.dataset.delpol).remove().catch(fail); }; });
     const cf = el.querySelector("#cabF"); cf.onsubmit = function (e) { e.preventDefault(); const pick = function (s3) { const o = {}; Array.prototype.forEach.call(s3.selectedOptions, function (x) { o[x.value] = true; }); return Object.keys(o).length ? o : null; }; db.ref("itsm/" + ID + "/data/settings/cab").set({ normal: pick(cf.normal), emergency: pick(cf.emergency) }).then(function () { toast("Autoridade de mudança salva"); }, fail); };
     const dc = el.querySelector("#delC"); if (dc) dc.onclick = deleteCentral;
