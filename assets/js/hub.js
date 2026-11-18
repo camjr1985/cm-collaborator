@@ -27,15 +27,15 @@
 
   /* ---------------- pieces ---------------- */
   /* "Start something new": one picker for every module – module tabs, then area, then the area's templates */
-  const MODTAB = [["collab", "Collaboration", "Colaboração"], ["planning", "Planning", "Planejamento"], ["itsm", "ITSM", "ITSM"], ["game", "Business Game", "Business Game"]];
+  const MODTAB = [["collab", "Collaboration", "Colaboração"], ["planning", "Planning", "Planejamento"], ["itsm", "ITSM", "ITSM"], ["game", "Business Game", "Business Game"], ["sst", "Occupational health", "Saúde Ocupacional"]];
   function startStrip(canCreate, opts) {
     if (!canCreate) return "";
-    const o = opts || {}, mods = MODTAB.filter(function (m) { return m[0] === "collab" || (m[0] === "planning" ? o.plan : m[0] === "itsm" ? o.itsm && window.ITSM : o.game && window.CMGameEngine); });
+    const o = opts || {}, mods = MODTAB.filter(function (m) { return m[0] === "collab" || (m[0] === "planning" ? o.plan : m[0] === "itsm" ? o.itsm && window.ITSM : m[0] === "sst" ? o.sst : o.game && window.CMGameEngine); });
     let cur = ""; try { cur = localStorage.getItem("cm:startMod") || ""; } catch (e) {}
     if (!mods.some(function (m) { return m[0] === cur; })) cur = "collab";
     return '<section class="hub-sec start-sec"><div class="hub-sec-head"><h2>Start something new</h2><span class="muted small">' + esc(LL("Choose the module and the area, then the template – everything stays editable.", "Escolha o módulo e a área, depois o template – tudo continua editável.")) + "</span></div>" +
       (mods.length > 1 ? '<div class="st-mods no-i18n" role="tablist">' + mods.map(function (m) { return '<button role="tab" data-smod="' + m[0] + '"' + (m[0] === cur ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + ">" + (window.CMIcon3D ? window.CMIcon3D(m[0] === "collab" ? "board" : m[0], 26, m[0]) : "") + "<span>" + esc(LL(m[1], m[2])) + "</span></button>"; }).join("") + "</div>" : "") +
-      mods.map(function (m) { return '<div class="st-pane" data-spane="' + m[0] + '"' + (m[0] === cur ? "" : " hidden") + ">" + (m[0] === "collab" ? collabPick() : m[0] === "planning" ? planPick() : m[0] === "itsm" ? itsmPick() : gamePick()) + "</div>"; }).join("") + "</section>";
+      mods.map(function (m) { return '<div class="st-pane" data-spane="' + m[0] + '"' + (m[0] === cur ? "" : " hidden") + ">" + (m[0] === "collab" ? collabPick() : m[0] === "planning" ? planPick() : m[0] === "itsm" ? itsmPick() : m[0] === "sst" ? sstPick() : gamePick()) + "</div>"; }).join("") + "</section>";
   }
   function areaList(key, ar, cur) {
     return '<div class="tpl-areas no-i18n" role="tablist" aria-label="' + esc(LL("Areas", "Áreas")) + '">' + ar.map(function (a) {
@@ -53,9 +53,9 @@
   }
   function planPick() {
     const M = window.PLAN_METHODS || {}, AR = window.PLAN_AREAS || {}, AP = window.PLAN_AREA_PLANS || [], W = window.PLAN_WORKFLOWS ? window.PLAN_WORKFLOWS() : {};
-    const ar = (window.PLAN_AREA_ORDER || []).map(function (k) { return { id: k, name: (AR[k] || {}).name || k, n: AP.filter(function (p) { return p.area === k; }).length }; }).filter(function (a) { return a.n; })
+    const ar = (window.PLAN_AREA_ORDER || []).filter(function (k) { return k !== "ohs" && k !== "she"; }).map(function (k) { return { id: k, name: (AR[k] || {}).name || k, n: AP.filter(function (p) { return p.area === k; }).length }; }).filter(function (a) { return a.n; })
       .concat([{ id: "_methods", name: LL("Free methods", "Métodos livres"), n: (window.PLAN_ORDER || []).length }]);
-    const cur = storedArea("cm:planArea", ar, "ohs");
+    const cur = storedArea("cm:planArea", ar, "health");
     return '<div class="tpl-pick">' + areaList("parea", ar, cur) + '<div class="tpl-strip">' +
       AP.map(function (p) { const m = M[p.method] || {}; return '<button class="tpl-tile plan-tile" data-newplant="' + p.id + '" data-cat="' + p.area + '"' + (p.area === cur ? "" : " hidden") + '><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(p.method) : "") + '</span><b class="no-i18n">' + esc(p.name) + '</b><small class="muted no-i18n">' + esc(m.name || "") + (W[p.workflow] ? " · " + esc(W[p.workflow].name) : "") + "</small></button>"; }).join("") +
       (window.PLAN_ORDER || []).map(function (k) { const m = M[k]; return '<button class="tpl-tile plan-tile" data-newplanm="' + k + '" data-cat="_methods"' + (cur === "_methods" ? "" : " hidden") + '><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(k) : "") + '</span><b class="no-i18n">' + (window.CMIcon3D ? window.CMIcon3D(m.icon, 24, k) : "") + " " + esc(m.name) + "</b></button>"; }).join("") +
@@ -70,6 +70,16 @@
       return '<div class="mp-pane" data-cat="' + k + '"' + (k === cur ? "" : " hidden") + '><div class="mp-head">' + (window.CMIcon3D ? window.CMIcon3D(t.icon || "itsm", 40, "violet") : "") + '<div><b class="no-i18n">' + esc(LL("Service centre – ", "Central de serviços – ") + t.name) + '</b><span class="muted small no-i18n">' + Object.keys(t.groups).length + " " + esc(LL("support groups", "grupos de suporte")) + " · " + t.services.length + " " + esc(LL("services", "serviços")) + " · " + t.offerings.length + " " + esc(LL("catalogue offerings", "ofertas no catálogo")) + (t.soc ? " · SLA 24×7" : "") + '</span></div><button class="btn primary sm" data-newitsma="' + k + '">' + esc(LL("Create with this area", "Criar com esta área")) + "</button></div>" +
         '<div class="mp-grid">' + t.offerings.map(function (o) { return '<div class="mp-item"><span class="mp-k" data-k="' + esc(o[1]) + '">' + esc(KIND[o[1]] || o[1]) + '</span><b class="no-i18n">' + esc(o[0]) + '</b><span class="muted small no-i18n">' + esc(o[3] || "") + "</span></div>"; }).join("") + "</div></div>";
     }).join("") + "</div></div>";
+  }
+  /* Saúde Ocupacional (separate module): areas = occupational health, work safety, SHE – each with its planning templates + the SST centre */
+  function sstPick() {
+    const AP = (window.PLAN_AREA_PLANS || []).filter(function (p) { return p.area === "ohs" || p.area === "she"; }), sub = function (p) { return p.sub || (p.area === "she" ? "she" : "health"); };
+    const ar = [["health", LL("Occupational health", "Saúde ocupacional")], ["safety", LL("Work safety", "Segurança do trabalho")], ["she", LL("SHE – environment", "SHE – meio ambiente")]].map(function (x) { return { id: x[0], name: x[1], n: AP.filter(function (p) { return sub(p) === x[0]; }).length }; }).concat([{ id: "_centre", name: LL("SST centre (records)", "Central SST (ocorrências)"), n: 11 }]);
+    const cur = storedArea("cm:sstArea", ar, "health");
+    return '<div class="tpl-pick">' + areaList("sarea", ar, cur) + '<div class="tpl-strip">' +
+      AP.map(function (p) { return '<button class="tpl-tile plan-tile" data-newplant="' + p.id + '" data-sst="1" data-cat="' + sub(p) + '"' + (sub(p) === cur ? "" : " hidden") + '><span class="tpl-pv">' + (window.CMPlanPreview ? window.CMPlanPreview(p.method) : "") + '</span><b class="no-i18n">' + esc(p.name) + '</b><small class="muted no-i18n">' + esc(p.desc || "") + "</small></button>"; }).join("") +
+      '<div class="mp-pane" data-cat="_centre"' + (cur === "_centre" ? "" : " hidden") + '><div class="mp-head">' + (window.CMIcon3D ? window.CMIcon3D("sst", 40, "sst") : "") + '<div><b class="no-i18n">' + esc(LL("SST centre", "Central SST")) + '</b><span class="muted small no-i18n">' + esc(LL("Accidents and CAT, near misses, PPE, occupational exams, absences, inspections, environmental incidents and action plans – with FR/SR. Separate from the IT service desk.", "Acidentes e CAT, quase-acidentes, EPI, exames ocupacionais, afastamentos, inspeções, incidentes ambientais e planos de ação – com TF/TG. Separada da central de TI.")) + '</span></div><button class="btn primary sm" data-opensst="1">' + esc(LL("Open the module", "Abrir o módulo")) + "</button></div></div>" +
+      "</div></div>";
   }
   /* Business Game: the area is the market case; the institution then parametrises the project/game (rounds, rules, currency, brand) */
   const GAME_AREA_TXT = {
@@ -106,7 +116,7 @@
         };
       });
     };
-    pick("tcat", "cm:tplArea", ".tpl-tile"); pick("parea", "cm:planArea", ".tpl-tile"); pick("iarea", "cm:itsmArea", ".mp-pane"); pick("garea", "cm:gameArea", ".mp-pane");
+    pick("tcat", "cm:tplArea", ".tpl-tile"); pick("parea", "cm:planArea", ".tpl-tile"); pick("iarea", "cm:itsmArea", ".mp-pane"); pick("garea", "cm:gameArea", ".mp-pane"); pick("sarea", "cm:sstArea", ".tpl-tile, .mp-pane");
     el.querySelectorAll("[data-smod]").forEach(function (b) {
       b.onclick = function () {
         el.querySelectorAll("[data-smod]").forEach(function (x) { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
@@ -116,7 +126,8 @@
     });
     const own = Object.keys(wss || {}).filter(function (w) { return PLAN === "admin" || isOwner(w, wss[w]); });
     const wsFor = function (mod) { return own.filter(function (w) { const m = ((wss[w] || {}).info || {}).modules; return !Array.isArray(m) || m.indexOf(mod) >= 0; })[0] || own[0] || ""; };
-    el.querySelectorAll("[data-newplant]").forEach(function (b) { b.onclick = function () { planDialog(wss, wsFor("planning"), null, b.dataset.newplant); }; });
+    el.querySelectorAll("[data-newplant]").forEach(function (b) { b.onclick = function () { planDialog(wss, b.dataset.sst ? wsFor("sst") : wsFor("planning"), null, b.dataset.newplant); }; });
+    el.querySelectorAll("[data-opensst]").forEach(function (b) { b.onclick = function () { const w = wsFor("sst"); if (!window.CMModules) { location.href = "../sst/?ws=" + encodeURIComponent(w); return; } window.CMModules.has("sst", w).then(function (ok) { if (ok) location.href = "../sst/?ws=" + encodeURIComponent(w); else window.CMModules.contact("sst", w); }); }; });
     el.querySelectorAll("[data-newitsma]").forEach(function (b) { b.onclick = function () { location.href = "../itsm/?new=" + encodeURIComponent(wsFor("itsm")) + "&area=" + encodeURIComponent(b.dataset.newitsma); }; });
     el.querySelectorAll("[data-newgamea]").forEach(function (b) { b.onclick = function () { location.href = "../game/?new=1&ws=" + encodeURIComponent(wsFor("game")) + "&scenario=" + encodeURIComponent(b.dataset.newgamea); }; });
   }
@@ -158,7 +169,7 @@
   }
   /* Business Game (add-on module) cards */
   // a workspace can restrict which modules make sense in it (e.g. Occupational health / SHE: Planning + Indicators + ITSM, no Business Game)
-  function wsMods(w) { const m = w && w.info && w.info.modules; return Array.isArray(m) ? m : (m && typeof m === "object" ? Object.keys(m).map(function (k) { return m[k]; }) : ["collab", "planning", "itsm", "game"]); }
+  function wsMods(w) { const m = w && w.info && w.info.modules; return Array.isArray(m) ? m : (m && typeof m === "object" ? Object.keys(m).map(function (k) { return m[k]; }) : ["collab", "planning", "itsm", "game", "sst"]); }
   function gamePreview() {
     return '<svg viewBox="0 0 160 100" aria-hidden="true"><rect width="160" height="100" fill="#0e1a33"/><g fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M16 78 L46 64 L76 70 L106 44 L144 30" stroke="#2cc4b3"/><path d="M16 84 L46 76 L76 58 L106 62 L144 52" stroke="#e8c468"/><path d="M16 88 L46 86 L76 80 L106 76 L144 70" stroke="#eb6834"/></g>' +
@@ -211,10 +222,14 @@
   function planDialog(wss, presetWs, presetMethod, presetTpl) {
     const canIn = function (id) { return PLAN === "admin" || isOwner(id, wss[id]); };
     const wsIds = Object.keys(wss || {}).filter(canIn);
-    const M = window.PLAN_METHODS, order = window.PLAN_ORDER, AR = window.PLAN_AREAS || {}, AO = window.PLAN_AREA_ORDER || [], AP = window.PLAN_AREA_PLANS || [], W = window.PLAN_WORKFLOWS ? window.PLAN_WORKFLOWS() : {};
+    const M = window.PLAN_METHODS, order = window.PLAN_ORDER, AR = window.PLAN_AREAS || {}, AP = window.PLAN_AREA_PLANS || [], W = window.PLAN_WORKFLOWS ? window.PLAN_WORKFLOWS() : {};
     const ic = function (n, z) { return window.CMIcon ? window.CMIcon(n, z || 22) : ""; };
     const wsArea = function (id) { return ((wss[id] || {}).info || {}).area || "general"; };
     let area = wsArea(presetWs || wsIds[0]);
+    /* Occupational health and SHE templates belong to the Saúde Ocupacional module: shown only when coming from it (or in an SST workspace) */
+    const SSTA = ["ohs", "she"], pTpl = presetTpl && AP.find(function (p) { return p.id === presetTpl; }), sstMode = pTpl ? SSTA.indexOf(pTpl.area) >= 0 : SSTA.indexOf(area) >= 0;
+    const AO = (window.PLAN_AREA_ORDER || []).filter(function (k) { return sstMode ? SSTA.indexOf(k) >= 0 : SSTA.indexOf(k) < 0; });
+    if (AO.indexOf(area) < 0) area = AO[0] || "general";
     document.body.insertAdjacentHTML("beforeend", '<div class="modal-lite" id="planDlg"><div class="card plan-new"><h2>' + esc(LL("New planning", "Novo planejamento")) + '</h2><p class="muted small">' + esc(LL("Choose your area and a ready-made model – or a free method. Columns and workflow can be changed later.", "Escolha a sua área e um modelo pronto – ou um método livre. Colunas e fluxo podem mudar depois.")) + '</p><form id="planForm">' +
       '<div class="pn-cols"><div class="pa-chips pa-list no-i18n" role="radiogroup" aria-label="' + esc(LL("Area", "Área")) + '">' + AO.map(function (k) { return '<button type="button" data-area="' + k + '">' + esc(AR[k].name) + "</button>"; }).join("") + "</div>" +
       '<div class="pn-right"><div id="paTpl"></div>' +
@@ -269,7 +284,7 @@
     const np = Object.keys(pls).length;
     const name = (w.info || {}).name || id;
     return '<section class="hub-sec ws-sec"><div class="hub-sec-head"><h2 class="no-i18n">' + esc(name) + '</h2><span class="muted small">' + ids.length + " " + t(ids.length === 1 ? "board" : "boards") + (np ? " · " + np + " " + esc(LL(np === 1 ? "planning" : "plannings", np === 1 ? "planejamento" : "planejamentos")) : "") + (ng ? " · " + ng + " " + esc(LL(ng === 1 ? "game" : "games", ng === 1 ? "partida" : "partidas")) : "") + "</span>" +
-      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button>' + (wsMods(w).indexOf("game") < 0 ? "" : '<a class="btn sm ghost" data-newgame="' + id + '" href="../game/?new=1&ws=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("game", 14) : "") + " " + esc(LL("New game", "Nova partida")) + (window.CMNewBadge ? window.CMNewBadge("game") : "") + '</a>') + '<a class="btn sm ghost" data-newitsm="' + id + '" href="../itsm/?new=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("itsm", 14) : "") + " " + esc(LL("New service centre", "Nova central ITSM")) + (window.CMNewBadge ? window.CMNewBadge("itsm") : "") + '</a><a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
+      (admin ? '<button class="btn sm ghost" data-newin="' + id + '">+ <span>New board</span></button><button class="btn sm ghost" data-newplan="' + id + '">' + (window.CMIcon ? window.CMIcon("planning", 14) : "") + " " + esc(LL("New planning", "Novo planejamento")) + (window.CMNewBadge ? window.CMNewBadge("planning") : "") + '</button>' + (wsMods(w).indexOf("game") < 0 ? "" : '<a class="btn sm ghost" data-newgame="' + id + '" href="../game/?new=1&ws=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("game", 14) : "") + " " + esc(LL("New game", "Nova partida")) + (window.CMNewBadge ? window.CMNewBadge("game") : "") + '</a>') + (wsMods(w).indexOf("itsm") < 0 ? "" : '<a class="btn sm ghost" data-newitsm="' + id + '" href="../itsm/?new=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("itsm", 14) : "") + " " + esc(LL("New service centre", "Nova central ITSM")) + (window.CMNewBadge ? window.CMNewBadge("itsm") : "") + '</a>') + (wsMods(w).indexOf("sst") < 0 || !/^(ohs|she)$/.test((w.info || {}).area || "") && !Array.isArray((w.info || {}).modules) ? "" : '<a class="btn sm ghost" data-opensstws="' + id + '" href="../sst/?ws=' + encodeURIComponent(id) + '">' + (window.CMIcon ? window.CMIcon("sst", 14) : "") + " " + esc(LL("Occupational health", "Saúde Ocupacional")) + (window.CMNewBadge ? window.CMNewBadge("sst") : "") + "</a>") + '<a class="btn sm ghost" href="../admin/#ws-' + id + '">' + (window.CMIcon ? window.CMIcon("people", 14) : "") + ' <span>Manage people</span></a>' : "") +
       (isOwner(id, w) ? '<span class="own-tag">' + t("Owner") + "</span>" : "") + ((w.info || {}).area && window.PLAN_AREAS && window.PLAN_AREAS[w.info.area] && w.info.area !== "general" ? '<span class="area-tag no-i18n">' + esc(window.PLAN_AREAS[w.info.area].name) + "</span>" : "") + "</div>" +
       (all.length ? '<div class="board-grid">' + all.map(function (x) { return x.k === "b" ? boardCard(x.id, boards[x.id], tplName(boards[x.id].template)) : x.k === "g" ? gameCard(x.id, gms[x.id]) : x.k === "i" ? itsmCard(x.id, its[x.id]) : planCard(x.id, pls[x.id]); }).join("") + "</div>"
         : '<div class="card empty-big"><p class="muted">' + t(admin ? "No boards in this workspace yet. Create one with “New board”." : "No boards in this workspace yet.") + "</p></div>") + "</section>";
@@ -471,7 +486,7 @@
           const bs = Object.keys(wss[firstBeta.id].boards || {}).sort();
           FIRST_BOARD = bs.filter(function (b) { return /comece|start|^1-/.test(b); })[0] || bs[0] || null;
         }
-        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true, (function () { const own = Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }); return { plan: own || !entries.length, itsm: own, game: own }; })()) + recentRows(allowed) + '<div id="gameSlot"></div>' +
+        el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true, (function () { const own = Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }); return { plan: own || !entries.length, itsm: own, game: own, sst: own }; })()) + recentRows(allowed) + '<div id="gameSlot"></div>' +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
             : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
         bindFeedback();
@@ -488,6 +503,12 @@
         document.getElementById("soBtn").onclick = A.signOut;
         el.querySelectorAll("[data-new]").forEach(function (b) { b.onclick = function () { createDialog(b.dataset.new, wss); }; });
         bindChips(wss);
+        (function () { /* ?newplan=<template>&ws=<ws> – opened from the Saúde Ocupacional module */
+          const qs = new URLSearchParams(location.search), tp = qs.get("newplan");
+          if (!tp) return;
+          if (history.replaceState) history.replaceState(null, "", location.pathname + location.hash);
+          setTimeout(function () { planDialog(wss, qs.get("ws") || "", null, tp); }, 50);
+        })();
         el.querySelectorAll("[data-newplan]").forEach(function (b) { b.onclick = function () { planDialog(wss, b.dataset.newplan); }; });
         el.querySelectorAll("[data-newplanm]").forEach(function (b) { b.onclick = function () { const strip = el.querySelector(".tpl-strip"); planDialog(wss, strip && strip.dataset.ws, b.dataset.newplanm); }; });
         el.querySelectorAll("[data-newin]").forEach(function (b) {

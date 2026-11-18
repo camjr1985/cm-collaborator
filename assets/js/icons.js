@@ -58,6 +58,7 @@
     lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
     layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
     trend: '<path d="M3.5 17.5 9 12l3.5 3.5 8-8"/><path d="M3.5 21h17"/>',
+    sst: '<path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="M12 8.5v6M9 11.5h6"/>',
     game: '<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.3" r="1"/><circle cx="17.6" cy="13.7" r="1"/><path d="M9 7l1.2-3h3.6L15 7"/>'
   };
   window.CMIcon = function (name, size, cls) {
@@ -66,7 +67,7 @@
   };
   /* 3D "clay" icon tile: gradient body, top highlight, bottom bevel and a soft coloured shadow.
      tone: planning | itsm | game | collab | roadmap | gantt | sprint | kanban | teal | gold | violet | blue | coral */
-  const TONE3D = { planning: "blue", itsm: "violet", game: "gold", collab: "teal", roadmap: "coral", hybrid: "coral", gantt: "blue", waterfall: "blue", sprint: "teal", scrum: "teal", kanban: "violet" };
+  const TONE3D = { planning: "blue", itsm: "violet", game: "gold", sst: "green", collab: "teal", roadmap: "coral", hybrid: "coral", gantt: "blue", waterfall: "blue", sprint: "teal", scrum: "teal", kanban: "violet" };
   window.CMIcon3D = function (name, size, tone) {
     const s = size || 36, t = TONE3D[tone || name] || tone || "blue";
     return '<span class="ic3d" data-t="' + t + '" style="--s:' + s + 'px" aria-hidden="true">' + window.CMIcon(name, Math.round(s * 0.56)) + "</span>";

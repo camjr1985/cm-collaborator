@@ -109,6 +109,7 @@ code, kbd, pre { font-family: var(--font-mono); }
 .ic3d[data-t="teal"]   { --a: #3fe0cc; --b: #0b8f80; --sh: 11,143,128; }
 .ic3d[data-t="violet"] { --a: #a98bff; --b: #5a35c4; --sh: 90,53,196; }
 .ic3d[data-t="gold"]   { --a: #ffd77a; --b: #c98a0b; --sh: 201,138,11; color: #3b2a00; }
+.ic3d[data-t="green"]  { --a: #5fd38d; --b: #12804a; --sh: 18,128,74; }
 .ic3d[data-t="coral"]  { --a: #ff9a76; --b: #d9482b; --sh: 217,72,43; }
 .ic3d[data-t="blue"]   { --a: #6f9bff; --b: #2f55d4; --sh: 47,85,212; }
 :is(a, button, label):hover > * > .ic3d, :is(a, button, label):hover .ic3d { transform: perspective(120px) rotateX(0deg) translateY(-1px); }
@@ -118,3 +119,5 @@ code, kbd, pre { font-family: var(--font-mono); }
 .pv-tag > svg { width: 12px !important; height: 12px !important; }
 .plan-tile b { display: inline-flex; align-items: center; gap: 8px; }
 .board-card .tpl-pv { position: relative; }
+.modsw-ic[data-m="sst"], .modsw-hic[data-m="sst"] { background: rgba(27,175,122,.14); color: #12804a; }
+.mod-tile-ic[data-m="sst"] { background: rgba(27,175,122,.18); color: #5fd38d; }

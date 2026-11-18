@@ -305,6 +305,7 @@
     const base = {};
     base["entitlements/users/" + key(cust) + "/itsm"] = { on: true, until: null, plan: "paid", by: admin, at: nowTs };
     base["entitlements/users/" + key(cust) + "/game"] = { on: true, until: null, plan: "paid", by: admin, at: nowTs };
+    base["entitlements/users/" + key(cust) + "/sst"] = { on: true, until: null, plan: "paid", by: admin, at: nowTs };
     base["plans/" + key(cust)] = { email: cust, plan: "enterprise", seats: 200, until: null, by: admin, at: nowTs, source: "admin" };
     SPACES.forEach(function (sp) {
       base["workspaces/" + sp.id + "/info"] = { name: sp.name, owner: key(cust), created: nowTs, area: sp.area, demo: true };
@@ -314,7 +315,8 @@
       base["entitlements/ws/" + sp.id + "/itsm"] = { on: true, until: null, plan: "paid", pkg: "empresarial", by: admin, at: nowTs };
       // SST / SHE are Planning + Indicators (+ ITSM) areas – Business Game is for universities / market cases, never here
       base["entitlements/ws/" + sp.id + "/game"] = null;
-      base["workspaces/" + sp.id + "/info"].modules = ["collab", "planning", "itsm"];
+      base["workspaces/" + sp.id + "/info"].modules = ["collab", "planning", "sst"];
+      base["entitlements/ws/" + sp.id + "/sst"] = { on: true, until: null, plan: "paid", pkg: "sst", by: admin, at: nowTs };
     });
     return db.ref().update(base).then(function () {
       log.push("licences, plan, spaces");
@@ -330,7 +332,7 @@
           u["workspaces/" + sp.id + "/plannings/" + id] = { title: a.title, method: method, created: nowTs };
           return db.ref().update(u).then(function () { log.push("planning " + id); }, function (e) { log.push("planning " + id + " FAILED: " + e.message); });
         }); });
-        sp.centres.forEach(function (c0) { jobs.push(function () {
+        (sp.centres || []).filter(function () { return false; }).forEach(function (c0) { jobs.push(function () { // 18/11: SST/SHE moved to the Saúde Ocupacional module (no ITSM centre here)
           const c = c0.base ? Object.assign({}, CENTRES.find(function (x) { return x.id === c0.base; }), { id: c0.id, title: "TI · Central de serviços" }) : c0;
           const id = "demo-" + c.id, u = {}, cen = buildCentre(c, cust, admin, nowTs, sp.id);
           cen.info.owner = key(cust); cen.info.members = {}; cen.info.members[key(cust)] = { email: cust, name: "Digital Agile", role: "manager" };
@@ -342,6 +344,60 @@
       });
       return jobs.reduce(function (p, j) { return p.then(j); }, Promise.resolve());
     }).then(function () { return log; });
+  };
+
+  /* 18/11 – Saúde Ocupacional becomes a separate module (licence "sst"): move the two demo spaces out of ITSM.
+     Removes the demo ITSM centres of these spaces (demo-sst, demo-she), sets modules = collab/planning/sst, licenses "sst"
+     (workspace + the validation account) and seeds sample records in sst/<ws>. Run from /admin/ as platform admin. */
+  const SST_RECS = {
+    "demo-saude-ocupacional": [
+      ["acc", "Corte na mão ao operar a prensa", "analysis", 18, { severity: "med", leave: true, daysLost: 5, place: "Produção – linha 2", person: "Operador de prensa", personRole: "Operador", cat: { num: "2026.11.00123-4", date: "" } }],
+      ["acc", "Queda de escada no almoxarifado", "action", 9, { severity: "low", leave: false, place: "Almoxarifado", personRole: "Auxiliar de almoxarifado" }],
+      ["commute", "Acidente de moto no trajeto para a fábrica", "new", 2, { severity: "high", leave: true, daysLost: 15, personRole: "Técnico de manutenção" }],
+      ["near", "Empilhadeira quase atinge pedestre no corredor C", "analysis", 4, { severity: "high", place: "Expedição" }],
+      ["unsafe", "Proteção da serra fita removida", "doing", 6, { severity: "med", place: "Marcenaria" }],
+      ["exam", "Exames periódicos – equipe de produção (40 pessoas)", "doing", 12, { exam: { kind: "periodic", date: "", result: "" }, place: "Ambulatório" }],
+      ["exam", "Exame de retorno ao trabalho – manutenção", "new", 1, { exam: { kind: "return", date: "", result: "" }, personRole: "Mecânico" }],
+      ["leave", "Afastamento acima de 15 dias – acompanhamento", "doing", 20, { daysLost: 22, personRole: "Analista administrativo" }],
+      ["epi", "Botinas e luvas para novos operadores", "new", 1, { epi: { item: "Botina de segurança + luva nitrílica", qty: 12, size: "38 a 44" } }],
+      ["improve", "Ginástica laboral no turno da noite", "done", 30, { place: "Produção" }]
+    ],
+    "demo-she": [
+      ["env", "Vazamento de óleo na área de tancagem", "action", 5, { severity: "high", place: "Tancagem" }],
+      ["env", "Resíduo classe I armazenado fora da baia", "doing", 8, { severity: "med", place: "Central de resíduos" }],
+      ["near", "Empilhadeira sem sinal sonoro de ré", "new", 3, { severity: "med", place: "Expedição" }],
+      ["inspection", "Extintores vencidos no prédio B (NR-23)", "action", 10, { place: "Prédio B" }],
+      ["inspection", "Auditoria interna ISO 14001 – 3 não conformidades", "analysis", 14, { place: "Unidade Campinas" }],
+      ["acc", "Queimadura leve na caldeira (trabalho a quente)", "done", 40, { severity: "low", leave: false, place: "Utilidades", cat: { num: "2026.10.00981-2", date: "" } }],
+      ["epi", "Cintos paraquedista para trabalho em altura", "doing", 6, { epi: { item: "Cinto paraquedista + talabarte duplo", qty: 6, size: "M/G" } }],
+      ["improve", "Coleta seletiva nos refeitórios", "done", 25, { place: "Refeitórios" }]
+    ]
+  };
+  window.CMDemoSST = function (opt) {
+    opt = opt || {};
+    const db = window.firebase.database(), me = window.firebase.auth().currentUser, admin = me.email, cust = (opt.email || "").toLowerCase(), nowTs = Date.now(), D = 864e5;
+    if (!cust) return Promise.reject(new Error("email required"));
+    const u = {};
+    u["entitlements/users/" + key(cust) + "/sst"] = { on: true, until: null, plan: "paid", by: admin, at: nowTs };
+    SPACES.forEach(function (sp) {
+      u["workspaces/" + sp.id + "/info/modules"] = ["collab", "planning", "sst"];
+      u["entitlements/ws/" + sp.id + "/sst"] = { on: true, until: null, plan: "paid", pkg: "sst", by: admin, at: nowTs };
+      (sp.centres || []).forEach(function (c) {
+        const id = "demo-" + c.id;
+        u["itsm/" + id] = null; u["workspaces/" + sp.id + "/itsm/" + id] = null; u["userItsm/" + key(cust) + "/" + id] = null; u["userItsm/" + key(admin) + "/" + id] = null;
+      });
+      const recs = {}, rs = SST_RECS[sp.id] || [];
+      rs.forEach(function (r, i) {
+        const when = nowTs - r[3] * D - (i * 3600e3), o = Object.assign({ key: "SST-" + String(i + 1).padStart(4, "0"), type: r[0], title: r[1], status: r[2], when: when, created: when, updated: nowTs, by: cust, owner: i % 2 ? admin : cust, due: when + (r[0] === "epi" || r[0] === "exam" || r[0] === "improve" ? 5 : 7) * D }, r[4]);
+        if (o.status === "done") o.closedAt = when + 4 * D;
+        if (r[0] === "acc" || r[0] === "env" || r[0] === "inspection") o.actions = { a1: { t: r[0] === "env" ? "Conter e limpar a área, descartar como resíduo classe I" : r[0] === "inspection" ? "Corrigir as não conformidades apontadas" : "Instalar proteção e treinar a equipe (DDS)", owner: admin, due: new Date(when + 10 * D).toISOString().slice(0, 10), at: when, by: cust, done: o.status === "done" || null } };
+        Object.keys(o).forEach(function (k) { if (o[k] === null || o[k] === "") delete o[k]; });
+        recs["r" + (i + 1)] = o;
+      });
+      const hht = {}; for (let m = 0; m < 12; m++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - m); hht[d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")] = sp.id === "demo-she" ? 38000 : 52000; }
+      u["sst/" + sp.id] = { settings: { places: sp.id === "demo-she" ? ["Tancagem", "Central de resíduos", "Expedição", "Utilidades", "Prédio B"] : ["Produção – linha 1", "Produção – linha 2", "Almoxarifado", "Expedição", "Marcenaria", "Ambulatório"], invDays: 7, reqDays: 5, hht: hht }, counter: rs.length, records: recs };
+    });
+    return db.ref().update(u).then(function () { return ["sst licences", "modules", "itsm demo centres removed", "sst records"]; });
   };
 
   window.CMDemoSeed = function (opt) {

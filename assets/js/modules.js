@@ -4,6 +4,7 @@
  * Add-on modules (sold separately, granted by the platform admin in Administração → Módulos e pacotes):
  *   itsm  – ITSM (ITIL 4 and 5) page /itsm/ (list) and /itsm/?id=
  *   game  – Business Game       page /game/?id=
+ *   sst   – Occupational health (Saúde Ocupacional, with SHE as a template area) page /sst/?ws=
  *
  * Data (only platform admins write – see database.rules.json):
  *   entitlements/ws/<wsId>/<mod>      = { on: true, until: ts|null, plan: "beta"|"paid"|"trial", pkg?: "empresarial"…, by, at }
@@ -29,13 +30,16 @@
     { id: "itsm", name: "ITSM", full: L("ITSM – service management (ITIL 4 and ITIL 5)", "ITSM – gestão de serviços (ITIL 4 e ITIL 5)"), icon: "itsm", path: "itsm/", area: "service",
       desc: L("Service desk, incidents, requests, problems, changes, SLAs and CMDB – connectable to Planning.", "Central de serviço, incidentes, requisições, problemas, mudanças, SLAs e CMDB – conectável ao Planning.") },
     { id: "game", name: "Business Game", full: L("Business Game – business simulation for education", "Business Game – simulação empresarial para educação"), icon: "game", path: "game/", area: "education",
-      desc: L("Round-based business simulation for classes, customizable per institution – connectable to Planning.", "Simulação empresarial por rodadas para turmas, customizável por instituição – conectável ao Planning.") }
+      desc: L("Round-based business simulation for classes, customizable per institution – connectable to Planning.", "Simulação empresarial por rodadas para turmas, customizável por instituição – conectável ao Planning.") },
+    { id: "sst", name: L("Occupational health", "Saúde Ocupacional"), full: L("Occupational health and SHE", "Saúde Ocupacional e SHE"), icon: "sst", path: "sst/", area: "ohs",
+      desc: L("Accidents, CAT, near misses, PPE, occupational exams, absences, environmental incidents, action plans, FR/SR indicators and SST/SHE planning templates – separate from the IT service desk.", "Acidentes, CAT, quase-acidentes, EPI, exames ocupacionais, afastamentos, incidentes ambientais, planos de ação, indicadores TF/TG e templates de planejamento de SST/SHE – separado da central de TI.") }
   ];
   const PACKAGES = [
     { id: "essencial", name: L("Essential", "Essencial"), mods: [], desc: L("Boards + Planning (core)", "Quadros + Planning (base)") },
     { id: "service", name: L("Service", "Serviços"), mods: ["itsm"], desc: L("Core + ITSM", "Base + ITSM") },
     { id: "educacao", name: L("Education", "Educação"), mods: ["game"], desc: L("Core + Business Game", "Base + Business Game") },
-    { id: "empresarial", name: L("Enterprise", "Empresarial"), mods: ["itsm", "game"], desc: L("Core + all add-on modules", "Base + todos os módulos adicionais") }
+    { id: "sst", name: L("Health and safety", "Saúde e segurança"), mods: ["sst"], desc: L("Core + Occupational health", "Base + Saúde Ocupacional") },
+    { id: "empresarial", name: L("Enterprise", "Empresarial"), mods: ["itsm", "game", "sst"], desc: L("Core + all add-on modules", "Base + todos os módulos adicionais") }
   ];
   function get(id) { return LIST.find(function (m) { return m.id === id; }) || null; }
   function active(g) { return !!(g && g.on && (!g.until || g.until > Date.now())); }
@@ -80,13 +84,14 @@
      Colaboração and Planejamento are always included; ITSM and Business Game open when licensed,
      otherwise they show the "contact the CM Collaborator administration" dialog. */
   const BASE = (function () { const sc = document.currentScript && document.currentScript.src; return sc ? sc.replace(/assets\/js\/modules\.js.*$/, "") : "../"; })();
-  const EMO = { collab: "🧩", planning: "🗺️", itsm: "🛠️", game: "🎲" };
+  const EMO = { collab: "🧩", planning: "🗺️", itsm: "🛠️", game: "🎲", sst: "⛑️" };
   function apps() {
     return [
       { id: "collab", name: L("Collaboration", "Colaboração"), desc: L("AI whiteboards, templates and live workshops", "Quadros colaborativos com IA, templates e dinâmicas ao vivo"), core: true, icon: "board", href: "workspaces/#colaboracao" },
       { id: "planning", name: L("Planning", "Planejamento"), desc: L("Roadmap, Waterfall, Scrum, Kanban, OKRs and reports", "Roadmap, Waterfall, Scrum, Kanban, OKRs e relatórios"), core: true, icon: "planning", href: "workspaces/#planejamento" },
       { id: "itsm", name: "ITSM", desc: L("Service management (ITIL 4)", "Gestão de serviços (ITIL 4)"), icon: "itsm", href: "itsm/" },
-      { id: "game", name: "Business Game", desc: L("Business simulation for education", "Simulação empresarial para educação"), icon: "game", href: "workspaces/#business-game" }
+      { id: "game", name: "Business Game", desc: L("Business simulation for education", "Simulação empresarial para educação"), icon: "game", href: "workspaces/#business-game" },
+      { id: "sst", name: L("Occupational health", "Saúde Ocupacional"), desc: L("Health, safety and SHE (environment)", "Saúde, segurança e SHE (meio ambiente)"), icon: "sst", href: "sst/" }
     ];
   }
   const pageOk = {};
@@ -117,6 +122,7 @@
     collab: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><rect x="6" y="7" width="4" height="4" rx=".8"/><rect x="12" y="7" width="6" height="2" rx=".8"/><path d="M12 12h4"/>',
     planning: '<path d="M4 4v16h16"/><rect x="7" y="6" width="8" height="3" rx="1"/><rect x="10" y="11" width="8" height="3" rx="1"/><path d="M15.5 17.5l1.5-1.5 1.5 1.5-1.5 1.5z"/>',
     itsm: '<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/><path d="M19 19c0 1.5-2 2.5-5 2.5"/>',
+    sst: '<path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="M12 8.5v6M9 11.5h6"/>',
     game: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8.5 20h7M10 17h4v3h-4z"/>'
   };
   function modIcon(id, size) { const p = MOD_SVG[id]; if (!p) return ""; const z = size || 18; return '<svg viewBox="0 0 24 24" width="' + z + '" height="' + z + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + "</svg>"; }
@@ -172,7 +178,7 @@
           if (!a.core && !acc.admin && !(acc[a.id] && acc[a.id].ok)) return contact(a.id, ((acc[a.id] || {}).ws || [])[0]);
           if (a.id === "itsm" && !avail.itsm) return soon(a.name);
           const ws = ((acc[a.id] || {}).ws || [])[0];
-          const url = BASE + a.href + (a.id === "itsm" && ws ? "?ws=" + encodeURIComponent(ws) : "");
+          const url = BASE + a.href + ((a.id === "itsm" || a.id === "sst") && ws ? "?ws=" + encodeURIComponent(ws) : "");
           if (location.href.split("#")[0] === url.split("#")[0] && url.indexOf("#") > 0) { location.hash = url.split("#")[1]; return; }
           location.href = url;
         }; });

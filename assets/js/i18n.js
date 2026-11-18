@@ -49,6 +49,16 @@
     return out;
   }
   const PT = {
+    "Occupational health": "Saúde Ocupacional",
+    "Manage health, safety and the environment (SHE) in one place, separate from the IT service desk.": "Gerencie saúde, segurança e meio ambiente (SHE) num só lugar, separado da central de TI.",
+    "Records with workflow and deadlines: accidents and CAT, near misses, PPE, exams and absences": "Registros com fluxo e prazos: acidentes e CAT, quase-acidentes, EPI, exames e afastamentos",
+    "SHE: environmental incidents, inspections and non-conformities": "SHE: incidentes ambientais, inspeções e não conformidades",
+    "Panel with days without accidents, frequency and severity rates": "Painel com dias sem acidente, taxas de frequência e gravidade",
+    "Templates: occupational health programme, safety committee, emergency plan, ISO 14001 and HSE goals": "Templates: PCMSO, CIPA, plano de emergência, ISO 14001 e metas de SSMA",
+    "Talk about occupational health": "Conversar sobre saúde ocupacional",
+    "Accidents and CAT, near misses, PPE, occupational exams, absences, inspections and environmental incidents (SHE) – with action plans, FR/SR indicators and planning templates.": "Acidentes e CAT, quase-acidentes, EPI, exames ocupacionais, afastamentos, inspeções e incidentes ambientais (SHE) – com planos de ação, indicadores TF/TG e templates de planejamento.",
+    "Add-on modules: ITSM, Business Game and Occupational health": "Módulos adicionais: ITSM, Business Game e Saúde Ocupacional",
+    "Base plan + ITSM + Business Game + Occupational health for the whole company, with onboarding and dedicated support.": "Plano base + ITSM + Business Game + Saúde Ocupacional para toda a empresa, com implantação e suporte dedicado.",
     // navigation / site
     "Home": "Início", "Mentoring": "Mentoria", "Open board": "Abrir quadro", "Open Mentoring": "Abrir Mentoria", "Open my workspaces": "Abrir meus workspaces", "Workspaces": "Workspaces",
     "Features": "Recursos", "How it works": "Como funciona", "Licensing": "Licenciamento", "Mentees": "Mentorados",
