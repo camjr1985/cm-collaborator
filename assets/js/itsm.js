@@ -242,6 +242,7 @@
       '<label class="chk"><input type="checkbox" name="seed" checked> Incluir exemplos: um artigo de conhecimento e itens de configuração (CMDB)</label>' +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>Cancelar</button><button class="pl-btn primary">Criar central</button></div></form>', function (w, close) {
       const f = w.querySelector("#ncF");
+      const qa = Q.get("area"); if (qa && f["ar_" + qa]) { Object.keys(I.AREA_TEMPLATES).forEach(function (k) { if (f["ar_" + k]) f["ar_" + k].checked = k === qa; }); if (!f.title.value) f.title.value = "Central de serviços – " + I.AREA_TEMPLATES[qa].name; } // area chosen on My boards
       f.onsubmit = function (e) {
         e.preventDefault();
         const title = f.title.value.trim(), ws = f.ws.value; if (!title) return;

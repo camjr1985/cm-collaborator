@@ -969,6 +969,7 @@
         '<p class="muted small">' + X("Você pode ajustar tudo depois em Configuração (moeda fictícia, parâmetros, marca, pesos).", "You can adjust everything later in Settings (fictional currency, parameters, brand, weights).", "Puedes ajustar todo después en Configuración.") + "</p>" +
         '<div class="gm-actions"><a class="gm-btn" href="../workspaces/">' + X("Cancelar", "Cancel", "Cancelar") + '</a><button class="gm-btn primary">' + X("Criar partida", "Create game", "Crear partida") + "</button></div></form></main>";
       const f = document.getElementById("newF");
+      const qsc = QS.get("scenario"); if (qsc && f.scen && [].some.call(f.scen.options, function (o) { return o.value === qsc; })) f.scen.value = qsc; // area chosen on My boards
       f.onsubmit = function (e) {
         e.preventDefault();
         const title = f.title.value.trim(); if (!title) return;
