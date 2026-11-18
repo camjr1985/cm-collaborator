@@ -79,7 +79,7 @@
     startup: ["Tech startup", "Startup de tecnologia", "Fast growth, R&D and funding decisions.", "Crescimento acelerado, P&D e decisões de financiamento."]
   };
   function gamePick() {
-    const E = window.CMGameEngine, X = window.CMGameAreas || {}, ks = Object.keys(E.SCENARIOS || {});
+    const E = window.CMGameEngine, X = window.CMGameAreas || {}, ks = Object.keys(window.CMGameAreas || E.SCENARIOS || {}); // project cases first (game-areas.js)
     const nm = function (k) { const a = X[k] || {}, t = GAME_AREA_TXT[k]; return a.name || (t ? LL(t[0], t[1]) : k); }, ds = function (k) { const a = X[k] || {}, t = GAME_AREA_TXT[k]; return a.desc || (t ? LL(t[2], t[3]) : ""); };
     const ar = ks.map(function (k) { return { id: k, name: nm(k), n: 1 }; }), cur = storedArea("cm:gameArea", ar, ks[0]);
     return '<div class="tpl-pick">' + areaList("garea", ar, cur).replace(/<small>1<\/small>/g, "") + "<div>" + ks.map(function (k) {

@@ -21,7 +21,7 @@
  */
 (function () {
   "use strict";
-  const A = window.CMAuth, E = window.CMGameEngine;
+  const A = window.CMAuth, E = window.CMGameEngine, PM = window.CMProjectEngine;
   const app = document.getElementById("app");
   const QS = new URLSearchParams(location.search);
   const ID = (QS.get("id") || "").toLowerCase();
@@ -123,6 +123,14 @@
     return (D[k] || [k])[0];
   }
   function decLabel(k) {
+    if (isPM()) return {
+      approach: X("Abordagem do projeto (escolhida na 1ª rodada)", "Project approach (chosen in round 1)", "Enfoque del proyecto (se elige en la 1.ª ronda)"),
+      hire: X("Contratar (+) / dispensar (−) pessoas", "Hire (+) / release (−) people", "Contratar (+) / liberar (−) personas", "Contratar (+) / dispensar (−) pessoas"),
+      ot: X("Hora extra", "Overtime", "Horas extra"), outsource: X("Terceirizar entregas", "Outsource deliverables", "Tercerizar entregas", "Subcontratar entregas"),
+      qa: X("Esforço em qualidade e testes", "Quality and testing effort", "Esfuerzo en calidad y pruebas"), train: X("Treinamento da equipe", "Team training", "Capacitación del equipo", "Formação da equipa"),
+      mitigation: X("Mitigação de riscos", "Risk mitigation", "Mitigación de riesgos"), comms: X("Comunicação com stakeholders", "Stakeholder communication", "Comunicación con stakeholders"),
+      accept: X("Aceitar mudanças pedidas", "Accept requested changes", "Aceptar cambios solicitados"), descope: X("Cortar escopo", "Cut scope", "Recortar alcance", "Cortar âmbito")
+    }[k] || k;
     return {
       price: X("Preço", "Price", "Precio"), qty: X("Produção", "Production", "Producción"), mkt: "Marketing", rd: X("P&D", "R&D", "I+D", "I&D"),
       hire: X("Contratação (+) / demissão (−)", "Hiring (+) / layoffs (−)", "Contratación (+) / despidos (−)", "Contratação (+) / despedimento (−)"),
@@ -132,10 +140,11 @@
     }[k] || k;
   }
   function unitLabel() {
-    const u = (cfg.params || {}).unit || "unit";
-    return { unit: X("unidades", "units", "unidades"), hour: X("horas", "hours", "horas"), subscription: X("assinaturas", "subscriptions", "suscripciones") }[u] || u;
+    const u = (cfg.params || {}).unit || (isPM() ? "points" : "unit");
+    return { points: X("pontos de entrega", "delivery points", "puntos de entrega"), packages: X("pacotes de obra", "work packages", "paquetes de obra"), unit: X("unidades", "units", "unidades"), hour: X("horas", "hours", "horas"), subscription: X("assinaturas", "subscriptions", "suscripciones") }[u] || u;
   }
   function scenName(id) {
+    if (isPM() || PM.SCENARIOS[id]) return pmScenName(id);
     return { industria: X("Indústria", "Manufacturing", "Industria"), varejo: X("Varejo", "Retail", "Comercio minorista", "Retalho"), servicos: X("Serviços", "Services", "Servicios"), startup: X("Startup de tecnologia", "Tech startup", "Startup tecnológica") }[id] || id;
   }
   function eventInfo(t) {
@@ -149,6 +158,12 @@
     }[t] || { n: t, d: "", unit: "×" };
   }
   function warnText(w) {
+    if (isPM()) { const t = {
+      "hire-max": X("Dispensas limitadas: a equipe precisa de pelo menos 1 pessoa.", "Releases limited: the team needs at least 1 person.", "Liberaciones limitadas: el equipo necesita al menos 1 persona."),
+      "ot-range": X("Hora extra limitada a 30%.", "Overtime limited to 30%.", "Horas extra limitadas al 30%."), "qa-range": X("Esforço em qualidade limitado a 40%.", "Quality effort limited to 40%.", "Esfuerzo en calidad limitado al 40%."),
+      "out-max": X("Terceirização limitada ao máximo por rodada.", "Outsourcing limited to the maximum per round.", "Tercerización limitada al máximo por ronda."), "out-unused": X("Parte da terceirização não foi usada: faltou trabalho.", "Part of the outsourcing was not used: not enough work left.", "Parte de la tercerización no se usó."),
+      "descope-max": X("Corte de escopo limitado a 50% do que falta.", "Scope cut limited to 50% of what is left.", "Recorte limitado al 50% de lo que falta.")
+    }[w]; if (t) return t; }
     return {
       "price-min": X("Preço abaixo do mínimo permitido – ajustado.", "Price below the minimum – adjusted.", "Precio por debajo del mínimo – ajustado."),
       "price-max": X("Preço acima do máximo permitido – ajustado.", "Price above the maximum – adjusted.", "Precio por encima del máximo – ajustado."),
@@ -161,8 +176,59 @@
     }[w] || (/-neg$/.test(w) ? X("Valor negativo ignorado.", "Negative value ignored.", "Valor negativo ignorado.") : w);
   }
 
+  /* ---------------- modes: "project" (project management, default for new games) · "business" (company & market) ---------------- */
+  function isPM() { return cfg.mode === "project"; }
+  function ENG() { return isPM() ? PM : E; }
+  function defScen() { return isPM() ? "lancamento" : "industria"; }
+  function pmScenName(id) {
+    return { lancamento: X("Lançamento de produto", "Product launch", "Lanzamiento de producto"), erp: X("Implantação de ERP", "ERP implementation", "Implantación de ERP", "Implementação de ERP"),
+      obra: X("Obra / expansão de unidade", "Construction / site expansion", "Obra / ampliación de planta"), pmo: X("Portfólio de projetos (PMO)", "Project portfolio (PMO)", "Portafolio de proyectos (PMO)") }[id] || id;
+  }
+  function pmScenDesc(id) {
+    return { lancamento: X("Uma fabricante de bens de consumo lança uma nova linha de produtos dentro da janela comercial.", "A consumer goods maker launches a new product line within the commercial window.", "Un fabricante de bienes de consumo lanza una nueva línea dentro de la ventana comercial."),
+      erp: X("Uma distribuidora troca o sistema de gestão (finanças, estoque e faturamento) até o go-live.", "A distributor replaces its management system (finance, inventory, billing) by go-live.", "Una distribuidora cambia su sistema de gestión (finanzas, inventario, facturación) hasta el go-live."),
+      obra: X("Construção de um centro de distribuição, com cronograma físico-financeiro, licenças e empreiteiras.", "Building a distribution centre, with a physical-financial schedule, permits and contractors.", "Construcción de un centro de distribución, con cronograma físico-financiero, licencias y contratistas."),
+      pmo: X("O PMO tem um portfólio de projetos maior que o orçamento e a equipe disponíveis: é preciso priorizar e cortar.", "The PMO has a portfolio bigger than the available budget and team: prioritise and cut.", "La PMO tiene un portafolio mayor que el presupuesto y el equipo disponibles: hay que priorizar y recortar.") }[id] || "";
+  }
+  /* events per case: id (what the professor picks) → engine type + default strength */
+  function pmEvents() {
+    const L = function (pt, en, es) { return X(pt, en, es); };
+    const C = {
+      lancamento: [["concorrente", "concorrente", 0.15, L("Concorrente lança antes", "Competitor launches first", "Un competidor lanza antes")], ["fornecedor", "atraso", 0.3, L("Atraso do fornecedor de embalagem", "Packaging supplier delay", "Retraso del proveedor de envases")],
+        ["rotulo", "mudanca_escopo", 0.08, L("Mudança de rótulo exigida pela regulação", "Label change required by the regulator", "Cambio de etiqueta exigido por el regulador")], ["insumos", "alta_custos", 1.2, L("Alta de insumos", "Input costs rise", "Suben los insumos")],
+        ["gerente", "saida_chave", 1, L("Saída do gerente de marca", "Brand manager leaves", "Sale el gerente de marca")], ["teste", "retrabalho", 0.08, L("Falha no teste de mercado", "Market test fails", "Falla la prueba de mercado")], ["verba", "corte_orcamento", 0.9, L("Corte da verba de marketing", "Marketing budget cut", "Recorte del presupuesto de marketing")]],
+      erp: [["usuario", "saida_chave", 2, L("Saída do usuário-chave", "Key user leaves", "Sale el usuario clave")], ["migracao", "retrabalho", 0.1, L("Retrabalho na migração de dados", "Data migration rework", "Retrabajo en la migración de datos")],
+        ["custom", "mudanca_escopo", 0.1, L("Pedido de customização da diretoria", "Customisation request from the board", "Pedido de personalización de la dirección")], ["fornecedor", "atraso", 0.3, L("Atraso do fornecedor do sistema", "Software vendor delay", "Retraso del proveedor del sistema")],
+        ["licencas", "alta_custos", 1.15, L("Reajuste das licenças", "Licence price increase", "Aumento de las licencias")], ["orcamento", "corte_orcamento", 0.9, L("Corte no orçamento de TI", "IT budget cut", "Recorte del presupuesto de TI")], ["fiscal", "concorrente", 0.15, L("Nova obrigação fiscal com prazo", "New tax obligation with a deadline", "Nueva obligación fiscal con plazo")]],
+      obra: [["chuva", "atraso", 0.3, L("Chuvas fortes", "Heavy rain", "Lluvias fuertes")], ["licenca", "atraso", 0.5, L("Atraso de licença", "Permit delay", "Retraso de licencia")], ["aco", "alta_custos", 1.25, L("Alta do aço e do cimento", "Steel and cement prices rise", "Suben el acero y el cemento")],
+        ["acidente", "atraso", 0.8, L("Acidente paralisa a obra", "Accident stops the site", "Un accidente paraliza la obra")], ["docas", "mudanca_escopo", 0.08, L("Cliente pede mais docas", "Client asks for more docks", "El cliente pide más andenes")],
+        ["engenheiro", "saida_chave", 3, L("Saída do engenheiro responsável e de parte da equipe", "Site engineer and part of the crew leave", "Sale el ingeniero responsable y parte del equipo")], ["investimento", "corte_orcamento", 0.9, L("Corte de investimento", "Investment cut", "Recorte de inversión")]],
+      pmo: [["corte", "corte_orcamento", 0.85, L("Corte de orçamento", "Budget cut", "Recorte de presupuesto")], ["novo", "mudanca_escopo", 0.15, L("Projeto estratégico novo da diretoria", "New strategic project from the board", "Nuevo proyecto estratégico de la dirección")],
+        ["conflito", "saida_chave", 3, L("Conflito de recursos com a operação", "Resource conflict with operations", "Conflicto de recursos con la operación")], ["fornecedor", "atraso", 0.25, L("Fornecedor crítico atrasa", "Critical supplier delays", "Proveedor crítico se retrasa")],
+        ["cambio", "alta_custos", 1.15, L("Câmbio encarece contratos", "Exchange rate makes contracts dearer", "El tipo de cambio encarece los contratos")], ["auditoria", "retrabalho", 0.08, L("Auditoria reprova entregas", "Audit rejects deliverables", "La auditoría rechaza entregas")]]
+    };
+    return (C[cfg.scenario] || C.lancamento).map(function (e) { return { id: e[0], type: e[1], k: e[2], n: e[3] }; });
+  }
+  function pmTypeInfo(type) {
+    return {
+      mudanca_escopo: { d: X("Pedido de mudança no escopo: cada equipe decide quanto aceitar (campo “Aceitar mudanças”).", "Scope change request: each team decides how much to accept (“Accept changes”).", "Pedido de cambio de alcance: cada equipo decide cuánto aceptar."), unit: "%", what: X("do escopo inicial", "of the initial scope", "del alcance inicial") },
+      atraso: { d: X("Parte da capacidade da equipe se perde nesta rodada. Exposição a risco alta piora o efeito.", "Part of the team's capacity is lost this round. High risk exposure makes it worse.", "Parte de la capacidad se pierde en esta ronda."), unit: "%", what: X("da capacidade", "of capacity", "de la capacidad") },
+      saida_chave: { d: X("Pessoas-chave deixam o projeto e a moral cai.", "Key people leave the project and morale drops.", "Personas clave dejan el proyecto y la moral cae."), unit: "n", what: X("pessoas", "people", "personas") },
+      alta_custos: { d: X("Materiais, licenças e terceiros ficam mais caros daqui em diante.", "Materials, licences and contractors cost more from now on.", "Materiales, licencias y terceros cuestan más desde ahora."), unit: "×", what: "" },
+      retrabalho: { d: X("Parte do que já foi entregue precisa ser refeita.", "Part of what was delivered must be redone.", "Parte de lo entregado debe rehacerse."), unit: "%", what: X("do entregue", "of delivered work", "de lo entregado") },
+      corte_orcamento: { d: X("O orçamento aprovado (BAC) é reduzido.", "The approved budget (BAC) is reduced.", "Se reduce el presupuesto aprobado (BAC)."), unit: "×", what: "" },
+      concorrente: { d: X("Se o projeto não for entregue até o prazo planejado, o valor para o negócio cai.", "If the project is not delivered by the planned round, business value drops.", "Si el proyecto no se entrega en el plazo, cae el valor para el negocio."), unit: "%", what: X("do valor", "of value", "del valor") }
+    }[type] || { d: "", unit: "×", what: "" };
+  }
+  /* catalog used by the professor panel: [{id, type, k, n, d, unit}] */
+  function evCatalog() {
+    if (isPM()) return pmEvents().map(function (e) { const i = pmTypeInfo(e.type); return { id: e.id, type: e.type, k: e.k, n: e.n, d: i.d, unit: i.unit, what: i.what }; });
+    return Object.keys(E.EVENTS).map(function (k) { const i = eventInfo(k); return { id: k, type: k, k: E.EVENTS[k].k, n: i.n, d: i.d, unit: i.unit, what: "" }; });
+  }
+  function evInfo(e) { const c = evCatalog().find(function (x) { return x.id === (e.id || e.type); }) || evCatalog().find(function (x) { return x.type === e.type; }); return c || { n: e.type, d: "" }; }
+
   /* ---------------- helpers on game data ---------------- */
-  function P() { return cfg.params || E.params(cfg.scenario || "industria"); }
+  function P() { return cfg.params || ENG().params(cfg.scenario || defScen()); }
   function teamIds() { return Object.keys(teams || {}).sort(function (a, b) { return ((teams[a].order || 0) - (teams[b].order || 0)) || a.localeCompare(b); }); }
   function tName(t) { return (teams[t] && teams[t].name) || t; }
   function tColor(t) { const i = teamIds().indexOf(t); return (teams[t] && teams[t].color) || COLORS[(i < 0 ? 0 : i) % COLORS.length]; }
@@ -171,12 +237,16 @@
   function doneRounds() { return roundNos().filter(function (n) { return rounds[n].status === "done"; }); }
   function lastDone() { const d = doneRounds(); return d.length ? d[d.length - 1] : 0; }
   function totalRounds() { return +cfg.rounds || 8; }
-  function decOn(k) { return k === "price" || k === "qty" || !(cfg.decisions && cfg.decisions[k] === false); }
+  function decFixed(k) { return isPM() ? (k === "approach" || k === "hire" || k === "qa") : (k === "price" || k === "qty"); }
+  function decOn(k) { return decFixed(k) || !(cfg.decisions && cfg.decisions[k] === false); }
   function stateBefore(n, t) {
     const prev = results[n - 1] && results[n - 1].teams && results[n - 1].teams[t];
-    return prev && prev.state ? fixState(prev.state) : E.initState(P());
+    return prev && prev.state ? fixState(prev.state) : ENG().initState(P());
   }
-  function fixState(s) { const o = Object.assign({}, s); o.ni = o.ni || []; o.share = o.share || []; ["emerg", "stockU", "stockV", "debt", "retained", "cumNI"].forEach(function (k) { o[k] = o[k] || 0; }); return o; }
+  function fixState(s) {
+    const o = Object.assign({}, s);
+    if (isPM()) { o.hist = o.hist || []; ["rework", "latent", "escaped", "done", "AC", "finished", "accepted", "descoped"].forEach(function (k) { o[k] = o[k] || 0; }); o.approach = o.approach || null; return o; }
+    o.ni = o.ni || []; o.share = o.share || []; ["emerg", "stockU", "stockV", "debt", "retained", "cumNI"].forEach(function (k) { o[k] = o[k] || 0; }); return o; }
   function decisionFor(n, t) { return (decisions[n] && decisions[n][t]) || null; }
   function prevDecision(n, t) { for (let k = n - 1; k > 0; k--) { const d = decisionFor(k, t); if (d) return d; } return null; }
   function deadlinePassed(n) { const r = rounds[n]; return !!(r && r.deadline && Date.now() > r.deadline); }
@@ -318,12 +388,17 @@
     if (isProf() && (!teamIds().length || !Object.keys(people).some(function (k) { return people[k].role === "student"; }) || !cr)) h += setupChecklist();
     h += '<section class="gm-cards">' +
       card(W("round"), cr ? cr + " / " + totalRounds() : "–", cr ? roundStatus(cr) + (r.deadline ? " · " + X("prazo ", "due ", "plazo ") + dt(r.deadline) : "") : X("Nenhuma rodada aberta", "No round opened yet", "Ninguna ronda abierta")) +
-      (pub ? card(X("Demanda do mercado", "Market demand", "Demanda del mercado"), num(pub.market.demand), unitLabel() + " · " + X("rodada ", "round ", "ronda ") + ld) +
+      (isPM() ? card(scenName(cfg.scenario), num(P().S0), unitLabel() + " · " + X("prazo: ", "deadline: ", "plazo: ") + P().N + X(" rodadas · orçamento ", " rounds · budget ", " rondas · presupuesto ") + money(P().BAC)) :
+      pub ? card(X("Demanda do mercado", "Market demand", "Demanda del mercado"), num(pub.market.demand), unitLabel() + " · " + X("rodada ", "round ", "ronda ") + ld) +
         card(X("Preço médio", "Average price", "Precio medio"), money(pub.market.avgPrice, 2), X("vendas totais ", "total sales ", "ventas totales ") + num(pub.market.sales)) : "") +
       (role === "student" && pub && pub.ranking && pub.ranking[myTeam] ? card(X("Sua posição", "Your position", "Tu posición"), rankPos(pub.ranking, myTeam) + "º", W("score") + " " + num(pub.ranking[myTeam].score, 1)) : "") +
       "</section>";
+    if (isPM() && pmScenDesc(cfg.scenario)) h += '<p class="gm-note">' + esc(pmScenDesc(cfg.scenario)) + " " + X("Todas as equipes começam com o mesmo escopo, prazo, orçamento e equipe.", "Every team starts with the same scope, deadline, budget and team.", "Todos los equipos empiezan con el mismo alcance, plazo, presupuesto y equipo.", "Todas as equipas começam com o mesmo âmbito, prazo, orçamento e equipa.") + "</p>";
     if (r.status === "open") h += eventsBox(r.events, X("Eventos desta rodada", "Events this round", "Eventos de esta ronda"));
-    if (pub) {
+    if (pub && isPM()) {
+      h += '<section class="gm-panel"><div class="gm-ph"><h2>' + X("Ranking", "Ranking", "Clasificación") + ' <span class="muted">· ' + W("round") + " " + ld + "</span></h2></div>" + rankingTable(pub.ranking) + weightsNote() + "</section>";
+      h += '<div class="gm-grid2"><section class="gm-panel"><h2>' + X("Escopo concluído", "Scope complete", "Alcance completado") + "</h2>" + lineChart("pct", pct) + '</section><section class="gm-panel"><h2>' + X("Valor previsto para o negócio", "Expected business value", "Valor previsto para el negocio") + ' <span class="muted">· ' + W("round") + " " + ld + "</span></h2>" + bars(pub.ranking, "value", money) + "</section></div>";
+    } else if (pub) {
       h += '<section class="gm-panel"><div class="gm-ph"><h2>' + X("Ranking", "Ranking", "Clasificación") + ' <span class="muted">· ' + W("round") + " " + ld + "</span></h2></div>" + rankingTable(pub.ranking) + weightsNote() + "</section>";
       h += '<div class="gm-grid2"><section class="gm-panel"><h2>' + W("cumNI") + "</h2>" + lineChart("cumNI") + '</section><section class="gm-panel"><h2>' + W("share") + ' <span class="muted">· ' + W("round") + " " + ld + "</span></h2>" + shareBars(pub.ranking) + "</section></div>";
     } else if (!isProf() || teamIds().length) {
@@ -334,7 +409,9 @@
   }
   function card(t, big, small) { return '<div class="gm-card"><span class="gm-k">' + esc(t) + '</span><b class="kpi">' + esc(big) + '</b><span class="gm-s">' + esc(small || "") + "</span></div>"; }
   function rankPos(rk, t) { const ids = Object.keys(rk).sort(function (a, b) { return rk[b].score - rk[a].score; }); return ids.indexOf(t) + 1; }
-  function weightsNote() { const w = cfg.weights || E.WEIGHTS; return '<p class="muted small">' + W("score") + ": " + W("cumNI").toLowerCase() + " " + (w.profit || 0) + "% · " + W("value").toLowerCase() + " " + (w.value || 0) + "% · " + W("sat").toLowerCase() + " " + (w.sat || 0) + "% · " + W("share").toLowerCase() + " " + (w.share || 0) + "%</p>"; }
+  function weightsNote() {
+    if (isPM()) { const w = cfg.weights || PM.WEIGHTS; return '<p class="muted small">' + W("score") + ": " + X("prazo (SPI) ", "schedule (SPI) ", "plazo (SPI) ") + (w.time || 0) + "% · " + X("custo (CPI) ", "cost (CPI) ", "costo (CPI) ") + (w.cost || 0) + "% · " + X("escopo entregue ", "scope delivered ", "alcance entregado ") + (w.scope || 0) + "% · " + X("qualidade ", "quality ", "calidad ") + (w.quality || 0) + "% · stakeholders " + (w.stake || 0) + "%</p>"; }
+    const w = cfg.weights || E.WEIGHTS; return '<p class="muted small">' + W("score") + ": " + W("cumNI").toLowerCase() + " " + (w.profit || 0) + "% · " + W("value").toLowerCase() + " " + (w.value || 0) + "% · " + W("sat").toLowerCase() + " " + (w.sat || 0) + "% · " + W("share").toLowerCase() + " " + (w.share || 0) + "%</p>"; }
   function setupChecklist() {
     const hasStud = Object.keys(people).some(function (k) { return people[k].role === "student"; });
     const steps = [[!!cfg.scenario, X("Escolha o cenário, a moeda e as regras", "Choose the scenario, currency and rules", "Elige el escenario, la moneda y las reglas"), "settings"],
@@ -345,17 +422,20 @@
   }
   function eventsBox(evs, title) {
     if (!evs || !evs.length) return "";
-    return '<section class="gm-panel gm-events"><h2>' + esc(title) + "</h2><ul>" + evs.map(function (e) { const i = eventInfo(e.type); return "<li><b>" + esc(i.n) + "</b> – " + esc(i.d) + "</li>"; }).join("") + "</ul></section>";
+    return '<section class="gm-panel gm-events"><h2>' + esc(title) + "</h2><ul>" + evs.map(function (e) { const i = evInfo(e); return "<li><b>" + esc(i.n) + "</b> – " + esc(i.d) + "</li>"; }).join("") + "</ul></section>";
   }
   function rankingTable(rk) {
     if (!rk) return "";
     const ids = Object.keys(rk).sort(function (a, b) { return rk[b].score - rk[a].score; });
+    if (isPM()) return '<div class="gm-tw"><table class="gm-t"><thead><tr><th>#</th><th>' + W("team") + '</th><th class="r">' + W("score") + '</th><th class="r">' + X("Concluído", "Complete", "Completado") + '</th><th class="r">CPI</th><th class="r">SPI</th><th class="r">' + X("Qualidade", "Quality", "Calidad") + '</th><th class="r">Stakeholders</th><th class="r">' + X("Término", "Finish", "Término") + '</th><th class="r">' + X("Valor", "Value", "Valor") + "</th></tr></thead><tbody>" +
+      ids.map(function (t, i) { const x = rk[t]; return '<tr class="' + (t === myTeam ? "mine" : "") + '"><td>' + (i + 1) + '</td><td class="nw"><span class="dot" style="background:' + tColor(t) + '"></span>' + esc(tName(t)) + '</td><td class="r"><b>' + num(x.score, 1) + '</b></td><td class="r">' + pct(x.pct) + '</td><td class="r' + (x.CPI < 1 ? " neg" : "") + '">' + num(x.CPI, 2) + '</td><td class="r' + (x.SPI < 1 ? " neg" : "") + '">' + num(x.SPI, 2) + '</td><td class="r">' + num(x.quality, 1) + '</td><td class="r">' + num(x.stake, 1) + '</td><td class="r">' + (x.finished ? "✓ " + W("round").charAt(0) + x.finished : "≈ " + W("round").charAt(0) + x.forecast) + '</td><td class="r">' + money(x.value) + "</td></tr>"; }).join("") + "</tbody></table></div>";
     return '<div class="gm-tw"><table class="gm-t"><thead><tr><th>#</th><th>' + W("team") + '</th><th class="r">' + W("score") + '</th><th class="r">' + W("cumNI") + '</th><th class="r">' + W("value") + '</th><th class="r">' + W("sat") + '</th><th class="r">' + W("share") + "</th></tr></thead><tbody>" +
       ids.map(function (t, i) { const x = rk[t]; return '<tr class="' + (t === myTeam ? "mine" : "") + '"><td>' + (i + 1) + '</td><td class="nw"><span class="dot" style="background:' + tColor(t) + '"></span>' + esc(tName(t)) + '</td><td class="r"><b>' + num(x.score, 1) + '</b></td><td class="r">' + money(x.cumNI) + '</td><td class="r">' + money(x.value) + '</td><td class="r">' + num(x.sat, 1) + '</td><td class="r">' + pct(x.avgShare != null ? x.avgShare : x.share) + "</td></tr>"; }).join("") + "</tbody></table></div>";
   }
 
   /* ---------------- charts (SVG, hover tooltips, legend + table elsewhere) ---------------- */
-  function lineChart(metric) {
+  function lineChart(metric, fmt) {
+    fmt = fmt || money;
     const ds = doneRounds(); if (!ds.length) return "";
     const ids = teamIds().filter(function (t) { return ds.some(function (n) { return results[n].public && results[n].public.ranking && results[n].public.ranking[t]; }); });
     const series = ids.map(function (t) { return { t: t, pts: ds.map(function (n) { const x = results[n].public.ranking[t]; return x ? x[metric] : null; }) }; });
@@ -364,18 +444,23 @@
     const Wd = 560, H = 220, L = 74, Rp = 12, T = 12, B = 28, iw = Wd - L - Rp, ih = H - T - B;
     const x = function (i) { return L + (ds.length === 1 ? iw / 2 : i * iw / (ds.length - 1)); }, y = function (v) { return T + ih - (v - mn) / (mx - mn) * ih; };
     let g = "";
-    [0, 0.5, 1].forEach(function (f) { const v = mn + (mx - mn) * f; g += '<line x1="' + L + '" x2="' + (Wd - Rp) + '" y1="' + y(v) + '" y2="' + y(v) + '" class="grid"/><text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" class="ax" text-anchor="end">' + esc(compact(v)) + "</text>"; });
+    [0, 0.5, 1].forEach(function (f) { const v = mn + (mx - mn) * f; g += '<line x1="' + L + '" x2="' + (Wd - Rp) + '" y1="' + y(v) + '" y2="' + y(v) + '" class="grid"/><text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" class="ax" text-anchor="end">' + esc(fmt === pct ? pct(v) : compact(v)) + "</text>"; });
     if (mn < 0) g += '<line x1="' + L + '" x2="' + (Wd - Rp) + '" y1="' + y(0) + '" y2="' + y(0) + '" class="zero"/>';
     ds.forEach(function (n, i) { g += '<text x="' + x(i) + '" y="' + (H - 8) + '" class="ax" text-anchor="middle">' + W("round").charAt(0) + n + "</text>"; });
     series.forEach(function (s) {
       const d = s.pts.map(function (p, i) { return p == null ? "" : (i ? "L" : "M") + x(i) + " " + y(p); }).join(" ");
       g += '<path d="' + d + '" fill="none" stroke="' + tColor(s.t) + '" stroke-width="2" stroke-linejoin="round"/>';
-      s.pts.forEach(function (p, i) { if (p == null) return; g += '<circle cx="' + x(i) + '" cy="' + y(p) + '" r="4" fill="' + tColor(s.t) + '" stroke="#fff" stroke-width="2" data-tip="' + esc(tName(s.t) + " · " + W("round") + " " + ds[i] + ": " + money(p)) + '"/>'; });
+      s.pts.forEach(function (p, i) { if (p == null) return; g += '<circle cx="' + x(i) + '" cy="' + y(p) + '" r="4" fill="' + tColor(s.t) + '" stroke="#fff" stroke-width="2" data-tip="' + esc(tName(s.t) + " · " + W("round") + " " + ds[i] + ": " + fmt(p)) + '"/>'; });
     });
-    return '<div class="gm-chart"><svg viewBox="0 0 ' + Wd + " " + H + '" role="img" aria-label="' + esc(W("cumNI")) + '">' + g + "</svg>" + legend(ids) + '<div class="gm-tip" hidden></div></div>';
+    return '<div class="gm-chart"><svg viewBox="0 0 ' + Wd + " " + H + '" role="img" aria-label="' + esc(metric) + '">' + g + "</svg>" + legend(ids) + '<div class="gm-tip" hidden></div></div>';
   }
   function compact(v) { try { return new Intl.NumberFormat(locale(), { notation: "compact", maximumFractionDigits: 1 }).format(v); } catch (e) { return String(Math.round(v)); } }
   function legend(ids) { return '<div class="gm-legend">' + ids.map(function (t) { return '<span><i style="background:' + tColor(t) + '"></i>' + esc(tName(t)) + "</span>"; }).join("") + "</div>"; }
+  function bars(rk, metric, fmt, what) {
+    if (!rk) return "";
+    const ids = teamIds().filter(function (t) { return rk[t]; }), mx = Math.max.apply(null, ids.map(function (t) { return Math.abs(rk[t][metric] || 0); }).concat([0.0001]));
+    return '<div class="gm-bars">' + ids.map(function (t) { const s = rk[t][metric] || 0; return '<div class="gm-bar" data-tip="' + esc(tName(t) + ": " + fmt(s) + (what ? " " + what : "")) + '"><span class="bl">' + esc(tName(t)) + '</span><span class="bt"><i style="width:' + Math.max(0, s / mx * 100).toFixed(1) + "%;background:" + tColor(t) + '"></i></span><span class="bv">' + esc(fmt === money ? compact(s) : fmt(s)) + "</span></div>"; }).join("") + '</div><div class="gm-tip" hidden></div>';
+  }
   function shareBars(rk) {
     if (!rk) return "";
     const ids = teamIds().filter(function (t) { return rk[t]; }), mx = Math.max.apply(null, ids.map(function (t) { return rk[t].share; }).concat([0.0001]));
@@ -404,7 +489,7 @@
     const n = cr, r = rounds[n] || {}, open = r.status === "open";
     const canWrite = open && (isProf() || (role === "student" && t === myTeam && !deadlinePassed(n)));
     const st = stateBefore(n, t), p = P(), saved = decisionFor(n, t);
-    const d0 = Object.assign({}, E.defaultDecision(p, st, teamIds().length), prevDecision(n, t) || {}, saved || {});
+    const d0 = Object.assign({}, ENG().defaultDecision(p, st, teamIds().length), prevDecision(n, t) || {}, saved || {});
     const strat = Object.assign({}, (saved && saved.strategic) || {});
     let h = '<div class="gm-bar-top">' + teamPicker("dTeam") + '<span class="gm-pill">' + W("round") + " " + n + " · " + roundStatus(n) + "</span>" +
       (r.deadline ? '<span class="gm-cd" data-cd="' + r.deadline + '"></span>' : "") +
@@ -414,7 +499,9 @@
     h += eventsBox(r.events, X("Eventos desta rodada", "Events this round", "Eventos de esta ronda"));
     const dis = canWrite ? "" : " disabled";
     h += '<div class="gm-dec"><form class="gm-panel gm-form live" id="decForm"><h2>' + X("Decisões da rodada", "Round decisions", "Decisiones de la ronda") + " " + n + "</h2>";
-    E.DECISIONS.forEach(function (k) {
+    if (isPM() && st.finished) h += '<p class="gm-note">' + X("O projeto da equipe já foi concluído. As próximas rodadas não geram custos.", "The team's project is finished. The next rounds have no costs.", "El proyecto del equipo ya terminó.") + "</p>";
+    if (isPM()) ENG().DECISIONS.forEach(function (k) { if (decOn(k)) h += pmField(k, d0, dis, st); });
+    else E.DECISIONS.forEach(function (k) {
       if (!decOn(k)) return;
       const isMoney = ["price", "mkt", "rd", "train", "invest", "loan", "amort"].indexOf(k) >= 0;
       const step = k === "price" || k === "train" ? "0.01" : "1";
@@ -428,8 +515,18 @@
       '</form><aside class="gm-panel gm-preview" id="decPrev"></aside></div>';
     v.innerHTML = h; bindPick(v);
     const f = v.querySelector("#decForm");
-    function read() { const d = {}; E.DECISIONS.forEach(function (k) { d[k] = f[k] ? Number(f[k].value) || 0 : (d0[k] || 0); if (!decOn(k)) d[k] = 0; }); return d; }
-    function preview() { v.querySelector("#decPrev").innerHTML = previewHtml(read(), st, p, n); hints(read(), st, p); }
+    function read() {
+      const d = {};
+      ENG().DECISIONS.forEach(function (k) {
+        if (k === "approach") { d[k] = f[k] ? f[k].value : (d0[k] || "hib"); return; }
+        d[k] = f[k] ? Number(f[k].value) || 0 : (Number(d0[k]) || 0); if (!decOn(k)) d[k] = 0;
+      });
+      return d;
+    }
+    function preview() {
+      if (isPM()) { v.querySelector("#decPrev").innerHTML = pmPreview(read(), st, p, n); pmHints(v, read(), st, p, n); return; }
+      v.querySelector("#decPrev").innerHTML = previewHtml(read(), st, p, n); hints(read(), st, p);
+    }
     function hints(d, s, pp) {
       const c = E.capacityOf(s, pp, d), set = function (k, txt) { const el = v.querySelector('[data-hint="' + k + '"]'); if (el) el.textContent = txt; };
       set("price", X("Faixa: ", "Range: ", "Rango: ") + money(pp.Pref * pp.pMin, 2) + " – " + money(pp.Pref * pp.pMax, 2) + " · " + X("referência ", "reference ", "referencia ") + money(pp.Pref, 2));
@@ -455,11 +552,58 @@
     };
     f.onsubmit = function (e) {
       e.preventDefault(); if (!canWrite) return;
-      const d = E.clampDecision(read(), st, p).d;
+      const d = ENG().clampDecision(read(), st, p, n).d;
       const rec = Object.assign({}, d, { strategic: Object.keys(strat).length ? strat : null, by: me.email, at: TS() });
       const btn = v.querySelector("#decSave"); btn.disabled = true;
       db.ref("game/" + ID + "/decisions/" + n + "/" + t).set(rec).then(function () { btn.disabled = false; toast(X("Decisões enviadas ✓ Você pode alterar até o prazo.", "Decisions sent ✓ You can change them until the deadline.", "Decisiones enviadas ✓ Puedes cambiarlas hasta el plazo.")); if (document.activeElement) document.activeElement.blur(); render(); }, function (er) { btn.disabled = false; fail(er); });
     };
+  }
+  /* ---- project mode: decision fields, hints and preview ---- */
+  function crUnitsOf(n) { const p = P(); return ((rounds[n] || {}).events || []).filter(function (e) { return e.type === "mudanca_escopo"; }).reduce(function (a, e) { return a + Math.round((e.k != null ? +e.k : 0.1) * p.S0); }, 0); }
+  function apName(a) { return { pred: X("Preditiva (cascata)", "Predictive (waterfall)", "Predictivo (cascada)"), agil: X("Ágil", "Agile", "Ágil"), hib: X("Híbrida", "Hybrid", "Híbrido") }[a] || a; }
+  function pmField(k, d0, dis, st) {
+    const lab = '<span>' + esc(decLabel(k));
+    if (k === "approach") {
+      const locked = !!st.approach;
+      return '<label class="gm-f"><span>' + esc(decLabel(k)) + '</span><select name="approach"' + (locked ? " disabled" : dis) + ">" + ["pred", "agil", "hib"].map(function (a) { return '<option value="' + a + '"' + ((st.approach || d0.approach || "hib") === a ? " selected" : "") + ">" + esc(apName(a)) + "</option>"; }).join("") + '</select><small class="muted" data-hint="approach"></small></label>';
+    }
+    const money_ = ["train", "mitigation", "comms"].indexOf(k) >= 0, pctF = ["ot", "qa", "accept"].indexOf(k) >= 0, units = k === "outsource" || k === "descope";
+    const suf = money_ ? ' <em class="muted">(' + esc(curr().custom ? (curr().symbol || "") : curr().code) + ")</em>" : pctF ? ' <em class="muted">(%)</em>' : units ? ' <em class="muted">(' + esc(unitLabel()) + ")</em>" : "";
+    const max = k === "ot" ? ' max="30"' : k === "qa" ? ' max="40"' : k === "accept" ? ' max="100"' : "";
+    return '<label class="gm-f">' + lab + suf + '</span><input type="number" inputmode="decimal" name="' + k + '" step="1" min="' + (k === "hire" ? "-999" : "0") + '"' + max + ' value="' + esc(d0[k] != null ? d0[k] : 0) + '"' + dis + '><small class="muted" data-hint="' + k + '"></small></label>';
+  }
+  function pmHints(v, d0, s, p, n) {
+    const d = PM.clampDecision(d0, s, p, n).d, set = function (k, txt) { const el = v.querySelector('[data-hint="' + k + '"]'); if (el) el.textContent = txt; };
+    const a = PM.APPROACH[d.approach] || PM.APPROACH.hib;
+    set("approach", s.approach ? X("Definida na rodada 1.", "Set in round 1.", "Definido en la ronda 1.") : { pred: X("Mudanças custam mais trabalho; um pouco menos de defeitos.", "Changes cost more work; slightly fewer defects.", "Los cambios cuestan más; algo menos de defectos."), agil: X("Começo mais lento, ritmo maior depois; mudanças baratas; stakeholders mais próximos.", "Slower start, faster later; cheap changes; closer stakeholders.", "Inicio más lento, luego más rápido; cambios baratos."), hib: X("Meio-termo entre as duas.", "A middle ground.", "Un punto intermedio.") }[d.approach]);
+    set("hire", X("Equipe: ", "Team: ", "Equipo: ") + num(s.W) + " → " + num(Math.max(1, s.W + d.hire)) + " · " + X("contratar custa ", "hiring costs ", "contratar cuesta ") + money(p.hire) + X(", dispensar ", ", releasing ", ", liberar ") + money(p.fire) + X("; quem chega rende metade na 1ª rodada", "; newcomers deliver half in their first round", "; los nuevos rinden la mitad en su 1.ª ronda"));
+    set("ot", X("+", "+", "+") + num(d.ot) + "% " + X("de capacidade, pago a 1,5× e reduz a moral", "capacity, paid at 1.5× and lowers morale", "de capacidad, pagado a 1,5× y baja la moral"));
+    set("outsource", X("Até ", "Up to ", "Hasta ") + num(p.outMax) + " " + unitLabel() + X(" por rodada, a ", " per round, at ", " por ronda, a ") + money(p.cOut * (s.cmatK || 1)) + X(" cada; gera mais defeitos", " each; more defects", " cada una; más defectos"));
+    set("qa", X("Defeitos estimados: ", "Estimated defects: ", "Defectos estimados: ") + num(p.d0 * (1 - Math.min(d.qa, 40) / 40 * 0.8) * a.def * 100, 1) + X(" a cada 100 entregas; reduz a capacidade em ", " per 100 deliverables; reduces capacity by ", " por cada 100 entregas; reduce la capacidad en ") + num(d.qa) + "%");
+    set("train", X("Referência: ", "Reference: ", "Referencia: ") + money(p.trRef) + X(" por pessoa melhora a moral", " per person improves morale", " por persona mejora la moral"));
+    set("mitigation", X("Exposição a risco: ", "Risk exposure: ", "Exposición al riesgo: ") + money(s.E) + " → " + money(Math.max(0, s.E + p.eGrow - d.mitigation * p.mitEff)) + X(" (cada 1 investido reduz ", " (each 1 spent removes ", " (cada 1 invertido reduce ") + num(p.mitEff, 1) + ")");
+    set("comms", X("Referência: ", "Reference: ", "Referencia: ") + money(p.commRef) + X(" por rodada", " per round", " por ronda"));
+    const cr = crUnitsOf(n);
+    set("accept", cr ? X("Pedido de mudança nesta rodada: ", "Change request this round: ", "Pedido de cambio en esta ronda: ") + num(cr) + " " + unitLabel() + X(" – aceitar ", " – accepting ", " – aceptar ") + num(Math.round(cr * d.accept / 100)) + X(" aumenta escopo, prazo e orçamento", " adds scope, time and budget", " aumenta alcance, plazo y presupuesto") : X("Sem pedido de mudança nesta rodada.", "No change request this round.", "Sin pedido de cambio en esta ronda."));
+    set("descope", X("Até ", "Up to ", "Hasta ") + num(Math.floor((s.scope - s.done) * 0.5)) + " " + unitLabel() + X("; reduz orçamento, valor entregue e a satisfação dos stakeholders", "; lowers budget, delivered value and stakeholder satisfaction", "; reduce presupuesto, valor entregado y satisfacción"));
+  }
+  function pmPreview(d0, s, p, n) {
+    const cd = PM.clampDecision(d0, s, p, n), d = cd.d, warn = cd.warn.slice();
+    const st = Object.assign({}, s, { approach: s.approach || d.approach }), c = PM.capacityOf(st, p, d, n);
+    const rem = PM.remaining(s) + (s.latent || 0) - d.descope, cr = Math.round(crUnitsOf(n) * d.accept / 100);
+    const work = Math.min(c.total, Math.max(0, rem + cr));
+    const W = c.W, cost = Math.round(W * p.sal * (1 + d.ot / 100 * 1.5)) + Math.max(0, d.hire) * p.hire + Math.max(0, -d.hire) * p.fire + Math.round(Math.max(0, work - Math.min(d.outsource, work)) * p.cmat * (s.cmatK || 1)) + Math.round(Math.min(d.outsource, work) * p.cOut * (s.cmatK || 1)) + d.train + d.mitigation + d.comms;
+    const prev = n > 1 && results[n - 1] && results[n - 1].teams && results[n - 1].teams[selTeam];
+    const finish = (n - 1) + Math.ceil(Math.max(0, rem + cr) / Math.max(1, c.total));
+    const rows = [[X("Escopo atual", "Current scope", "Alcance actual"), num(s.scope) + " " + unitLabel()], [X("Entregue até agora", "Delivered so far", "Entregado hasta ahora"), num(s.done)], [X("Falta (com retrabalho)", "Left (incl. rework)", "Falta (con retrabajo)"), num(Math.max(0, rem + cr))],
+      [X("Capacidade nesta rodada", "Capacity this round", "Capacidad en esta ronda"), num(c.total) + " (" + X("equipe ", "team ", "equipo ") + num(c.internal) + (d.outsource ? " + " + X("terceiros ", "contractors ", "terceros ") + num(Math.min(d.outsource, p.outMax)) : "") + ")"],
+      [X("Custo previsto da rodada", "Expected cost this round", "Costo previsto de la ronda"), money(cost)], [X("Orçamento (BAC) · gasto até agora", "Budget (BAC) · spent so far", "Presupuesto (BAC) · gastado"), money(s.BAC) + " · " + money(s.AC)],
+      [X("Término previsto", "Forecast finish", "Término previsto"), W ? X("rodada ", "round ", "ronda ") + finish + X(" (plano: ", " (plan: ", " (plan: ") + p.N + ")" : "–"]];
+    if (prev) rows.push(["CPI · SPI", num(prev.CPI, 2) + " · " + num(prev.SPI, 2)]);
+    return "<h2>" + X("Prévia", "Preview", "Vista previa") + '</h2><table class="gm-t mini"><tbody>' + rows.map(function (r) { return "<tr><td>" + esc(r[0]) + '</td><td class="r">' + esc(r[1]) + "</td></tr>"; }).join("") + "</tbody></table>" +
+      (finish > p.N ? '<p class="gm-warn">' + X("No ritmo atual, o projeto termina depois do prazo planejado.", "At the current pace the project ends after the planned deadline.", "Al ritmo actual el proyecto termina después del plazo.") + "</p>" : "") +
+      (warn.length ? '<ul class="gm-warns">' + warn.map(function (w) { return "<li>" + esc(warnText(w)) + "</li>"; }).join("") + "</ul>" : "") +
+      '<p class="muted small">' + X("A prévia é uma estimativa: defeitos, retrabalho e eventos só aparecem quando o professor processar a rodada.", "The preview is an estimate: defects, rework and events only show when the professor processes the round.", "La vista previa es una estimación.") + "</p>";
   }
   function bindPick(v) { const s = v.querySelector("#dTeam, #rTeam"); if (s) s.onchange = function () { selTeam = s.value; render(); }; }
   function nameOf(email) { if (!email) return ""; const p = people[A.key(email)]; return (p && p.name) || String(email).split("@")[0]; }
@@ -487,6 +631,7 @@
       (isProf() ? '<span class="sp"></span><button class="gm-btn sm" id="xCsv">' + IC("export", 14) + " CSV</button><button class=\"gm-btn sm\" id=\"xPdf\">" + IC("print", 14) + " PDF</button>" : "") + "</div>";
     h += eventsBox((rounds[n] || {}).events, X("Eventos da rodada", "Round events", "Eventos de la ronda"));
     if (!o) { h += '<p class="gm-empty">' + X("Sem resultados desta equipe nesta rodada.", "No results for this team in this round.", "Sin resultados de este equipo.") + "</p>"; v.innerHTML = h; bindResBar(v); return; }
+    if (isPM()) { v.innerHTML = h + pmResults(o, pub, t, n); bindResBar(v); bindTips(v); return; }
     h += '<section class="gm-cards">' + card(W("niShort"), money(o.ni), W("cumNI") + " " + money(o.cumNI)) + card(W("revenue"), money(o.revenue), num(o.sales) + " " + unitLabel() + " × " + money(o.price, 2)) +
       card(W("share"), pct(o.share), X("média ", "average ", "media ") + pct(o.avgShare)) + card(W("sat"), num(o.sat, 1), "0–100") + card(W("cash"), money(o.bs.cash), W("debt") + " " + money(o.bs.liabilities)) +
       (pub.ranking && pub.ranking[t] ? card(W("score"), num(pub.ranking[t].score, 1), rankPos(pub.ranking, t) + "º " + X("lugar", "place", "lugar")) : "") + "</section>";
@@ -501,6 +646,56 @@
     h += '<section class="gm-panel"><h2>' + X("Evolução", "Evolution", "Evolución") + "</h2>" + evolution(t) + "</section>";
     if (pub.ranking) h += '<section class="gm-panel"><h2>' + X("Mercado", "Market", "Mercado") + ' <span class="muted">· ' + W("round") + " " + n + "</span></h2>" + shareBars(pub.ranking) + "</section>";
     v.innerHTML = h; bindResBar(v); bindTips(v);
+  }
+  /* ---- project mode: results ---- */
+  function f2(x) { return num(x, 2); }
+  function pmResults(o, pub, t, n) {
+    const p = P(), rk = pub.ranking || {};
+    let h = '<section class="gm-cards">' + card(X("Concluído", "Complete", "Completado"), pct(o.pct), num(o.done) + " / " + num(o.scope) + " " + unitLabel()) +
+      card("CPI", f2(o.CPI), X("custo: ", "cost: ", "costo: ") + (o.CPI >= 1 ? X("dentro do orçamento", "on budget", "dentro del presupuesto") : X("acima do orçamento", "over budget", "por encima del presupuesto"))) +
+      card("SPI", f2(o.SPI), X("prazo: ", "schedule: ", "plazo: ") + (o.SPI >= 1 ? X("em dia", "on track", "al día") : X("atrasado", "behind", "atrasado"))) +
+      card(X("Término", "Finish", "Término"), (o.finished ? "✓ " : "≈ ") + X("rodada ", "round ", "ronda ") + (o.finished || o.forecast), (o.finished ? X("concluído", "finished", "terminado") : X("previsão", "forecast", "previsión")) + " · " + X("plano: rodada ", "plan: round ", "plan: ronda ") + p.N + (o.late ? " · " + num(o.late) + X(" de atraso", " late", " de atraso") : "")) +
+      card(X("Qualidade", "Quality", "Calidad"), num(o.quality, 1), "0–100") + card("Stakeholders", num(o.stake, 1), "0–100") +
+      card(X("Valor para o negócio", "Business value", "Valor para el negocio"), money(o.value), X("retorno ", "return ", "retorno ") + pct(o.roi)) +
+      (rk[t] ? card(W("score"), num(rk[t].score, 1), rankPos(rk, t) + "º " + X("lugar", "place", "lugar")) : "") + "</section>";
+    if (o.warn && o.warn.length) h += '<ul class="gm-warns panel">' + o.warn.map(function (w) { return "<li>" + esc(warnText(w)) + "</li>"; }).join("") + "</ul>";
+    const evm = [[X("Valor planejado (PV)", "Planned value (PV)", "Valor planificado (PV)"), money(o.PV)], [X("Valor agregado (EV)", "Earned value (EV)", "Valor ganado (EV)"), money(o.EV)], [X("Custo real (AC)", "Actual cost (AC)", "Costo real (AC)"), money(o.AC)],
+      [X("Variação de custo (CV = EV − AC)", "Cost variance (CV = EV − AC)", "Variación de costo (CV)"), money(o.CV)], [X("Variação de prazo (SV = EV − PV)", "Schedule variance (SV = EV − PV)", "Variación de plazo (SV)"), money(o.SV)],
+      ["CPI (EV ÷ AC)", f2(o.CPI)], ["SPI (EV ÷ PV)", f2(o.SPI)], [X("Orçamento (BAC)", "Budget (BAC)", "Presupuesto (BAC)"), money(o.BAC)], [X("Estimativa no término (EAC)", "Estimate at completion (EAC)", "Estimación a la conclusión (EAC)"), money(o.EAC)], [X("Variação no término (VAC)", "Variance at completion (VAC)", "Variación a la conclusión (VAC)"), money(o.VAC)]];
+    h += '<div class="gm-grid2"><section class="gm-panel"><h2>' + X("Valor agregado", "Earned value", "Valor ganado") + '</h2><table class="gm-t stmt"><tbody>' + evm.map(function (r) { return "<tr><td>" + esc(r[0]) + '</td><td class="r">' + esc(r[1]) + "</td></tr>"; }).join("") + "</tbody></table></section>" +
+      stmt(X("Custos da rodada", "Costs this round", "Costos de la ronda"), [[X("Equipe (inclui hora extra)", "Team (incl. overtime)", "Equipo (incl. horas extra)"), o.cost.payroll], [X("Contratações e dispensas", "Hiring and releases", "Contrataciones y liberaciones"), o.cost.people], [X("Materiais e licenças", "Materials and licences", "Materiales y licencias"), o.cost.material], [X("Terceirização", "Outsourcing", "Tercerización", "Subcontratação"), o.cost.outsourcing], [decLabel("train"), o.cost.training], [decLabel("mitigation"), o.cost.mitigation], [decLabel("comms"), o.cost.comms], [X("= Total da rodada", "= Round total", "= Total de la ronda"), o.cost.total, 2]]) + "</div>";
+    h += '<section class="gm-panel"><h2>' + X("Curva S (PV, EV e AC)", "S-curve (PV, EV and AC)", "Curva S (PV, EV y AC)") + "</h2>" + sCurve(o) + "</section>";
+    const ops = [[X("Abordagem", "Approach", "Enfoque"), apName(o.approach)], [X("Capacidade da rodada", "Capacity this round", "Capacidad de la ronda"), num(o.capacity)], [X("Trabalho feito", "Work done", "Trabajo hecho"), num(o.work) + " (" + X("retrabalho ", "rework ", "retrabajo ") + num(o.reworkDone) + (o.outsourced ? " · " + X("terceiros ", "contractors ", "terceros ") + num(o.outsourced) : "") + ")"],
+      [X("Defeitos encontrados (viram retrabalho)", "Defects found (become rework)", "Defectos encontrados (retrabajo)"), num(o.defects)], [X("Falta entregar", "Left to deliver", "Falta entregar"), num(o.remaining)],
+      [X("Mudanças pedidas · aceitas · recusadas", "Changes requested · accepted · refused", "Cambios pedidos · aceptados · rechazados"), num(o.crUnits) + " · " + num(o.crAccepted) + " · " + num(o.crRejected)], [X("Escopo cortado nesta rodada", "Scope cut this round", "Alcance recortado en esta ronda"), num(o.descope)],
+      [X("Equipe", "Team", "Equipo", "Equipa"), num(o.W) + (o.hired ? " · +" + num(o.hired) : "") + (o.fired ? " · −" + num(o.fired) : "") + (o.lost ? " · " + X("saíram ", "left ", "salieron ") + num(o.lost) : "")], [X("Moral da equipe", "Team morale", "Moral del equipo"), num(o.morale, 1)], [X("Exposição a risco", "Risk exposure", "Exposición al riesgo"), money(o.risk)]];
+    h += '<section class="gm-panel"><h2>' + X("Andamento", "Progress", "Avance") + '</h2><div class="gm-tw"><table class="gm-t"><tbody>' + ops.map(function (r) { return "<tr><td>" + esc(r[0]) + '</td><td class="r">' + esc(r[1]) + "</td></tr>"; }).join("") + "</tbody></table></div></section>";
+    h += '<section class="gm-panel"><h2>' + X("Evolução", "Evolution", "Evolución") + "</h2>" + evolutionPM(t) + "</section>";
+    if (pub.ranking) h += '<section class="gm-panel"><h2>' + X("Comparação entre as equipes", "Team comparison", "Comparación entre equipos", "Comparação entre as equipas") + ' <span class="muted">· ' + W("round") + " " + n + "</span></h2>" + bars(pub.ranking, "pct", pct, X("concluído", "complete", "completado")) + "</section>";
+    return h;
+  }
+  function sCurve(o) {
+    const hist = (o.state && o.state.hist) || []; if (!hist.length) return "";
+    const p = P(), N = Math.max(p.N, hist.length), BAC = o.BAC;
+    const Wd = 560, H = 220, L = 74, Rp = 12, T = 12, B = 28, iw = Wd - L - Rp, ih = H - T - B;
+    const mx = Math.max(BAC, o.EAC || 0, hist.reduce(function (a, h) { return Math.max(a, h.AC, h.PV, h.EV); }, 1));
+    const x = function (r) { return L + r / N * iw; }, y = function (v) { return T + ih - v / mx * ih; };
+    let g = "";
+    [0, 0.5, 1].forEach(function (f) { const v = mx * f; g += '<line x1="' + L + '" x2="' + (Wd - Rp) + '" y1="' + y(v) + '" y2="' + y(v) + '" class="grid"/><text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" class="ax" text-anchor="end">' + esc(compact(v)) + "</text>"; });
+    for (let r = 1; r <= N; r++) g += '<text x="' + x(r) + '" y="' + (H - 8) + '" class="ax" text-anchor="middle">' + W("round").charAt(0) + r + "</text>";
+    g += '<line x1="' + x(p.N) + '" x2="' + x(p.N) + '" y1="' + T + '" y2="' + (T + ih) + '" class="zero"/>';
+    const plan = []; for (let r = 0; r <= p.N; r++) plan.push([r, BAC * r / p.N]);
+    const S = [["PV", "#8a93a6", plan], ["EV", "#1baf7a", [[0, 0]].concat(hist.map(function (h) { return [h.t, h.EV]; }))], ["AC", "#eb6834", [[0, 0]].concat(hist.map(function (h) { return [h.t, h.AC]; }))]];
+    S.forEach(function (sr) {
+      g += '<path d="' + sr[2].map(function (pt, i) { return (i ? "L" : "M") + x(pt[0]) + " " + y(pt[1]); }).join(" ") + '" fill="none" stroke="' + sr[1] + '" stroke-width="2"' + (sr[0] === "PV" ? ' stroke-dasharray="5 4"' : "") + "/>";
+      if (sr[0] !== "PV") sr[2].slice(1).forEach(function (pt) { g += '<circle cx="' + x(pt[0]) + '" cy="' + y(pt[1]) + '" r="4" fill="' + sr[1] + '" stroke="#fff" stroke-width="2" data-tip="' + esc(sr[0] + " · " + W("round") + " " + pt[0] + ": " + money(pt[1])) + '"/>'; });
+    });
+    return '<div class="gm-chart"><svg viewBox="0 0 ' + Wd + " " + H + '" role="img" aria-label="S-curve">' + g + '</svg><div class="gm-legend"><span><i style="background:#8a93a6"></i>' + X("PV – planejado", "PV – planned", "PV – planificado") + '</span><span><i style="background:#1baf7a"></i>' + X("EV – agregado", "EV – earned", "EV – ganado") + '</span><span><i style="background:#eb6834"></i>' + X("AC – custo real", "AC – actual cost", "AC – costo real") + "</span></div>" + '<div class="gm-tip" hidden></div></div>';
+  }
+  function evolutionPM(t) {
+    const ds = doneRounds().filter(function (n) { return results[n].teams && results[n].teams[t]; });
+    return '<div class="gm-tw"><table class="gm-t"><thead><tr><th>' + W("round") + '</th><th class="r">' + X("Concluído", "Complete", "Completado") + '</th><th class="r">PV</th><th class="r">EV</th><th class="r">AC</th><th class="r">CPI</th><th class="r">SPI</th><th class="r">' + X("Qualidade", "Quality", "Calidad") + '</th><th class="r">Stakeholders</th></tr></thead><tbody>' +
+      ds.map(function (n) { const o = results[n].teams[t]; return "<tr><td>" + n + '</td><td class="r">' + pct(o.pct) + '</td><td class="r">' + money(o.PV) + '</td><td class="r">' + money(o.EV) + '</td><td class="r">' + money(o.AC) + '</td><td class="r' + (o.CPI < 1 ? " neg" : "") + '">' + f2(o.CPI) + '</td><td class="r' + (o.SPI < 1 ? " neg" : "") + '">' + f2(o.SPI) + '</td><td class="r">' + num(o.quality, 1) + '</td><td class="r">' + num(o.stake, 1) + "</td></tr>"; }).join("") + "</tbody></table></div>";
   }
   function bindResBar(v) {
     bindPick(v);
@@ -519,6 +714,7 @@
 
   /* ================= export ================= */
   function exportCsv() {
+    if (isPM()) return exportCsvPM();
     const rows = [[W("round"), W("team"), X("Preço", "Price", "Precio"), X("Produção", "Production", "Producción"), "Marketing", decLabel("rd"), decLabel("hire"), decLabel("train"), decLabel("invest"), decLabel("loan"), decLabel("amort"),
       X("Demanda", "Demand", "Demanda"), X("Vendas", "Sales", "Ventas"), W("revenue"), W("niShort"), W("cumNI"), W("cash"), W("debt"), W("equity"), W("value"), W("share"), W("sat"), W("score"), X("Posição", "Position", "Posición")]];
     doneRounds().forEach(function (n) {
@@ -533,6 +729,24 @@
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = slug(info.title || "business-game") + "-resultados.csv"; a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   }
+  function downloadCsv(rows) {
+    const sep = /^(pt|es|pt-pt)$/.test(LANG) ? ";" : ",";
+    const csv = "\ufeff" + rows.map(function (r) { return r.map(function (c) { c = c == null ? "" : String(c); if (sep === ";" && /^-?\d+\.\d+$/.test(c)) c = c.replace(".", ","); return /[";,\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(sep); }).join("\r\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = slug(info.title || "business-game") + "-resultados.csv"; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+  function exportCsvPM() {
+    const ks = PM.DECISIONS, rows = [[W("round"), W("team")].concat(ks.map(decLabel)).concat([X("Escopo", "Scope", "Alcance"), X("Entregue", "Delivered", "Entregado"), X("Concluído (%)", "Complete (%)", "Completado (%)"), "PV", "EV", "AC", "CPI", "SPI", "BAC", "EAC",
+      X("Qualidade", "Quality", "Calidad"), X("Risco", "Risk", "Riesgo"), X("Moral", "Morale", "Moral"), "Stakeholders", X("Término previsto", "Forecast finish", "Término previsto"), X("Concluído na rodada", "Finished in round", "Terminado en ronda"), X("Valor", "Value", "Valor"), W("score"), X("Posição", "Position", "Posición")])];
+    doneRounds().forEach(function (n) {
+      const rk = (results[n].public || {}).ranking || {};
+      teamIds().forEach(function (t) {
+        const o = results[n].teams && results[n].teams[t]; if (!o) return; const d = o.decision || {};
+        rows.push([n, tName(t)].concat(ks.map(function (k) { return k === "approach" ? apName(d[k]) : d[k]; })).concat([o.scope, o.done, (o.pct * 100).toFixed(1), o.PV, o.EV, o.AC, o.CPI, o.SPI, o.BAC, o.EAC, o.quality, o.risk, o.morale, o.stake, o.forecast, o.finished || "", o.value, rk[t] ? rk[t].score : "", rk[t] ? rankPos(rk, t) : ""]));
+      });
+    });
+    downloadCsv(rows);
+  }
   function exportPdf() {
     const n = selRound || lastDone(); if (!n) return;
     const pub = results[n].public || {}, b = cfg.brand || {};
@@ -542,7 +756,8 @@
       const o = results[n].teams && results[n].teams[t]; if (!o) return;
       const ms = membersOf(t).map(function (p) { return p.name || p.email; }).join(", ");
       h += '<section class="pg"><h2><span class="dot" style="background:' + tColor(t) + '"></span>' + esc(tName(t)) + "</h2>" + (ms ? '<p class="muted">' + esc(ms) + "</p>" : "") +
-        '<table class="gm-t"><tbody>' + [[W("revenue"), money(o.revenue)], [W("niShort"), money(o.ni)], [W("cumNI"), money(o.cumNI)], [W("cash"), money(o.bs.cash)], [W("equity"), money(o.bs.equity)], [W("value"), money(o.value)], [W("share"), pct(o.share)], [W("sat"), num(o.sat, 1)]].map(function (r) { return "<tr><td>" + esc(r[0]) + '</td><td class="r">' + esc(r[1]) + "</td></tr>"; }).join("") + "</tbody></table>" + evolution(t) + "</section>";
+        '<table class="gm-t"><tbody>' + (isPM() ? [[X("Concluído", "Complete", "Completado"), pct(o.pct)], ["CPI · SPI", num(o.CPI, 2) + " · " + num(o.SPI, 2)], ["AC · BAC", money(o.AC) + " · " + money(o.BAC)], ["EAC", money(o.EAC)], [X("Qualidade", "Quality", "Calidad"), num(o.quality, 1)], ["Stakeholders", num(o.stake, 1)], [X("Término", "Finish", "Término"), o.finished ? X("rodada ", "round ", "ronda ") + o.finished : "≈ " + o.forecast], [X("Valor para o negócio", "Business value", "Valor para el negocio"), money(o.value)]]
+          : [[W("revenue"), money(o.revenue)], [W("niShort"), money(o.ni)], [W("cumNI"), money(o.cumNI)], [W("cash"), money(o.bs.cash)], [W("equity"), money(o.bs.equity)], [W("value"), money(o.value)], [W("share"), pct(o.share)], [W("sat"), num(o.sat, 1)]]).map(function (r) { return "<tr><td>" + esc(r[0]) + '</td><td class="r">' + esc(r[1]) + "</td></tr>"; }).join("") + "</tbody></table>" + (isPM() ? evolutionPM(t) : evolution(t)) + "</section>";
     });
     h += "</div>";
     let box = document.getElementById("gmPrint"); if (!box) { box = document.createElement("div"); box.id = "gmPrint"; document.body.appendChild(box); }
@@ -552,16 +767,16 @@
   }
 
   /* ================= strategy & debrief ================= */
-  const BOARDS = [["swot", "SWOT"], ["leancanvas", "Lean Canvas"], ["okr", "OKR"]];
+  function boardsList() { return isPM() ? [["riskmatrix", X("Matriz de riscos", "Risk matrix", "Matriz de riesgos")], ["storymap", X("Mapa de entregas", "Delivery map", "Mapa de entregas")], ["okr", "OKR"]] : [["swot", "SWOT"], ["leancanvas", "Lean Canvas"], ["okr", "OKR"]]; }
   function viewStrategy(v) {
     const ids = role === "student" ? [myTeam] : teamIds();
     const planId = info.plan;
     let h = '<section class="gm-panel"><div class="gm-ph"><h2>' + X("Quadros de estratégia das equipes", "Teams' strategy boards", "Tableros de estrategia de los equipos", "Quadros de estratégia das equipas") + "</h2>" +
       (isProf() && ids.length ? '<button class="gm-btn sm" id="mkBoards">' + IC("plus", 14) + " " + X("Criar quadros que faltam", "Create missing boards", "Crear tableros faltantes") + "</button>" : "") + "</div>" +
-      '<p class="muted small">' + X("Cada equipe trabalha a estratégia em quadros colaborativos (SWOT, Lean Canvas e OKR) ligados à partida.", "Each team works its strategy on collaborative boards (SWOT, Lean Canvas and OKR) linked to the game.", "Cada equipo trabaja su estrategia en tableros colaborativos (SWOT, Lean Canvas y OKR).") + "</p>" +
+      '<p class="muted small">' + (isPM() ? X("Cada equipe planeja o projeto em quadros colaborativos ligados à partida: riscos, entregas e objetivos (OKR).", "Each team plans its project on collaborative boards linked to the game: risks, deliverables and objectives (OKR).", "Cada equipo planifica su proyecto en tableros colaborativos: riesgos, entregas y objetivos (OKR).") : X("Cada equipe trabalha a estratégia em quadros colaborativos (SWOT, Lean Canvas e OKR) ligados à partida.", "Each team works its strategy on collaborative boards (SWOT, Lean Canvas and OKR) linked to the game.", "Cada equipo trabaja su estrategia en tableros colaborativos (SWOT, Lean Canvas y OKR).")) + "</p>" +
       '<div class="gm-teams">' + ids.map(function (t) {
         const bs = (teams[t] && teams[t].boards) || {};
-        return '<div class="gm-team" style="--c:' + tColor(t) + '"><b>' + esc(tName(t)) + "</b><div>" + BOARDS.map(function (b) { return bs[b[0]] ? '<a class="gm-btn sm" href="../board/?id=' + encodeURIComponent(bs[b[0]]) + '">' + IC("board", 14) + " " + b[1] + "</a>" : '<span class="gm-btn sm off">' + b[1] + "</span>"; }).join("") + "</div></div>";
+        return '<div class="gm-team" style="--c:' + tColor(t) + '"><b>' + esc(tName(t)) + "</b><div>" + boardsList().map(function (b) { return bs[b[0]] ? '<a class="gm-btn sm" href="../board/?id=' + encodeURIComponent(bs[b[0]]) + '">' + IC("board", 14) + " " + b[1] + "</a>" : '<span class="gm-btn sm off">' + b[1] + "</span>"; }).join("") + "</div></div>";
       }).join("") + "</div>" +
       (role === "student" ? '<p class="muted small">' + X("Se o quadro não abrir, peça ao professor acesso ao workspace da turma.", "If a board does not open, ask the professor for access to the class workspace.", "Si el tablero no abre, pide acceso al profesor.") + "</p>" : "") + "</section>";
     h += '<section class="gm-panel"><h2>' + X("Planejamento conectado", "Connected planning", "Planificación conectada") + "</h2>" +
@@ -581,6 +796,7 @@
     if (!d.auto) return h + '<p class="muted">' + X("O resumo fica disponível depois das rodadas processadas.", "The summary is available after rounds are processed.", "El resumen está disponible tras procesar las rondas.") + "</p></section>";
     h += '<div class="gm-teams">' + Object.keys(d.auto).sort().map(function (t) {
       const a = d.auto[t];
+      if (a.mode === "project") return '<div class="gm-team" style="--c:' + tColor(t) + '"><b>' + esc(tName(t)) + "</b><ul><li>" + X("Abordagem: ", "Approach: ", "Enfoque: ") + esc(apName(a.approach)) + "</li><li>" + X("Concluído: ", "Complete: ", "Completado: ") + pct(a.pct) + " · " + (a.finished ? X("terminou na rodada ", "finished in round ", "terminó en la ronda ") + a.finished : X("término previsto: rodada ", "forecast finish: round ", "término previsto: ronda ") + a.forecast) + "</li><li>CPI " + num(a.CPI, 2) + " · SPI " + num(a.SPI, 2) + "</li><li>" + X("Qualidade ", "Quality ", "Calidad ") + num(a.quality, 1) + " · stakeholders " + num(a.stake, 1) + "</li><li>" + X("Mudanças aceitas: ", "Changes accepted: ", "Cambios aceptados: ") + num(a.accepted) + " · " + X("escopo cortado: ", "scope cut: ", "alcance recortado: ") + num(a.descoped) + "</li><li>" + X("Valor para o negócio: ", "Business value: ", "Valor para el negocio: ") + money(a.value) + "</li></ul></div>";
       return '<div class="gm-team" style="--c:' + tColor(t) + '"><b>' + esc(tName(t)) + "</b><ul>" +
         "<li>" + W("cumNI") + ": " + money(a.cumNI) + "</li><li>" + X("Melhor rodada: ", "Best round: ", "Mejor ronda: ") + a.best + " (" + money(a.bestNI) + ")</li><li>" + X("Preço médio: ", "Average price: ", "Precio medio: ") + money(a.avgPrice, 2) + "</li>" +
         "<li>Marketing + " + decLabel("rd") + ": " + money(a.mktRd) + "</li><li>" + W("share") + X(" médio: ", " average: ", " media: ") + pct(a.avgShare) + "</li>" + (a.emergency ? "<li>" + X("Rodadas com empréstimo emergencial: ", "Rounds with an emergency loan: ", "Rondas con préstamo de emergencia: ") + a.emergency + "</li>" : "") + "</ul></div>";
@@ -590,6 +806,14 @@
   }
   function genDebrief() {
     const auto = {};
+    if (isPM()) {
+      teamIds().forEach(function (t) {
+        const ds = doneRounds().filter(function (n) { return results[n].teams && results[n].teams[t]; }); if (!ds.length) return;
+        const o = results[ds[ds.length - 1]].teams[t], s = o.state || {};
+        auto[t] = { mode: "project", approach: o.approach, pct: o.pct, CPI: o.CPI, SPI: o.SPI, quality: o.quality, stake: o.stake, finished: o.finished || 0, forecast: o.forecast, accepted: s.accepted || 0, descoped: s.descoped || 0, value: o.value, AC: o.AC, BAC: o.BAC };
+      });
+      return db.ref("game/" + ID + "/debrief").update({ auto: auto, at: TS() }).then(function () { toast(X("Resumo gerado", "Summary generated", "Resumen generado")); }, fail);
+    }
     teamIds().forEach(function (t) {
       const ds = doneRounds().filter(function (n) { return results[n].teams && results[n].teams[t]; }); if (!ds.length) return;
       let best = ds[0], sumP = 0, mr = 0, em = 0;
@@ -603,9 +827,12 @@
     const d = debrief || {}; if (!d.auto) return;
     if (!window.CMAI || !window.CMAI.generate) return toast(X("A IA não está disponível nesta página.", "AI is not available on this page.", "La IA no está disponible."));
     const lname = { pt: "português do Brasil", "pt-pt": "português de Portugal", en: "English", es: "español" }[LANG];
-    const facts = Object.keys(d.auto).map(function (t) { const a = d.auto[t]; return tName(t) + ": cumulative profit " + a.cumNI + ", best round " + a.best + ", average price " + a.avgPrice + ", marketing+R&D " + a.mktRd + ", average share " + (a.avgShare * 100).toFixed(1) + "%, emergency loans " + a.emergency; }).join("\n");
-    const prompt = "You are a business school professor running the debrief of a business simulation game (scenario: " + scenName(cfg.scenario) + ", " + doneRounds().length + " rounds). Teams' facts:\n" + facts +
-      "\nWrite in " + lname + ". Return JSON {\"summary\": \"one paragraph comparing the strategies and what explains the ranking\", \"lessons\": [\"4 to 6 short management lessons for the class\"]}.";
+    const facts = Object.keys(d.auto).map(function (t) { const a = d.auto[t]; return a.mode === "project"
+      ? tName(t) + ": approach " + a.approach + ", " + (a.pct * 100).toFixed(0) + "% complete, " + (a.finished ? "finished in round " + a.finished : "forecast finish round " + a.forecast) + " (planned " + P().N + "), CPI " + a.CPI + ", SPI " + a.SPI + ", quality " + a.quality + ", stakeholder satisfaction " + a.stake + ", changes accepted " + a.accepted + ", scope cut " + a.descoped + ", actual cost " + a.AC + " vs budget " + a.BAC + ", business value " + a.value
+      : tName(t) + ": cumulative profit " + a.cumNI + ", best round " + a.best + ", average price " + a.avgPrice + ", marketing+R&D " + a.mktRd + ", average share " + (a.avgShare * 100).toFixed(1) + "%, emergency loans " + a.emergency; }).join("\n");
+    const kind = isPM() ? "a project management simulation game (case: " + scenName(cfg.scenario) + ", all teams ran the same project)" : "a business simulation game (scenario: " + scenName(cfg.scenario) + ")";
+    const prompt = "You are a business school professor running the debrief of " + kind + ", " + doneRounds().length + " rounds. Teams' facts:\n" + facts +
+      "\nWrite in " + lname + ". Return JSON {\"summary\": \"one paragraph comparing the strategies and what explains the ranking\", \"lessons\": [\"4 to 6 short " + (isPM() ? "project management" : "management") + " lessons for the class\"]}.";
     const b = document.getElementById("dbAi"); if (b) b.disabled = true;
     window.CMAI.generate("debrief", prompt).then(function (r) {
       return db.ref("game/" + ID + "/debrief/ai").set({ summary: String((r && r.summary) || "").slice(0, 3000), lessons: ((r && r.lessons) || []).slice(0, 8).map(function (x) { return String(x).slice(0, 300); }), at: TS() });
@@ -623,7 +850,7 @@
   function createBoards() {
     const u = {}; let c = 0;
     teamIds().forEach(function (t) {
-      BOARDS.forEach(function (b) {
+      boardsList().forEach(function (b) {
         if (teams[t].boards && teams[t].boards[b[0]]) return;
         const id = slug(b[1] + " " + tName(t)) + "-" + rnd(), title = b[1] + " – " + tName(t) + " · " + (info.title || "");
         u["boards/" + id + "/info"] = boardRec(title, b[0]); u["workspaces/" + info.ws + "/boards/" + id] = { title: title, template: b[0], created: TS() };
@@ -672,26 +899,29 @@
   }
   function localDT(d) { const z = function (x) { return String(x).padStart(2, "0"); }; return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + "T" + z(d.getHours()) + ":" + z(d.getMinutes()); }
   function eventsEditor(evs) {
-    const on = {}; evs.forEach(function (e) { on[e.type] = e; });
-    return '<div class="gm-evs">' + Object.keys(E.EVENTS).map(function (k) {
-      const i = eventInfo(k), e = on[k], val = e && e.k != null ? e.k : E.EVENTS[k].k;
+    const on = {}; evs.forEach(function (e) { on[e.id || e.type] = e; });
+    return '<div class="gm-evs">' + evCatalog().map(function (i) {
+      const k = i.id, e = on[k], val = e && e.k != null ? e.k : i.k;
       const shown = i.unit === "%" ? +(val * 100).toFixed(2) : val;
-      return '<label class="gm-ev' + (e ? " on" : "") + '"><input type="checkbox" data-ev="' + k + '"' + (e ? " checked" : "") + "><span><b>" + esc(i.n) + "</b><small>" + esc(i.d) + '</small></span><span class="gm-evk">' + (i.unit === "%" ? "" : "×") + '<input type="number" step="0.01" data-evk="' + k + '" value="' + shown + '">' + (i.unit === "%" ? "%" : "") + "</span></label>";
+      return '<label class="gm-ev' + (e ? " on" : "") + '"><input type="checkbox" data-ev="' + k + '"' + (e ? " checked" : "") + "><span><b>" + esc(i.n) + "</b><small>" + esc(i.d) + '</small></span><span class="gm-evk">' + (i.unit === "×" ? "×" : "") + '<input type="number" step="' + (i.unit === "n" ? "1" : "0.01") + '" data-evk="' + k + '" value="' + shown + '" title="' + esc(i.what || "") + '">' + (i.unit === "%" ? "%" : i.unit === "n" ? " " + esc(i.what) : "") + "</span></label>";
     }).join("") + '<button type="button" class="gm-btn sm" data-surprise>🎲 ' + X("Evento surpresa", "Surprise event", "Evento sorpresa") + "</button></div>";
   }
   function readEvents(root) {
     const out = [];
     root.querySelectorAll("[data-ev]").forEach(function (c) {
-      if (!c.checked) return; const k = c.dataset.ev, inp = root.querySelector('[data-evk="' + k + '"]');
-      let val = Number(inp && inp.value); if (!isFinite(val) || val <= 0) val = E.EVENTS[k].k; if (eventInfo(k).unit === "%") val = val / 100;
-      out.push({ type: k, k: val });
+      if (!c.checked) return; const k = c.dataset.ev, inp = root.querySelector('[data-evk="' + k + '"]'), i = evCatalog().find(function (x) { return x.id === k; }); if (!i) return;
+      let val = Number(inp && inp.value); if (!isFinite(val) || val <= 0) val = i.k; else if (i.unit === "%") val = val / 100;
+      out.push(i.id === i.type ? { type: i.type, k: val } : { id: i.id, type: i.type, k: val });
     });
     return out;
   }
   function bindEvents(root, onChange, n) {
     root.querySelectorAll("[data-ev], [data-evk]").forEach(function (c) { c.onchange = function () { const l = c.closest(".gm-ev"); if (l) l.classList.toggle("on", !!l.querySelector("[data-ev]").checked); onChange(readEvents(root)); }; });
     const s = root.querySelector("[data-surprise]");
-    if (s) s.onclick = function () { const k = E.surprise(ID + ":" + n), c = root.querySelector('[data-ev="' + k + '"]'); if (c && !c.checked) { c.checked = true; c.onchange(); } toast("🎲 " + eventInfo(k).n); };
+    if (s) s.onclick = function () {
+      const ids = evCatalog().map(function (x) { return x.id; }), k = isPM() ? PM.surprise(ID + ":" + n, ids) : E.surprise(ID + ":" + n), c = root.querySelector('[data-ev="' + k + '"]');
+      if (c && !c.checked) { c.checked = true; c.onchange(); } toast("🎲 " + evInfo({ id: k, type: k }).n);
+    };
   }
 
   function openRound(n, deadline, evs, mail) {
@@ -704,23 +934,28 @@
     const p = P(), out = {}, auto = {};
     teamIds().forEach(function (t) {
       let d = decisionFor(n, t);
-      if (!d) { d = Object.assign({}, prevDecision(n, t) || E.defaultDecision(p, stateBefore(n, t), teamIds().length)); delete d.strategic; delete d.by; delete d.at; auto[t] = true; }
+      if (!d) { d = Object.assign({}, prevDecision(n, t) || ENG().defaultDecision(p, stateBefore(n, t), teamIds().length)); delete d.strategic; delete d.by; delete d.at; auto[t] = true; if (isPM()) { d.descope = 0; d.hire = 0; } }
       out[t] = d;
     });
     return { d: out, auto: auto };
   }
   function computeRound(n, prevTeams) {
     const p = P(), st = {};
-    teamIds().forEach(function (t) { st[t] = prevTeams && prevTeams[t] ? fixState(prevTeams[t].state) : E.initState(p); });
+    const G = ENG();
+    teamIds().forEach(function (t) { st[t] = prevTeams && prevTeams[t] ? fixState(prevTeams[t].state) : G.initState(p); });
     const fd = fullDecisions(n), dec = {};
-    Object.keys(fd.d).forEach(function (t) { const x = {}; E.DECISIONS.forEach(function (k) { x[k] = decOn(k) ? (Number(fd.d[t][k]) || 0) : 0; }); dec[t] = x; });
-    const r = E.runRound(p, st, dec, n, (rounds[n] || {}).events || []);
-    const sc = E.score(r.teams, cfg.weights || E.WEIGHTS), ranking = {};
-    Object.keys(r.teams).forEach(function (t) { const o = r.teams[t]; ranking[t] = { score: sc[t], cumNI: o.cumNI, value: o.value, sat: o.sat, share: o.share, avgShare: o.avgShare, sales: o.sales, price: o.price, ni: o.ni }; });
+    Object.keys(fd.d).forEach(function (t) { const x = {}; G.DECISIONS.forEach(function (k) { x[k] = k === "approach" ? fd.d[t][k] : decOn(k) ? (Number(fd.d[t][k]) || 0) : 0; }); dec[t] = x; });
+    const r = G.runRound(p, st, dec, n, (rounds[n] || {}).events || []);
+    const sc = G.score(r.teams, cfg.weights || G.WEIGHTS), ranking = {};
+    Object.keys(r.teams).forEach(function (t) {
+      const o = r.teams[t];
+      ranking[t] = isPM() ? { score: sc[t], pct: o.pct, CPI: o.CPI, SPI: o.SPI, quality: o.quality, stake: o.stake, value: o.value, finished: o.finished, forecast: o.forecast, late: o.late, AC: o.AC, EAC: o.EAC }
+        : { score: sc[t], cumNI: o.cumNI, value: o.value, sat: o.sat, share: o.share, avgShare: o.avgShare, sales: o.sales, price: o.price, ni: o.ni };
+    });
     return { r: r, ranking: ranking, fd: fd };
   }
   function resultWrites(n, c, u) {
-    u["game/" + ID + "/results/" + n] = { public: { market: c.r.market, ranking: c.ranking, at: TS(), version: E.VERSION }, teams: c.r.teams };
+    u["game/" + ID + "/results/" + n] = { public: { market: c.r.market, ranking: c.ranking, at: TS(), version: ENG().VERSION }, teams: c.r.teams };
     Object.keys(c.fd.auto).forEach(function (t) { u["game/" + ID + "/decisions/" + n + "/" + t] = Object.assign({}, c.fd.d[t], { auto: true, at: TS(), by: me.email }); });
   }
   function processRound(n, mail) {
@@ -798,12 +1033,13 @@
     // scenario & parameters
     h += '<form class="gm-panel gm-form live" id="sScen"><h2>' + X("Cenário e regras", "Scenario and rules", "Escenario y reglas") + "</h2>" +
       (started ? '<p class="gm-note">' + X("A partida já começou: mudar parâmetros só vale ao reprocessar as rodadas.", "The game has started: parameter changes only apply when rounds are reprocessed.", "La partida ya empezó: los cambios valen al reprocesar.") + "</p>" : "") +
-      '<div class="gm-fg"><label class="gm-f"><span>' + X("Cenário de partida", "Starting scenario", "Escenario") + '</span><select name="scenario">' + Object.keys(E.SCENARIOS).map(function (k) { return '<option value="' + k + '"' + (cfg.scenario === k ? " selected" : "") + ">" + esc(scenName(k)) + "</option>"; }).join("") +
-      Object.keys(wsTemplates).map(function (k) { return '<option value="tpl:' + k + '">' + X("Modelo da instituição: ", "Institution model: ", "Modelo de la institución: ") + esc(wsTemplates[k].name) + "</option>"; }).join("") + '</select></label><button type="button" class="gm-btn sm" id="applyScen">' + X("Aplicar cenário", "Apply scenario", "Aplicar escenario") + "</button>" +
+      '<div class="gm-fg"><label class="gm-f"><span>' + X("Modo do jogo", "Game mode", "Modo de juego") + '</span><select name="mode"' + (started ? " disabled" : "") + '>' + modeOptions(cfg.mode || "business") + "</select></label>" +
+      '<label class="gm-f"><span>' + (isPM() ? X("Caso (projeto)", "Case (project)", "Caso (proyecto)") : X("Cenário de partida", "Starting scenario", "Escenario")) + '</span><select name="scenario">' + scenOptions(cfg.mode || "business", cfg.scenario) +
+      Object.keys(wsTemplates).filter(function (k) { return (wsTemplates[k].mode || "business") === (cfg.mode || "business"); }).map(function (k) { return '<option value="tpl:' + k + '">' + X("Modelo da instituição: ", "Institution model: ", "Modelo de la institución: ") + esc(wsTemplates[k].name) + "</option>"; }).join("") + '</select></label><button type="button" class="gm-btn sm" id="applyScen">' + X("Aplicar cenário", "Apply scenario", "Aplicar escenario") + "</button>" +
       '<label class="gm-f"><span>' + X("Converter valores monetários ×", "Convert money values ×", "Convertir valores ×") + '</span><input type="number" step="0.0001" min="0.0001" name="factor" placeholder="' + esc(X("ex.: 0,18 de real para euro", "e.g. 0.18", "ej.: 0,18")) + '"></label><button type="button" class="gm-btn sm" id="applyConv">' + X("Converter", "Convert", "Convertir") + "</button></div>" +
       paramsTable(p) +
-      "<h3>" + X("Decisões disponíveis para as equipes", "Decisions available to the teams", "Decisiones disponibles") + '</h3><div class="gm-chks">' + E.DECISIONS.map(function (k) { const fixed = k === "price" || k === "qty"; return '<label class="gm-chk"><input type="checkbox" name="dec_' + k + '"' + (decOn(k) ? " checked" : "") + (fixed ? " disabled" : "") + "> " + esc(decLabel(k)) + "</label>"; }).join("") + "</div>" +
-      "<h3>" + X("Pesos da pontuação (%)", "Score weights (%)", "Pesos de la puntuación (%)") + '</h3><div class="gm-fg">' + ["profit", "value", "sat", "share"].map(function (k) { const w = cfg.weights || E.WEIGHTS; return '<label class="gm-f"><span>' + esc({ profit: W("cumNI"), value: W("value"), sat: W("sat"), share: W("share") }[k]) + '</span><input type="number" min="0" max="100" name="w_' + k + '" value="' + (w[k] != null ? w[k] : 0) + '"></label>'; }).join("") + "</div>" +
+      "<h3>" + X("Decisões disponíveis para as equipes", "Decisions available to the teams", "Decisiones disponibles") + '</h3><div class="gm-chks">' + ENG().DECISIONS.map(function (k) { const fixed = decFixed(k); return '<label class="gm-chk"><input type="checkbox" name="dec_' + k + '"' + (decOn(k) ? " checked" : "") + (fixed ? " disabled" : "") + "> " + esc(decLabel(k)) + "</label>"; }).join("") + "</div>" +
+      "<h3>" + X("Pesos da pontuação (%)", "Score weights (%)", "Pesos de la puntuación (%)") + '</h3><div class="gm-fg">' + weightKeys().map(function (k) { const w = cfg.weights || ENG().WEIGHTS; return '<label class="gm-f"><span>' + esc(weightLabel(k)) + '</span><input type="number" min="0" max="100" name="w_' + k + '" value="' + (w[k] != null ? w[k] : 0) + '"></label>'; }).join("") + "</div>" +
       '<div class="gm-actions"><button type="button" class="gm-btn" id="saveTpl">' + X("Salvar como modelo da instituição", "Save as institution model", "Guardar como modelo de la institución") + '</button><button class="gm-btn primary">' + X("Salvar regras", "Save rules", "Guardar reglas") + "</button></div></form>";
     // teams & people
     h += '<section class="gm-panel"><div class="gm-ph"><h2>' + W("teams") + " (" + teamIds().length + ")</h2><span class=\"muted small\">" + X("recomendado: 4 a 6", "recommended: 4 to 6", "recomendado: 4 a 6") + '</span></div><div class="gm-teams">' + teamIds().map(function (t) {
@@ -823,8 +1059,17 @@
     v.innerHTML = h;
     bindSettings(v);
   }
+  function modeOptions(sel) { return [["project", X("Gerenciamento de projetos", "Project management", "Gestión de proyectos")], ["business", X("Gestão empresarial (empresa e mercado)", "Business management (company and market)", "Gestión empresarial (empresa y mercado)")]].map(function (m) { return '<option value="' + m[0] + '"' + (sel === m[0] ? " selected" : "") + ">" + esc(m[1]) + "</option>"; }).join(""); }
+  function scenOptions(mode, sel) { const S = mode === "project" ? PM.SCENARIOS : E.SCENARIOS; return Object.keys(S).map(function (k) { return '<option value="' + k + '"' + (sel === k ? " selected" : "") + ">" + esc(mode === "project" ? pmScenName(k) : scenName(k)) + "</option>"; }).join(""); }
+  function weightKeys() { return isPM() ? ["time", "cost", "scope", "quality", "stake"] : ["profit", "value", "sat", "share"]; }
+  function weightLabel(k) { return { profit: W("cumNI"), value: W("value"), sat: W("sat"), share: W("share"), time: X("Prazo (SPI)", "Schedule (SPI)", "Plazo (SPI)"), cost: X("Custo (CPI)", "Cost (CPI)", "Costo (CPI)"), scope: X("Escopo entregue", "Scope delivered", "Alcance entregado", "Âmbito entregue"), quality: X("Qualidade", "Quality", "Calidad"), stake: "Stakeholders" }[k] || k; }
   function regionName(k) { try { return new Intl.DisplayNames([LOCALE[LANG]], { type: "region" }).of(k); } catch (e) { return k; } }
-  const PARAM_GROUPS = [
+  const PM_PARAM_GROUPS = [
+    [X("Projeto", "Project", "Proyecto"), [["S0", X("Escopo inicial", "Initial scope", "Alcance inicial", "Âmbito inicial")], ["N", X("Prazo planejado (rodadas)", "Planned duration (rounds)", "Plazo planificado (rondas)")], ["BAC", X("Orçamento aprovado (BAC)", "Approved budget (BAC)", "Presupuesto aprobado (BAC)"), "$"], ["benefit", X("Valor para o negócio se entregue no prazo", "Business value if delivered on time", "Valor para el negocio si se entrega a tiempo"), "$"], ["lateLoss", X("Perda de valor por rodada de atraso", "Value lost per round late", "Pérdida de valor por ronda de atraso"), "%"], ["crCost", X("Custo das mudanças aprovadas (× custo unitário)", "Cost of approved changes (× unit cost)", "Costo de los cambios aprobados (×)")]]],
+    [X("Equipe e custos", "Team and costs", "Equipo y costos", "Equipa e custos"), [["init.W", X("Pessoas na equipe", "People on the team", "Personas en el equipo")], ["sal", X("Custo por pessoa por rodada", "Cost per person per round", "Costo por persona por ronda"), "$"], ["prod", X("Entregas por pessoa por rodada", "Deliverables per person per round", "Entregas por persona por ronda")], ["hire", X("Custo por contratação", "Cost per hire", "Costo por contratación"), "$"], ["fire", X("Custo por dispensa", "Cost per release", "Costo por liberación"), "$"], ["trRef", X("Treinamento de referência por pessoa", "Reference training per person", "Capacitación de referencia por persona"), "$"], ["cmat", X("Materiais e licenças por entrega", "Materials and licences per deliverable", "Materiales y licencias por entrega"), "$"], ["cOut", X("Terceirização por entrega", "Outsourcing per deliverable", "Tercerización por entrega"), "$"], ["outMax", X("Terceirização máxima por rodada", "Max outsourcing per round", "Tercerización máxima por ronda")]]],
+    [X("Qualidade, riscos e stakeholders", "Quality, risks and stakeholders", "Calidad, riesgos y stakeholders"), [["d0", X("Defeitos por entrega sem testes", "Defects per deliverable without testing", "Defectos por entrega sin pruebas"), "%"], ["escape", X("Defeitos que escapam para o cliente", "Defects that reach the client", "Defectos que llegan al cliente"), "%"], ["E0", X("Exposição a risco inicial", "Initial risk exposure", "Exposición al riesgo inicial"), "$"], ["eGrow", X("Aumento da exposição por rodada", "Exposure growth per round", "Aumento de la exposición por ronda"), "$"], ["mitEff", X("Redução de exposição por 1 investido", "Exposure removed per 1 spent", "Exposición reducida por 1 invertido")], ["commRef", X("Comunicação de referência por rodada", "Reference communication per round", "Comunicación de referencia por ronda"), "$"], ["init.M", X("Moral inicial (0–100)", "Initial morale (0–100)", "Moral inicial (0–100)")], ["init.St", X("Satisfação inicial dos stakeholders (0–100)", "Initial stakeholder satisfaction (0–100)", "Satisfacción inicial (0–100)")]]]
+  ];
+  const BIZ_PARAM_GROUPS = [
     [X("Mercado", "Market", "Mercado"), [["D0", X("Demanda base por rodada", "Base demand per round", "Demanda base por ronda")], ["g", X("Crescimento por rodada", "Growth per round", "Crecimiento por ronda"), "%"], ["Pref", X("Preço de referência", "Reference price", "Precio de referencia"), "$"], ["em", X("Elasticidade do mercado ao preço médio", "Market elasticity to average price", "Elasticidad del mercado")], ["e", X("Elasticidade da fatia ao preço", "Share elasticity to price", "Elasticidad de la cuota al precio")], ["a", X("Efeito do marketing", "Marketing effect", "Efecto del marketing")], ["gq", X("Efeito da qualidade (P&D)", "Quality (R&D) effect", "Efecto de la calidad")], ["ls", X("Efeito da satisfação", "Satisfaction effect", "Efecto de la satisfacción")], ["spill", X("Transbordo da demanda não atendida", "Spill-over of unmet demand", "Traspaso de demanda no atendida"), "%"]]],
     [X("Custos e operação", "Costs and operations", "Costos y operación"), [["cv", X("Custo unitário (insumos)", "Unit cost (inputs)", "Costo unitario"), "$"], ["sal", X("Salário por funcionário por rodada", "Salary per employee per round", "Salario por empleado por ronda"), "$"], ["prod", X("Produtividade (unidades por funcionário)", "Productivity (units per employee)", "Productividad")], ["tau", X("Ganho máximo do treinamento", "Max training gain", "Ganancia máx. de capacitación"), "%"], ["trRef", X("Treinamento de referência por funcionário", "Reference training per employee", "Capacitación de referencia"), "$"], ["hire", X("Custo por contratação", "Cost per hire", "Costo por contratación"), "$"], ["fire", X("Custo por demissão", "Cost per layoff", "Costo por despido"), "$"], ["capCost", X("Investimento por unidade de capacidade", "Investment per unit of capacity", "Inversión por unidad de capacidad"), "$"], ["dep", X("Depreciação por rodada", "Depreciation per round", "Depreciación por ronda"), "%"], ["stor", X("Estocagem por unidade", "Storage per unit", "Almacenaje por unidad"), "$"], ["adm", X("Despesa administrativa fixa", "Fixed overheads", "Gastos fijos"), "$"], ["dB", X("Desgaste da marca por rodada", "Brand decay per round", "Desgaste de la marca"), "%"], ["dQ", X("Desgaste da qualidade por rodada", "Quality decay per round", "Desgaste de la calidad"), "%"]]],
     [X("Finanças", "Finance", "Finanzas"), [["r", X("Juros por rodada", "Interest per round", "Interés por ronda"), "%"], ["rE", X("Juros do empréstimo emergencial", "Emergency loan interest", "Interés de emergencia"), "%"], ["tax", X("Imposto sobre o lucro", "Income tax rate", "Impuesto a la renta"), "%"], ["debtMax", X("Teto de dívida (% do ativo)", "Debt ceiling (% of assets)", "Tope de deuda (% del activo)"), "%"], ["mult", X("Múltiplo do lucro anual no valor da empresa", "Annual profit multiple in company value", "Múltiplo de utilidad anual")]]],
@@ -832,7 +1077,7 @@
   ];
   function pget(p, k) { return k.indexOf("init.") === 0 ? p.init[k.slice(5)] : p[k]; }
   function paramsTable(p) {
-    return PARAM_GROUPS.map(function (g) {
+    return (isPM() ? PM_PARAM_GROUPS : BIZ_PARAM_GROUPS).map(function (g) {
       return "<h3>" + esc(g[0]) + '</h3><div class="gm-fg">' + g[1].map(function (f) {
         const v = pget(p, f[0]), isPct = f[2] === "%";
         return '<label class="gm-f"><span>' + esc(f[1]) + (f[2] === "$" ? ' <em class="muted">(' + esc(curr().custom ? curr().symbol || "" : curr().code) + ")</em>" : isPct ? " <em class=\"muted\">(%)</em>" : "") + '</span><input type="number" step="any" name="p_' + f[0] + '" value="' + (isPct ? +(v * 100).toFixed(4) : v) + '"></label>';
@@ -841,7 +1086,7 @@
   }
   function readParams(f) {
     const p = JSON.parse(JSON.stringify(P()));
-    PARAM_GROUPS.forEach(function (g) { g[1].forEach(function (x) {
+    (isPM() ? PM_PARAM_GROUPS : BIZ_PARAM_GROUPS).forEach(function (g) { g[1].forEach(function (x) {
       const inp = f["p_" + x[0]]; if (!inp) return; let v = Number(inp.value); if (!isFinite(v)) return; if (x[2] === "%") v = v / 100;
       if (x[0].indexOf("init.") === 0) p.init[x[0].slice(5)] = v; else p[x[0]] = v;
     }); });
@@ -863,29 +1108,30 @@
       db.ref().update(u).then(function () { if (!langFromUser) LANG = g.lang.value; toast(X("Salvo ✓", "Saved ✓", "Guardado ✓")); }, fail);
     };
     const s = v.querySelector("#sScen");
+    s.mode.onchange = function () { s.scenario.innerHTML = scenOptions(s.mode.value, "") + Object.keys(wsTemplates).filter(function (k) { return (wsTemplates[k].mode || "business") === s.mode.value; }).map(function (k) { return '<option value="tpl:' + k + '">' + esc(wsTemplates[k].name) + "</option>"; }).join(""); };
     v.querySelector("#applyScen").onclick = function () {
-      const val = s.scenario.value; let upd;
-      if (val.indexOf("tpl:") === 0) { const t = wsTemplates[val.slice(4)] || {}; upd = { scenario: t.scenario || "industria", params: t.params || E.params(t.scenario || "industria"), decisions: t.decisions || null, weights: t.weights || null, currency: t.currency || cfg.currency || null, country: t.country || null, lang: t.lang || cfg.lang || null, brand: t.brand || cfg.brand || null, rounds: t.rounds || cfg.rounds || 8 }; }
-      else upd = { scenario: val, params: E.params(val) };
+      const val = s.scenario.value, mode = s.mode.value, G = mode === "project" ? PM : E, same = mode === (cfg.mode || "business"); let upd;
+      if (val.indexOf("tpl:") === 0) { const t = wsTemplates[val.slice(4)] || {}, tm = t.mode || "business", TG = tm === "project" ? PM : E, sc = t.scenario || (tm === "project" ? "lancamento" : "industria"); upd = { mode: tm, scenario: sc, params: t.params || TG.params(sc), decisions: t.decisions || null, weights: t.weights || TG.WEIGHTS, currency: t.currency || cfg.currency || null, country: t.country || null, lang: t.lang || cfg.lang || null, brand: t.brand || cfg.brand || null, rounds: t.rounds || cfg.rounds || 8 }; }
+      else { upd = { mode: mode, scenario: val, params: G.params(val), decisions: same ? (cfg.decisions || null) : null, weights: same ? (cfg.weights || G.WEIGHTS) : G.WEIGHTS }; if (mode === "project") upd.rounds = Math.max(totalRounds(), G.params(val).N + 2); }
       if (!window.confirm(X("Substituir os parâmetros atuais pelos do cenário escolhido?", "Replace the current parameters with the chosen scenario's?", "¿Reemplazar los parámetros actuales?"))) return;
       db.ref("game/" + ID + "/config").update(upd).then(function () { toast(X("Cenário aplicado", "Scenario applied", "Escenario aplicado")); }, fail);
     };
     v.querySelector("#applyConv").onclick = function () {
       const f = Number(String(s.factor.value).replace(",", ".")); if (!(f > 0)) return toast(X("Informe um fator maior que zero.", "Enter a factor above zero.", "Indica un factor mayor que cero."));
-      db.ref("game/" + ID + "/config/params").set(E.convert(P(), f)).then(function () { toast(X("Valores convertidos ×", "Values converted ×", "Valores convertidos ×") + f); }, fail);
+      db.ref("game/" + ID + "/config/params").set(ENG().convert(P(), f)).then(function () { toast(X("Valores convertidos ×", "Values converted ×", "Valores convertidos ×") + f); }, fail);
     };
     s.onsubmit = function (e) {
       e.preventDefault();
-      const dec = {}; E.DECISIONS.forEach(function (k) { if (k !== "price" && k !== "qty" && s["dec_" + k] && !s["dec_" + k].checked) dec[k] = false; });
-      const w = {}; ["profit", "value", "sat", "share"].forEach(function (k) { w[k] = Math.max(0, +s["w_" + k].value || 0); });
-      if (!(w.profit + w.value + w.sat + w.share)) return toast(X("Defina ao menos um peso.", "Set at least one weight.", "Define al menos un peso."));
+      const dec = {}; ENG().DECISIONS.forEach(function (k) { if (!decFixed(k) && s["dec_" + k] && !s["dec_" + k].checked) dec[k] = false; });
+      const w = {}; weightKeys().forEach(function (k) { w[k] = Math.max(0, +s["w_" + k].value || 0); });
+      if (!Object.keys(w).reduce(function (a, k) { return a + w[k]; }, 0)) return toast(X("Defina ao menos um peso.", "Set at least one weight.", "Define al menos un peso."));
       document.activeElement && document.activeElement.blur();
       db.ref("game/" + ID + "/config").update({ params: readParams(s), decisions: Object.keys(dec).length ? dec : null, weights: w }).then(function () { toast(X("Regras salvas ✓", "Rules saved ✓", "Reglas guardadas ✓")); }, fail);
     };
     v.querySelector("#saveTpl").onclick = function () {
       const name = window.prompt(X("Nome do modelo (ex.: Business Game – Administração 5º semestre)", "Model name", "Nombre del modelo"), info.title || ""); if (!name) return;
       const id = slug(name) + "-" + rnd();
-      db.ref("workspaces/" + info.ws + "/gameTemplates/" + id).set({ name: name.trim(), scenario: cfg.scenario || "industria", params: readParams(s), decisions: cfg.decisions || null, weights: cfg.weights || null, currency: cfg.currency || null, country: cfg.country || null, lang: cfg.lang || null, brand: cfg.brand || null, rounds: totalRounds(), created: TS(), by: me.email })
+      db.ref("workspaces/" + info.ws + "/gameTemplates/" + id).set({ name: name.trim(), mode: cfg.mode || "business", scenario: cfg.scenario || defScen(), params: readParams(s), decisions: cfg.decisions || null, weights: cfg.weights || null, currency: cfg.currency || null, country: cfg.country || null, lang: cfg.lang || null, brand: cfg.brand || null, rounds: totalRounds(), created: TS(), by: me.email })
         .then(function () { toast(X("Modelo salvo para a instituição", "Model saved for the institution", "Modelo guardado")); loadWs(); }, function (e2) { fail({ message: X("Só o dono do workspace pode salvar modelos: ", "Only the workspace owner can save models: ", "Solo el dueño puede guardar modelos: ") + e2.message }); });
     };
     v.querySelector("#addTeam").onclick = function () {
@@ -957,11 +1203,16 @@
       const w = r[0]; wsInfo = w.info || {}; wsTemplates = w.gameTemplates || {};
       if (!r[1]) return window.CMModules.gate("game", wsId, app);
       if (!isAdm && wsInfo.owner !== ME) return gate(X("Sem permissão", "Not allowed", "Sin permiso"), X("Só o dono do workspace ou um admin cria partidas.", "Only the workspace owner or an admin can create games.", "Solo el dueño del workspace o un admin crea partidas."));
+      // the workspace may restrict its modules (workspaces/<ws>/info/modules); without "game" there is no Business Game there
+      const mods = wsInfo.modules, list = Array.isArray(mods) ? mods : (mods && typeof mods === "object" ? Object.keys(mods).map(function (k) { return mods[k] === true ? k : mods[k]; }) : null);
+      if (list && list.indexOf("game") < 0) return gate(X("Business Game não disponível neste workspace", "Business Game is not available in this workspace", "Business Game no disponible en este workspace"), X("Este workspace não inclui o módulo Business Game. Escolha outro workspace ou peça ao administrador para incluir o módulo.", "This workspace does not include the Business Game module. Pick another workspace or ask the administrator to add it.", "Este workspace no incluye el módulo Business Game."));
       const c0 = LANG === "en" ? "USD" : LANG === "pt-pt" || LANG === "es" ? "EUR" : "BRL";
       app.innerHTML = '<header class="gm-top"><a class="gm-back" href="../workspaces/">' + IC("back", 18) + '</a><span class="gm-logo">CM</span><div class="gm-title"><h1>' + X("Nova partida", "New game", "Nueva partida") + '</h1><span class="gm-sub">Business Game · ' + esc(wsInfo.name || wsId) + "</span></div></header>" +
         '<main class="gm-view"><form class="gm-panel gm-form gm-new" id="newF"><h2>' + X("Criar partida", "Create game", "Crear partida") + "</h2>" +
         '<label class="gm-f"><span>' + X("Nome da partida (turma)", "Game name (class)", "Nombre de la partida (curso)") + '</span><input name="title" required maxlength="80" placeholder="' + esc(X("Ex.: Administração 5º semestre – 2026/2", "E.g. Business 101 – Fall 2026", "Ej.: Administración 5º semestre")) + '"></label>' +
-        '<label class="gm-f"><span>' + X("Cenário ou modelo da instituição", "Scenario or institution model", "Escenario o modelo de la institución") + '</span><select name="scen">' + Object.keys(E.SCENARIOS).map(function (k) { return '<option value="' + k + '">' + esc(scenName(k)) + "</option>"; }).join("") + Object.keys(wsTemplates).map(function (k) { return '<option value="tpl:' + k + '">' + X("Modelo: ", "Model: ", "Modelo: ") + esc(wsTemplates[k].name) + "</option>"; }).join("") + "</select></label>" +
+        '<div class="gm-fg"><label class="gm-f"><span>' + X("Modo do jogo", "Game mode", "Modo de juego") + '</span><select name="mode">' + modeOptions("project") + "</select></label>" +
+        '<label class="gm-f"><span>' + X("Caso, cenário ou modelo da instituição", "Case, scenario or institution model", "Caso, escenario o modelo de la institución") + '</span><select name="scen"></select></label></div>' +
+        '<p class="muted small" id="scenDesc"></p>' +
         '<div class="gm-fg"><label class="gm-f"><span>' + X("Moeda", "Currency", "Moneda") + '</span><select name="cur">' + allCurrencies().map(function (k) { return '<option value="' + k + '"' + (k === c0 ? " selected" : "") + ">" + k + " – " + esc(curName(k)) + "</option>"; }).join("") + "</select></label>" +
         '<label class="gm-f"><span>' + X("Idioma", "Language", "Idioma") + '</span><select name="lang">' + Object.keys(LANGS).map(function (k) { return '<option value="' + k + '"' + (k === LANG ? " selected" : "") + ">" + LANGS[k] + "</option>"; }).join("") + "</select></label>" +
         '<label class="gm-f"><span>' + X("Rodadas", "Rounds", "Rondas") + '</span><input type="number" name="rounds" min="1" max="16" value="8"></label>' +
@@ -969,21 +1220,35 @@
         '<p class="muted small">' + X("Você pode ajustar tudo depois em Configuração (moeda fictícia, parâmetros, marca, pesos).", "You can adjust everything later in Settings (fictional currency, parameters, brand, weights).", "Puedes ajustar todo después en Configuración.") + "</p>" +
         '<div class="gm-actions"><a class="gm-btn" href="../workspaces/">' + X("Cancelar", "Cancel", "Cancelar") + '</a><button class="gm-btn primary">' + X("Criar partida", "Create game", "Crear partida") + "</button></div></form></main>";
       const f = document.getElementById("newF");
-      const qsc = QS.get("scenario"); if (qsc && f.scen && [].some.call(f.scen.options, function (o) { return o.value === qsc; })) f.scen.value = qsc; // area chosen on My boards
+      function fillScen() {
+        const m = f.mode.value;
+        f.scen.innerHTML = scenOptions(m, m === "project" ? "lancamento" : "industria") + Object.keys(wsTemplates).filter(function (k) { return (wsTemplates[k].mode || "business") === m; }).map(function (k) { return '<option value="tpl:' + k + '">' + X("Modelo: ", "Model: ", "Modelo: ") + esc(wsTemplates[k].name) + "</option>"; }).join("");
+        descScen();
+      }
+      function descScen() {
+        const m = f.mode.value, sv = f.scen.value, d = document.getElementById("scenDesc");
+        if (m === "project" && PM.SCENARIOS[sv]) { const p = PM.params(sv); d.textContent = pmScenDesc(sv) + " " + X("Plano: ", "Plan: ", "Plan: ") + p.N + X(" rodadas.", " rounds.", " rondas."); f.rounds.value = p.N + 2; }
+        else d.textContent = m === "business" ? X("Cada equipe dirige uma empresa que disputa o mesmo mercado (DRE, balanço e fluxo de caixa).", "Each team runs a company competing in the same market (income statement, balance sheet, cash flow).", "Cada equipo dirige una empresa que compite en el mismo mercado.") : "";
+      }
+      f.mode.onchange = fillScen; f.scen.onchange = descScen; fillScen();
+      // case chosen on My boards (?scenario=): project cases open in project mode, company scenarios in business mode
+      const qsc = QS.get("scenario");
+      if (qsc && (PM.SCENARIOS[qsc] || E.SCENARIOS[qsc])) { f.mode.value = PM.SCENARIOS[qsc] ? "project" : "business"; fillScen(); f.scen.value = qsc; descScen(); }
       f.onsubmit = function (e) {
         e.preventDefault();
         const title = f.title.value.trim(); if (!title) return;
         const id = slug(title) + "-" + rnd(), sv = f.scen.value, u = {};
         let conf;
-        if (sv.indexOf("tpl:") === 0) { const t = wsTemplates[sv.slice(4)] || {}; conf = { scenario: t.scenario || "industria", params: t.params || E.params(t.scenario || "industria"), decisions: t.decisions || null, weights: t.weights || E.WEIGHTS, currency: t.currency || { code: f.cur.value }, country: t.country || null, lang: t.lang || f.lang.value, brand: t.brand || null, rounds: +f.rounds.value || t.rounds || 8 }; }
-        else conf = { scenario: sv, params: E.params(sv), weights: E.WEIGHTS, currency: { code: f.cur.value }, lang: f.lang.value, rounds: +f.rounds.value || 8, brand: wsInfo.name ? { name: wsInfo.name } : null };
+        const mode = f.mode.value, G = mode === "project" ? PM : E;
+        if (sv.indexOf("tpl:") === 0) { const t = wsTemplates[sv.slice(4)] || {}, tm = t.mode || "business", TG = tm === "project" ? PM : E, sc = t.scenario || (tm === "project" ? "lancamento" : "industria"); conf = { mode: tm, scenario: sc, params: t.params || TG.params(sc), decisions: t.decisions || null, weights: t.weights || TG.WEIGHTS, currency: t.currency || { code: f.cur.value }, country: t.country || null, lang: t.lang || f.lang.value, brand: t.brand || null, rounds: +f.rounds.value || t.rounds || 8 }; }
+        else conf = { mode: mode, scenario: sv, params: G.params(sv), weights: G.WEIGHTS, currency: { code: f.cur.value }, lang: f.lang.value, rounds: +f.rounds.value || 8, brand: wsInfo.name ? { name: wsInfo.name } : null };
         conf.deadlineH = 48;
         u["game/" + id + "/info"] = { title: title, ws: wsId, status: "setup", created: TS(), createdBy: me.email };
         u["game/" + id + "/config"] = conf;
         const nt = Math.max(2, Math.min(6, +f.teams.value || 4)), names = ["Alfa", "Beta", "Gama", "Delta", "Épsilon", "Zeta"];
         for (let i = 0; i < nt; i++) u["game/" + id + "/teams/" + slug(names[i])] = { name: names[i], order: i + 1, color: COLORS[i] };
         u["game/" + id + "/people/" + ME] = { email: me.email, name: me.displayName || me.email.split("@")[0], role: "prof", added: TS() };
-        u["workspaces/" + wsId + "/games/" + id] = { title: title, scenario: conf.scenario, created: TS() };
+        u["workspaces/" + wsId + "/games/" + id] = { title: title, scenario: conf.scenario, mode: conf.mode, created: TS() };
         u["userGames/" + ME + "/" + id] = { title: title, role: "prof" };
         f.querySelector(".gm-btn.primary").disabled = true;
         db.ref().update(u).then(function () { if (window.CMMarkSeen) window.CMMarkSeen("game"); location.href = "./?id=" + encodeURIComponent(id); }, function (er) { f.querySelector(".gm-btn.primary").disabled = false; fail(er); });
