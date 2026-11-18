@@ -224,19 +224,58 @@
   }
 
 
+  /* ---------- demo indicators (Indicadores tab) for the SST / SHE plannings ---------- */
+  const HHT = "Horas-homem trabalhadas (HHT)";
+  const KPIS = {
+    "sst-pcmso": [
+      { name: "Exames periódicos em dia", kind: "percent", a: "Exames em dia", b: "Exames previstos", unit: "%", dir: "up", target: 95, dec: 1, gen: function (i) { return { a: 380 + i * 4 + (i % 3) * 3, b: 420 }; } },
+      { name: "Absenteísmo", kind: "percent", a: "Horas de ausência", b: "Horas previstas", unit: "%", dir: "down", target: 2.5, dec: 1, gen: function (i) { return { a: 3400 - i * 90 + (i % 4) * 120, b: 105600 }; } }
+    ],
+    "sst-cipa": [
+      { name: "Taxa de frequência de acidentes (TF)", kind: "rate", a: "Acidentes com afastamento", b: HHT, factor: 1000000, unit: "", dir: "down", target: 1.5, dec: 2, desc: "Acidentes com afastamento × 1.000.000 ÷ horas-homem trabalhadas.", gen: function (i) { return { a: [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0][i], b: 98000 + (i % 5) * 1500 }; } },
+      { name: "Taxa de gravidade (TG)", kind: "rate", a: "Dias perdidos e debitados", b: HHT, factor: 1000000, unit: "", dir: "down", target: 50, dec: 0, gen: function (i) { return { a: [12, 0, 6, 9, 0, 0, 4, 0, 0, 3, 0, 0][i], b: 98000 + (i % 5) * 1500 }; } },
+      { name: "Treinamentos obrigatórios (NR) realizados", kind: "percent", a: "Pessoas treinadas", b: "Pessoas que precisam do treinamento", unit: "%", dir: "up", target: 90, dec: 1, gen: function (i) { return { a: 140 + i * 6, b: 220 }; } },
+      { name: "Quase-acidentes reportados", kind: "value", a: "Relatos", unit: "", dir: "up", target: 20, dec: 0, gen: function (i) { return { a: 8 + i + (i % 3) * 2 }; } }
+    ],
+    "sst-mental": [
+      { name: "Afastamentos por saúde mental", kind: "value", a: "Afastamentos", unit: "", dir: "down", target: 3, dec: 0, gen: function (i) { return { a: [7, 6, 6, 5, 6, 5, 4, 4, 5, 3, 3, 2][i] }; } },
+      { name: "Adesão ao programa de bem-estar", kind: "percent", a: "Participantes", b: "Colaboradores", unit: "%", dir: "up", target: 60, dec: 1, gen: function (i) { return { a: 120 + i * 18, b: 480 }; } }
+    ],
+    "she-iso14001": [
+      { name: "Resíduos reciclados", kind: "percent", a: "Resíduos reciclados (t)", b: "Resíduos totais (t)", unit: "%", dir: "up", target: 70, dec: 1, gen: function (i) { return { a: 16 + i * 1.3, b: 40 }; } },
+      { name: "Consumo de água", kind: "value", a: "m³", unit: "m³", dir: "down", target: 1200, dec: 0, gen: function (i) { return { a: 1480 - i * 22 + (i % 3) * 30 }; } },
+      { name: "Emissões (CO₂e)", kind: "value", a: "Toneladas de CO₂e", unit: "t", dir: "down", target: 80, dec: 1, gen: function (i) { return { a: 96 - i * 1.2 + (i % 2) * 2 }; } }
+    ],
+    "she-safety": [
+      { name: "Inspeções de extintores realizadas", kind: "percent", a: "Inspeções realizadas", b: "Inspeções programadas", unit: "%", dir: "up", target: 100, dec: 0, gen: function (i) { return { a: 40 + (i % 4 === 0 ? -4 : 0) + (i > 6 ? 2 : 0), b: 44 }; } },
+      { name: "Permissões de trabalho sem desvio", kind: "percent", a: "PTs sem desvio", b: "PTs emitidas", unit: "%", dir: "up", target: 95, dec: 1, gen: function (i) { return { a: 52 + i, b: 60 + i }; } }
+    ],
+    "she-metas": [
+      { name: "Taxa de frequência de acidentes (TF)", kind: "rate", a: "Acidentes com afastamento", b: HHT, factor: 1000000, unit: "", dir: "down", target: 1.5, dec: 2, gen: function (i) { return { a: [1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0][i], b: 210000 + (i % 4) * 4000 }; } },
+      { name: "Dias sem acidente com afastamento", kind: "value", a: "Dias", unit: "dias", dir: "up", target: 365, dec: 0, gen: function (i) { return { a: [0, 0, 30, 0, 31, 0, 31, 61, 0, 31, 61, 92][i] }; } }
+    ]
+  };
+  function kpiSeed(list) {
+    const kpis = {}, kpiv = {}, d0 = new Date();
+    list.forEach(function (k, n) {
+      const id = "k" + (n + 1), o = {}; Object.keys(k).forEach(function (f) { if (f !== "gen") o[f] = k[f]; }); o.order = n + 1; kpis[id] = o; kpiv[id] = {};
+      for (let i = 0; i < 12; i++) { const d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() - 11 + i, 1)); const v = k.gen(i); Object.keys(v).forEach(function (f) { v[f] = Math.round(v[f] * 10) / 10; }); kpiv[id][d.toISOString().slice(0, 7)] = v; }
+    });
+    return { kpis: kpis, kpiv: kpiv };
+  }
   /* ---------- extra demo spaces owned by a customer account (full management inside them) ---------- */
   const SPACES = [
-    { id: "demo-saude-ocupacional", name: "Demonstração – Saúde ocupacional", area: "health",
+    { id: "demo-saude-ocupacional", name: "Demonstração – Saúde ocupacional", area: "ohs",
       plans: [
-        { id: "sst-pcmso", area: "health", method: "waterfall", workflow: "waterfall", title: "SST · Programa de saúde ocupacional (PCMSO) 2027", budget: true,
+        { id: "sst-pcmso", area: "ohs", method: "waterfall", workflow: "waterfall", title: "SST · Programa de saúde ocupacional (PCMSO) 2027", budget: true,
           epics: [["Diagnóstico", [["task", "Inventário de riscos (PGR)"], ["task", "Mapa de exposição por função"]]], ["Exames ocupacionais", [["task", "Exames admissionais"], ["task", "Exames periódicos por função"], ["task", "Retorno ao trabalho"], ["task", "Exames demissionais"]]], ["Ergonomia", [["task", "Análise ergonômica do trabalho (AET)"], ["task", "Ginástica laboral"]]], ["Indicadores e eSocial", [["task", "Envio dos eventos S-2220 e S-2240"], ["task", "Indicadores de absenteísmo"], ["milestone", "Relatório anual do PCMSO"]]]] },
-        { id: "sst-cipa", area: "health", method: "kanban", workflow: "simple", title: "SST · Prevenção de acidentes e CIPA", ini: "Zero acidente com afastamento",
+        { id: "sst-cipa", area: "ohs", method: "kanban", workflow: "simple", title: "SST · Prevenção de acidentes e CIPA", ini: "Zero acidente com afastamento",
           epics: [["Treinamentos NR", [["task", "NR-35 – trabalho em altura"], ["task", "NR-10 – eletricidade"], ["task", "NR-06 – entrega e uso de EPIs"]]], ["CIPA", [["task", "Eleição da CIPA"], ["task", "Mapa de riscos por setor"], ["task", "SIPAT"]]], ["Investigação de acidentes", [["task", "Investigação – acidente no almoxarifado"], ["task", "Plano de ação 5W2H"]]]] },
-        { id: "sst-mental", area: "health", method: "hybrid", workflow: "simple", title: "SST · Saúde mental e bem-estar", ini: "Programa de bem-estar", okr: ["Reduzir afastamentos por saúde mental", "Afastamentos de 18 para 10 por trimestre", "Adesão ao programa de 30 para 60%"],
+        { id: "sst-mental", area: "ohs", method: "hybrid", workflow: "simple", title: "SST · Saúde mental e bem-estar", ini: "Programa de bem-estar", okr: ["Reduzir afastamentos por saúde mental", "Afastamentos de 18 para 10 por trimestre", "Adesão ao programa de 30 para 60%"],
           epics: [["Riscos psicossociais (NR-1)", [["task", "Pesquisa de riscos psicossociais"], ["task", "Plano de ação por área"]]], ["Apoio psicológico", [["task", "Contratar programa de apoio"], ["task", "Divulgar o canal de acolhimento"]]], ["Campanhas", [["task", "Setembro Amarelo"], ["task", "Semana de qualidade de vida"]]]] }
       ],
       centres: [
-        { id: "sst", title: "Saúde ocupacional · Central de atendimento SST", area: "health", groups: ["Medicina do trabalho", "Segurança do trabalho", "Ergonomia"],
+        { id: "sst", title: "Saúde ocupacional · Central de atendimento SST", area: "ohs", groups: ["Medicina do trabalho", "Segurança do trabalho", "Ergonomia"],
           svc: [["Exames ocupacionais", "Agendamento e resultados (ASO).", 0], ["Atestados e afastamentos", "Envio e homologação de atestados.", 0], ["EPIs", "Solicitação e troca de equipamentos de proteção.", 1], ["Ergonomia do posto de trabalho", "Avaliação e ajustes.", 2]],
           off: [[0, "Agendar exame periódico", "request"], [1, "Enviar atestado médico", "request"], [2, "Solicitar EPI", "request", true], [-1, "Relatar acidente ou incidente de trabalho", "incident"], [3, "Pedir avaliação ergonômica", "request"]],
           recs: [["incident", "Queda de escada no almoxarifado (sem afastamento)", "high", "high", "doing", 3, 2], ["request", "Agendar exame periódico – equipe de produção", "medium", "medium", "doing", 20, 0], ["request", "Homologar atestado de 3 dias", "low", "medium", "resolved", 30, 1], ["request", "Troca de protetor auricular – linha 2", "medium", "high", "approval", 6, 2], ["request", "Avaliação ergonômica – atendimento", "low", "low", "new", 40, 3], ["problem", "Aumento de queixas de dor lombar no setor de expedição", "medium", "medium", "analysis", 120, 3], ["improvement", "Agendamento on-line dos exames periódicos", "medium", "low", "approved", 300, 0]] }
@@ -273,7 +312,9 @@
       base["userWorkspaces/" + key(cust) + "/" + sp.id] = { name: sp.name, expires: null };
       base["userWorkspaces/" + key(admin) + "/" + sp.id] = { name: sp.name, expires: null };
       base["entitlements/ws/" + sp.id + "/itsm"] = { on: true, until: null, plan: "paid", pkg: "empresarial", by: admin, at: nowTs };
-      base["entitlements/ws/" + sp.id + "/game"] = { on: true, until: null, plan: "paid", pkg: "empresarial", by: admin, at: nowTs };
+      // SST / SHE are Planning + Indicators (+ ITSM) areas – Business Game is for universities / market cases, never here
+      base["entitlements/ws/" + sp.id + "/game"] = null;
+      base["workspaces/" + sp.id + "/info"].modules = ["collab", "planning", "itsm"];
     });
     return db.ref().update(base).then(function () {
       log.push("licences, plan, spaces");
@@ -285,6 +326,7 @@
           const id = "demo-" + a.id, u = {}, method = a.tpl ? (window.PLAN_AREA_PLANS.find(function (x) { return x.id === a.tpl; }) || {}).method : a.method;
           u["planning/" + id + "/info"] = { title: a.title, ws: sp.id, method: method, created: nowTs, createdBy: cust, area: a.area, demo: true };
           u["planning/" + id + "/data"] = buildPlanning(a, people, nowTs);
+          const kp = KPIS[a.id]; if (kp) { const o = kpiSeed(kp); u["planning/" + id + "/data"].kpis = o.kpis; u["planning/" + id + "/data"].kpiv = o.kpiv; }
           u["workspaces/" + sp.id + "/plannings/" + id] = { title: a.title, method: method, created: nowTs };
           return db.ref().update(u).then(function () { log.push("planning " + id); }, function (e) { log.push("planning " + id + " FAILED: " + e.message); });
         }); });

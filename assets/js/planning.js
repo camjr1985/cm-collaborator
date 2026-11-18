@@ -39,7 +39,7 @@
     if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
     return { b: b, a: a };
   }
-  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs" };
+  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs", kpi: L("Indicators", "Indicadores") };
 
   let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
   const pushT = {};
@@ -156,6 +156,7 @@
     let views = m.views.slice();
     if (views.indexOf("backlog") < 0 && boardsList().some(function (b) { return b.kind === "scrum"; })) views.splice(views.indexOf("board") + 1, 0, "backlog");
     views = views.concat(["reports", "okr"]);
+    if (kpiOn()) views.push("kpi");
     if (!view) { try { view = localStorage.getItem("cmcollab:plview:" + ID); } catch (e) { /* ignore */ } }
     if (views.indexOf(view) < 0) view = views[0];
     const who = {}; items().forEach(function (i) { if (i.assignee) who[i.assignee] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = 1; });
@@ -195,7 +196,7 @@
     let mb = 0, ma = 0; all.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
     document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "") + (mb || ma ? ' · <span class="money" title="' + L("Budget vs actual", "Orçado x realizado") + '">' + L("Budget ", "Orçado ") + money(mb) + " · " + L("Actual ", "Realizado ") + '<b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></span>" : "");
     if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
-    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else list(v);
+    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else list(v);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
@@ -703,6 +704,138 @@
       const wa = r[a] / max * 100, wb = r[b] / max * 100;
       return '<div class="rp-hr"><span class="n" title="' + esc(r.n) + '">' + esc(r.n) + '</span><span class="tr"><i class="a" style="width:' + wa + '%" title="' + esc(la + ": " + nf(r[a])) + '">' + (wa > 8 ? nf(r[a]) : "") + '</i><i class="b" style="width:' + wb + '%" title="' + esc(lb + ": " + nf(r[b])) + '">' + (wb > 8 ? nf(r[b]) : "") + "</i></span></div>";
     }).join("") + '<div class="rp-leg row"><span><i class="a"></i>' + esc(la) + '</span><span><i class="b"></i>' + esc(lb) + "</span></div></div>";
+  }
+
+  /* ---------------- Indicators (own KPIs) – parametrisable per planning; default tab for Occupational health and SHE ----------------
+     data.kpis/<k>  = { name, unit, kind: value|percent|rate, a, b, factor, dir: up|down, target, dec, desc, order }
+     data.kpiv/<k>/<YYYY-MM> = { a, b }     value = a · percent = a / b × 100 · rate = a × factor / b */
+  function kpiOn() {
+    const st = data.settings || {};
+    if (st.kpiTab === false) return false;
+    return st.kpiTab === true || info.area === "ohs" || info.area === "she" || Object.keys(data.kpis || {}).length > 0;
+  }
+  function KPI_LIB() {
+    const HHT = L("Hours worked (man-hours)", "Horas-homem trabalhadas (HHT)");
+    return [
+      { id: "tf", g: "sst", name: L("Accident frequency rate (FR)", "Taxa de frequência de acidentes (TF)"), kind: "rate", a: L("Lost-time accidents", "Acidentes com afastamento"), b: HHT, factor: 1000000, unit: "", dir: "down", target: 1.5, dec: 2, desc: L("Lost-time accidents × 1,000,000 ÷ man-hours worked.", "Acidentes com afastamento × 1.000.000 ÷ horas-homem trabalhadas.") },
+      { id: "tg", g: "sst", name: L("Accident severity rate (SR)", "Taxa de gravidade (TG)"), kind: "rate", a: L("Days lost and charged", "Dias perdidos e debitados"), b: HHT, factor: 1000000, unit: "", dir: "down", target: 50, dec: 0, desc: L("Days lost × 1,000,000 ÷ man-hours worked.", "Dias perdidos × 1.000.000 ÷ horas-homem trabalhadas.") },
+      { id: "abs", g: "ohs", name: L("Absenteeism", "Absenteísmo"), kind: "percent", a: L("Hours absent", "Horas de ausência"), b: L("Scheduled hours", "Horas previstas"), unit: "%", dir: "down", target: 2.5, dec: 1, desc: L("Hours absent ÷ scheduled hours × 100.", "Horas de ausência ÷ horas previstas × 100.") },
+      { id: "exam", g: "ohs", name: L("Periodic exams up to date", "Exames periódicos em dia"), kind: "percent", a: L("Exams up to date", "Exames em dia"), b: L("Exams due", "Exames previstos"), unit: "%", dir: "up", target: 95, dec: 1 },
+      { id: "mental", g: "ohs", name: L("Absences for mental health", "Afastamentos por saúde mental"), kind: "value", a: L("Absences", "Afastamentos"), unit: "", dir: "down", target: 3, dec: 0 },
+      { id: "train", g: "sst", name: L("Mandatory safety training done", "Treinamentos obrigatórios (NR) realizados"), kind: "percent", a: L("People trained", "Pessoas treinadas"), b: L("People who must be trained", "Pessoas que precisam do treinamento"), unit: "%", dir: "up", target: 90, dec: 1 },
+      { id: "near", g: "sst", name: L("Near misses reported", "Quase-acidentes reportados"), kind: "value", a: L("Reports", "Relatos"), unit: "", dir: "up", target: 20, dec: 0, desc: L("More reports mean a stronger safety culture.", "Mais relatos indicam uma cultura de segurança mais forte.") },
+      { id: "days", g: "sst", name: L("Days without lost-time accidents", "Dias sem acidente com afastamento"), kind: "value", a: L("Days", "Dias"), unit: L("days", "dias"), dir: "up", target: 365, dec: 0 },
+      { id: "recy", g: "env", name: L("Waste recycled", "Resíduos reciclados"), kind: "percent", a: L("Recycled waste (t)", "Resíduos reciclados (t)"), b: L("Total waste (t)", "Resíduos totais (t)"), unit: "%", dir: "up", target: 70, dec: 1 },
+      { id: "water", g: "env", name: L("Water consumption", "Consumo de água"), kind: "value", a: "m³", unit: "m³", dir: "down", target: 1200, dec: 0 },
+      { id: "co2", g: "env", name: L("Emissions (CO₂e)", "Emissões (CO₂e)"), kind: "value", a: L("Tonnes of CO₂e", "Toneladas de CO₂e"), unit: "t", dir: "down", target: 80, dec: 1 }
+    ];
+  }
+  function kpis() { const o = data.kpis || {}; return Object.keys(o).map(function (k) { return Object.assign({ id: k }, o[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); }); }
+  function kpiVal(k, v) {
+    if (!v || v.a === undefined || v.a === null || v.a === "") return null;
+    const a = Number(v.a), b = Number(v.b);
+    if (k.kind === "percent") return b ? a / b * 100 : null;
+    if (k.kind === "rate") return b ? a * (Number(k.factor) || 1) / b : null;
+    return a;
+  }
+  function kpiSeries(k) { const vv = (data.kpiv || {})[k.id] || {}; return Object.keys(vv).sort().map(function (p) { return { p: p, v: kpiVal(k, vv[p]), raw: vv[p] }; }).filter(function (x) { return x.v !== null && isFinite(x.v); }); }
+  function kpiOk(k, v) { if (v === null || k.target === undefined || k.target === null || k.target === "") return null; return k.dir === "down" ? v <= Number(k.target) : v >= Number(k.target); }
+  function perLabel(p) { const d = new Date(p + "-01T12:00:00Z"); return d.toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { month: "short", year: "2-digit", timeZone: "UTC" }); }
+  function kpiChart(k, ser) {
+    const pts = ser.slice(-12); if (!pts.length) return '<div class="kp-empty">' + L("No values yet – use “Enter values”.", "Ainda sem valores – use “Lançar valores”.") + "</div>";
+    const W = 300, H = 110, l = 34, r = 8, t = 12, b = 22, tg = Number(k.target);
+    const vals = pts.map(function (x) { return x.v; }).concat(isFinite(tg) && k.target !== "" && k.target !== undefined ? [tg] : []);
+    let mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals); if (mn === mx) { mn -= 1; mx += 1; } const pad = (mx - mn) * .12; mn = Math.max(k.kind === "percent" || mn >= 0 ? 0 : mn - pad, mn - pad); mx += pad;
+    const X = function (i) { return l + (pts.length === 1 ? (W - l - r) / 2 : i * (W - l - r) / (pts.length - 1)); }, Y = function (v) { return t + (H - t - b) * (1 - (v - mn) / (mx - mn)); };
+    let o = '<svg viewBox="0 0 ' + W + " " + H + '" class="kp-chart" role="img" aria-label="' + esc(k.name) + '">';
+    [mn, (mn + mx) / 2, mx].forEach(function (g) { o += '<line x1="' + l + '" x2="' + (W - r) + '" y1="' + Y(g) + '" y2="' + Y(g) + '" class="kp-grid"/><text x="' + (l - 4) + '" y="' + (Y(g) + 3) + '" text-anchor="end" class="kp-ax">' + nf(g, g < 10 && k.dec ? 1 : 0) + "</text>"; });
+    if (isFinite(tg) && k.target !== "" && k.target !== undefined) o += '<line x1="' + l + '" x2="' + (W - r) + '" y1="' + Y(tg) + '" y2="' + Y(tg) + '" class="kp-target"/><text x="' + (W - r) + '" y="' + (Y(tg) - 3) + '" text-anchor="end" class="kp-tl">' + esc(L("target ", "meta ") + nf(tg, k.dec || 0)) + "</text>";
+    o += '<polyline fill="none" class="kp-line" points="' + pts.map(function (x, i) { return X(i) + "," + Y(x.v); }).join(" ") + '"/>';
+    pts.forEach(function (x, i) { const ok = kpiOk(k, x.v); o += '<circle cx="' + X(i) + '" cy="' + Y(x.v) + '" r="4" class="kp-dot' + (ok === false ? " off" : "") + '"><title>' + esc(perLabel(x.p) + ": " + nf(x.v, k.dec || 0) + (k.unit ? " " + k.unit : "")) + "</title></circle>"; });
+    [0, pts.length - 1].filter(function (i, j, a) { return a.indexOf(i) === j; }).forEach(function (i) { o += '<text x="' + X(i) + '" y="' + (H - 6) + '" text-anchor="' + (i === 0 && pts.length > 1 ? "start" : "end") + '" class="kp-ax">' + esc(perLabel(pts[i].p)) + "</text>"; });
+    return o + "</svg>";
+  }
+  function kpiView(v) {
+    const list = kpis();
+    let h = '<div class="kp-head"><div><h2>' + L("Indicators", "Indicadores") + '</h2><p class="muted small">' + L("Create your own indicators – value, percentage or rate with a multiplier (e.g. accidents × 1,000,000 ÷ man-hours) – set the target and enter the values each month.", "Crie os seus próprios indicadores – valor, percentual ou taxa com multiplicador (ex.: acidentes × 1.000.000 ÷ horas-homem) – defina a meta e lance os valores a cada mês.") + "</p></div>" +
+      (canEdit ? '<button class="pl-btn primary" id="kpNew">' + IC("plus", 16) + " " + L("New indicator", "Novo indicador") + "</button>" : "") + "</div>";
+    if (!list.length) h += '<div class="kp-zero"><p>' + L("No indicators yet.", "Ainda não há indicadores.") + "</p>" + (canEdit ? '<p class="muted small">' + L("Start from the library (frequency and severity rates, absenteeism, exams up to date, recycled waste…) or build your own formula.", "Comece pela biblioteca (taxas de frequência e gravidade, absenteísmo, exames em dia, resíduos reciclados…) ou monte a sua própria fórmula.") + "</p>" : "") + "</div>";
+    h += '<div class="kp-grid">' + list.map(function (k) {
+      const ser = kpiSeries(k), last = ser[ser.length - 1], prev = ser[ser.length - 2], ok = last ? kpiOk(k, last.v) : null;
+      const delta = last && prev ? last.v - prev.v : null;
+      return '<article class="kp-card"><header><div><b>' + esc(k.name) + '</b><small class="muted">' + esc(k.kind === "rate" ? k.a + " × " + nf(k.factor || 1) + " ÷ " + k.b : k.kind === "percent" ? k.a + " ÷ " + k.b + " × 100" : k.a || "") + "</small></div>" +
+        (canEdit ? '<button class="pl-btn icon sm" data-kped="' + k.id + '" title="' + L("Edit indicator", "Editar indicador") + '">' + IC("pencil", 14) + "</button>" : "") + "</header>" +
+        '<div class="kp-big"><span class="kp-num">' + (last ? nf(last.v, k.dec || 0) : "–") + '</span><span class="kp-unit">' + esc(k.unit || "") + "</span>" +
+        (ok === null ? "" : '<span class="kp-st ' + (ok ? "ok" : "off") + '">' + (ok ? "✓ " + L("On target", "Na meta") : "! " + L("Off target", "Fora da meta")) + "</span>") + "</div>" +
+        '<div class="kp-meta">' + L("Target", "Meta") + ": <b>" + (k.target !== undefined && k.target !== "" ? (k.dir === "down" ? "≤ " : "≥ ") + nf(k.target, k.dec || 0) + (k.unit ? " " + esc(k.unit) : "") : "–") + "</b>" + (last ? " · " + esc(perLabel(last.p)) : "") + (delta !== null ? ' · <span class="' + ((k.dir === "down" ? delta <= 0 : delta >= 0) ? "kp-good" : "kp-bad") + '">' + (delta > 0 ? "▲ " : delta < 0 ? "▼ " : "") + nf(Math.abs(delta), k.dec || 0) + "</span> " + L("vs previous", "vs anterior") : "") + "</div>" +
+        kpiChart(k, ser) + (canEdit ? '<button class="pl-btn sm" data-kpval="' + k.id + '">' + L("Enter values", "Lançar valores") + "</button>" : "") + "</article>";
+    }).join("") + "</div>";
+    v.innerHTML = '<div class="kp-wrap">' + h + "</div>";
+    const nb = document.getElementById("kpNew"); if (nb) nb.onclick = function () { kpiDialog(null); };
+    v.querySelectorAll("[data-kped]").forEach(function (b) { b.onclick = function () { kpiDialog(b.dataset.kped); }; });
+    v.querySelectorAll("[data-kpval]").forEach(function (b) { b.onclick = function () { kpiValues(b.dataset.kpval); }; });
+  }
+  function kpiDialog(id) {
+    const k = id ? Object.assign({ id: id }, data.kpis[id]) : { kind: "percent", dir: "up", factor: 1000000, dec: 0 };
+    const lib = KPI_LIB(), G = { sst: L("Safety", "Segurança do trabalho"), ohs: L("Occupational health", "Saúde ocupacional"), env: L("Environment", "Meio ambiente") };
+    modal("<h2>" + (id ? L("Edit indicator", "Editar indicador") : L("New indicator", "Novo indicador")) + '</h2><form class="pl-form kp-form" id="kpF">' +
+      (id ? "" : "<label>" + L("Start from the library (optional)", "Partir da biblioteca (opcional)") + '<select name="lib"><option value="">' + L("— my own indicator —", "— meu próprio indicador —") + "</option>" + Object.keys(G).map(function (g) { return '<optgroup label="' + esc(G[g]) + '">' + lib.filter(function (x) { return x.g === g; }).map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + "</option>"; }).join("") + "</optgroup>"; }).join("") + "</select></label>") +
+      "<label>" + L("Name", "Nome") + '<input name="name" required maxlength="80" value="' + esc(k.name || "") + '"></label>' +
+      "<label>" + L("Calculation", "Cálculo") + '<select name="kind"><option value="value">' + L("Value entered (e.g. number of near misses)", "Valor lançado (ex.: nº de quase-acidentes)") + '</option><option value="percent">' + L("Percentage: A ÷ B × 100", "Percentual: A ÷ B × 100") + '</option><option value="rate">' + L("Rate: A × multiplier ÷ B", "Taxa: A × multiplicador ÷ B") + "</option></select></label>" +
+      '<div class="pl-2"><label>' + L("Variable A", "Variável A") + '<input name="a" maxlength="60" value="' + esc(k.a || "") + '" placeholder="' + esc(L("e.g. Lost-time accidents", "ex.: Acidentes com afastamento")) + '"></label><label class="kp-b">' + L("Variable B", "Variável B") + '<input name="b" maxlength="60" value="' + esc(k.b || "") + '" placeholder="' + esc(L("e.g. Man-hours worked", "ex.: Horas-homem trabalhadas")) + '"></label></div>' +
+      '<div class="pl-2"><label class="kp-f">' + L("Multiplier", "Multiplicador") + '<input name="factor" type="number" min="1" step="any" value="' + esc(k.factor || 1000000) + '"></label><label>' + L("Unit", "Unidade") + '<input name="unit" maxlength="12" value="' + esc(k.unit || "") + '" placeholder="%, t, m³, dias…"></label></div>' +
+      '<div class="pl-2"><label>' + L("Better when", "Melhor quando") + '<select name="dir"><option value="up">' + L("Higher (≥ target)", "Maior (≥ meta)") + '</option><option value="down">' + L("Lower (≤ target)", "Menor (≤ meta)") + "</option></select></label><label>" + L("Target", "Meta") + '<input name="target" type="number" step="any" value="' + esc(k.target === undefined ? "" : k.target) + '"></label></div>' +
+      "<label>" + L("Decimal places", "Casas decimais") + '<select name="dec">' + [0, 1, 2].map(function (n) { return '<option value="' + n + '"' + (Number(k.dec || 0) === n ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select></label>" +
+      "<label>" + L("How it is measured (optional)", "Como é medido (opcional)") + '<textarea name="desc" rows="2" maxlength="300">' + esc(k.desc || "") + "</textarea></label>" +
+      '<p class="muted small" id="kpPrev"></p>' +
+      '<div class="pl-row-end">' + (id ? '<button type="button" class="pl-btn ghost danger" id="kpDel">' + L("Delete", "Excluir") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#kpF");
+      f.kind.value = k.kind || "value"; f.dir.value = k.dir || "up";
+      function upd() {
+        const kd = f.kind.value;
+        box.querySelector(".kp-b").style.display = kd === "value" ? "none" : ""; box.querySelector(".kp-f").style.display = kd === "rate" ? "" : "none";
+        const A = f.a.value || "A", B = f.b.value || "B";
+        box.querySelector("#kpPrev").textContent = L("Formula: ", "Fórmula: ") + (kd === "rate" ? A + " × " + nf(Number(f.factor.value) || 1) + " ÷ " + B : kd === "percent" ? A + " ÷ " + B + " × 100" : A);
+      }
+      ["kind", "a", "b", "factor"].forEach(function (n) { f[n].oninput = upd; f[n].onchange = upd; }); upd();
+      if (f.lib) f.lib.onchange = function () {
+        const x = lib.find(function (y) { return y.id === f.lib.value; }); if (!x) return;
+        f.name.value = x.name; f.kind.value = x.kind; f.a.value = x.a || ""; f.b.value = x.b || ""; f.factor.value = x.factor || 1000000; f.unit.value = x.unit || ""; f.dir.value = x.dir; f.target.value = x.target; f.dec.value = String(x.dec || 0); f.desc.value = x.desc || ""; upd();
+      };
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const o = { name: f.name.value.trim(), kind: f.kind.value, a: f.a.value.trim() || L("Value", "Valor"), unit: f.unit.value.trim(), dir: f.dir.value, dec: Number(f.dec.value) || 0, desc: f.desc.value.trim(), order: k.order || Date.now() };
+        if (o.kind !== "value") { o.b = f.b.value.trim(); if (!o.b) return toast(L("Name variable B", "Dê um nome à variável B")); }
+        if (o.kind === "rate") o.factor = Number(f.factor.value) || 1;
+        if (f.target.value !== "") o.target = Number(f.target.value);
+        if (o.kind === "percent" && !o.unit) o.unit = "%";
+        const kid = id || "k" + Date.now().toString(36);
+        save("kpis/" + kid, o).then(function () { close(); toast(L("Indicator saved", "Indicador salvo")); if (!id) setTimeout(function () { kpiValues(kid, o); }, 60); });
+      };
+      const del = box.querySelector("#kpDel"); if (del) del.onclick = function () {
+        if (!window.confirm(L("Delete this indicator and all its values?", "Excluir este indicador e todos os seus valores?"))) return;
+        const u = {}; u["kpis/" + id] = null; u["kpiv/" + id] = null; ref("").update(u).then(function () { close(); toast(L("Indicator deleted", "Indicador excluído")); });
+      };
+    });
+  }
+  function kpiValues(id, fresh) {
+    const k = Object.assign({ id: id }, fresh || (data.kpis || {})[id]); if (!k.name) return;
+    const vv = (data.kpiv || {})[id] || {}, per = [];
+    const d0 = new Date(); for (let i = 11; i >= 0; i--) { const d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() - i, 1)); per.push(d.toISOString().slice(0, 7)); }
+    Object.keys(vv).forEach(function (p) { if (per.indexOf(p) < 0) per.unshift(p); }); per.sort();
+    const two = k.kind !== "value";
+    modal("<h2>" + L("Enter values", "Lançar valores") + '</h2><p class="muted small">' + esc(k.name) + " · " + esc(k.kind === "rate" ? k.a + " × " + nf(k.factor || 1) + " ÷ " + k.b : k.kind === "percent" ? k.a + " ÷ " + k.b + " × 100" : k.a) + '</p><form class="pl-form" id="kvF"><div class="kv-wrap"><table class="kv-tbl"><thead><tr><th>' + L("Month", "Mês") + "</th><th>" + esc(k.a) + "</th>" + (two ? "<th>" + esc(k.b) + "</th>" : "") + "<th>" + esc(k.name.length > 18 ? L("Result", "Resultado") : k.name) + "</th></tr></thead><tbody>" +
+      per.slice().reverse().map(function (p) { const x = vv[p] || {}; return '<tr data-p="' + p + '"><td>' + esc(perLabel(p)) + '</td><td><input type="number" step="any" name="a_' + p + '" value="' + esc(x.a === undefined ? "" : x.a) + '"></td>' + (two ? '<td><input type="number" step="any" name="b_' + p + '" value="' + esc(x.b === undefined ? "" : x.b) + '"></td>' : "") + '<td class="kv-r"></td></tr>'; }).join("") +
+      '</tbody></table></div><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save values", "Salvar valores") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#kvF");
+      function calc() { box.querySelectorAll("tr[data-p]").forEach(function (tr) { const p = tr.dataset.p, a = f["a_" + p].value, b = two ? f["b_" + p].value : ""; const r = kpiVal(k, { a: a, b: b }); const ok = kpiOk(k, r); tr.querySelector(".kv-r").innerHTML = r === null || !isFinite(r) ? "–" : '<span class="' + (ok === false ? "kp-bad" : ok ? "kp-good" : "") + '">' + nf(r, k.dec || 0) + (k.unit ? " " + esc(k.unit) : "") + "</span>"; }); }
+      f.oninput = calc; calc();
+      f.onsubmit = function (e) {
+        e.preventDefault(); const u = {};
+        per.forEach(function (p) { const a = f["a_" + p].value, b = two ? f["b_" + p].value : ""; u["kpiv/" + id + "/" + p] = a === "" ? null : (two ? { a: Number(a), b: b === "" ? null : Number(b) } : { a: Number(a) }); });
+        ref("").update(u).then(function () { close(); toast(L("Values saved", "Valores salvos")); });
+      };
+    });
   }
   function reportsView(v) {
     const sps = Object.keys(data.sprints || {}).map(function (k) { return Object.assign({ id: k }, data.sprints[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
@@ -1230,6 +1363,7 @@
       (canEdit ? '<button data-act="alerts">' + IC("bell") + " " + L("E-mail alerts (milestones, key activities, delays)", "Alertas por e-mail (marcos, atividades principais, atrasos)") + "</button>" : "") +
       (canEdit ? '<button data-act="remind">' + IC("send") + " " + L("Send deadline reminders now", "Enviar lembretes de prazo agora") + "</button>" : "") +
       (canEdit ? '<button data-act="import">' + IC("import") + " " + L("Import CSV (Jira, Azure DevOps, Kanbanize, Excel)", "Importar CSV (Jira, Azure DevOps, Kanbanize, Excel)") + "</button>" : "") +
+      (canEdit ? '<button data-act="kpitab">' + IC("objective") + " " + (kpiOn() ? L("Hide the Indicators tab", "Ocultar a aba Indicadores") : L("Show the Indicators tab (own KPIs)", "Mostrar a aba Indicadores (KPIs próprios)")) + "</button>" : "") +
       '<button data-act="export">' + IC("export") + " " + L("Export CSV", "Exportar CSV") + "</button>" +
       '<button data-act="print">' + IC("print") + " " + L("Print / PDF", "Imprimir / PDF") + "</button>" +
       '<button data-act="integrations">' + IC("integration") + " " + L("Integrations (Jira, Azure DevOps, Kanbanize)", "Integrações (Jira, Azure DevOps, Kanbanize)") + (window.CMNewBadge ? window.CMNewBadge("integrations") : "") + "</button>" +
@@ -1240,7 +1374,7 @@
       box.querySelectorAll("[data-act]").forEach(function (b) {
         b.onclick = function () {
           close();
-          ({ workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog, delete: deletePlanning, alerts: alertsDialog, bulk: function () { bulkCreate(b.dataset.p); } })[b.dataset.act]();
+          ({ kpitab: function () { save("settings/kpiTab", !kpiOn()).then(function () { if (kpiOn()) view = "kpi"; }); }, workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog, delete: deletePlanning, alerts: alertsDialog, bulk: function () { bulkCreate(b.dataset.p); } })[b.dataset.act]();
         };
       });
     });

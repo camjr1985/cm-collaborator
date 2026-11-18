@@ -591,3 +591,50 @@ button, select, input, textarea { font: inherit; color: inherit; }
 /* item linked to an ITSM record (problem, change, improvement) */
 .pl-itsm { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin: 2px 0 4px; padding: 2px 8px; border-radius: 99px; background: #e3f6f3; color: #0f6b62; font-size: var(--fs-11); font-weight: 600; text-decoration: none; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 a.pl-itsm:hover { background: #cdeee9; }
+/* board kinds as a list (less scrolling) */
+.ab-kinds { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.ab-k { display: grid !important; grid-template-columns: 22px 190px minmax(0, 1fr); align-items: center; gap: 10px !important; flex-direction: row; padding: 9px 12px; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.ab-k:first-child { border-top: 0; }
+.ab-k:hover { background: rgba(14,26,51,.04); }
+.ab-k:has(input:checked) { box-shadow: inset 3px 0 0 #2CC4B3; background: rgba(44,196,179,.08); }
+.ab-k small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-12); }
+@media (max-width: 560px) { .ab-k { grid-template-columns: 22px minmax(0, 1fr); } .ab-k small { grid-column: 2; white-space: normal; } }
+
+/* Indicators (own KPIs) */
+.kp-wrap { padding: 16px; max-width: 1200px; display: grid; gap: 14px; overflow: auto; }
+.kp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.kp-head h2 { margin: 0 0 4px; font: 700 18px Poppins, sans-serif; color: var(--ink); }
+.kp-head p { margin: 0; max-width: 720px; }
+.kp-zero { background: #fff; border: 1px dashed var(--line); border-radius: 14px; padding: 22px; text-align: center; }
+.kp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.kp-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; }
+.kp-card header { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.kp-card header > div { display: grid; gap: 2px; min-width: 0; }
+.kp-card header b { font-size: var(--fs-14); }
+.kp-card header small { font-size: var(--fs-11); overflow-wrap: anywhere; }
+.kp-big { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.kp-num { font: 700 var(--fs-32)/1.1 var(--font); color: var(--ink); }
+.kp-unit { font-size: var(--fs-14); color: var(--ink2); font-weight: 600; }
+.kp-st { margin-left: auto; font: 600 var(--fs-11)/1 var(--font); padding: 5px 8px; border-radius: 99px; }
+.kp-st.ok { background: #dff7ea; color: #146c43; } .kp-st.off { background: #fde8e8; color: #a3262b; }
+.kp-meta { font-size: var(--fs-12); color: var(--ink3); font-variant-numeric: tabular-nums; }
+.kp-good { color: #146c43; font-weight: 600; } .kp-bad { color: #a3262b; font-weight: 600; }
+.kp-chart { width: 100%; height: auto; display: block; }
+.kp-grid line.kp-grid, .kp-chart .kp-grid { stroke: #eef0f5; stroke-width: 1; }
+.kp-ax { font-size: 9px; fill: var(--ink3); font-variant-numeric: tabular-nums; }
+.kp-target { stroke: var(--ink2); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.kp-tl { font-size: 9px; fill: var(--ink2); font-weight: 600; }
+.kp-line { stroke: var(--blue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.kp-dot { fill: var(--blue); stroke: #fff; stroke-width: 2; cursor: default; }
+.kp-dot.off { fill: var(--red); }
+.kp-empty { font-size: var(--fs-12); color: var(--ink3); padding: 18px 0; text-align: center; }
+.kp-card > .pl-btn { justify-self: start; }
+.pl-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kp-form optgroup { font-weight: 700; }
+.kv-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.kv-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
+.kv-tbl th { position: sticky; top: 0; background: #f6f7fb; text-align: left; font-size: var(--fs-11); padding: 8px; color: var(--ink2); }
+.kv-tbl td { padding: 4px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+.kv-tbl input { width: 100%; min-width: 80px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; }
+.kv-r { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) { .kp-head { flex-direction: column; } .kp-grid { grid-template-columns: 1fr; } .pl-2 { grid-template-columns: 1fr; } }

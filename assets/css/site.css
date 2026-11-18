@@ -687,3 +687,28 @@ body.mkt h1, body.mkt h2, body.mkt h3 { font-weight: 700; }
 @media (max-width: 1000px) { .grid4 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 720px) { .grid4, .grid2 { grid-template-columns: 1fr; } .mod-price { flex-direction: column; align-items: flex-start; } }
 section.alt { background: rgba(255,255,255,.025); border-block: 1px solid rgba(255,255,255,.06); }
+/* "New planning" as lists (areas on the left, models and methods as compact rows) – less scrolling */
+.plan-new { width: min(900px, 100%) !important; }
+.pn-cols { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; margin-top: 12px; align-items: start; }
+.pa-list { flex-direction: column; flex-wrap: nowrap; gap: 2px; margin: 0; padding: 6px; border: 1px solid var(--line); border-radius: 12px; position: sticky; top: 0; }
+.pa-list button { border: 0; border-radius: 8px; text-align: left; padding: 8px 10px; font-size: var(--fs-13); background: transparent; }
+.pa-list button:hover { background: rgba(255,255,255,.05); }
+.pa-list button.on { background: rgba(232,196,104,.16); color: var(--ink); box-shadow: inset 3px 0 0 var(--gold, #e8c468); }
+.pn-right .pm-h:first-child { margin-top: 0; }
+.pm-list { display: flex; flex-direction: column; gap: 0; margin: 6px 0 10px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.pm-list .pm-opt { display: grid; grid-template-columns: 26px 180px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-radius: 0; border-top: 1px solid var(--line); background: transparent; }
+.pm-list .pm-opt:first-child { border-top: 0; }
+.pm-list .pm-opt:hover { background: rgba(255,255,255,.04); }
+.pm-list .pm-opt:has(input:checked) { box-shadow: inset 3px 0 0 var(--gold, #e8c468); background: rgba(232,196,104,.10); }
+.pm-list .pm-opt .pm-ic { font-size: var(--fs-16); display: grid; place-items: center; }
+.pm-list .pm-opt .pm-ic svg { width: 18px; height: 18px; }
+.pm-list .pm-opt b { font-size: var(--fs-13); }
+.pm-list .pm-opt .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-12); }
+.pm-list .pa-tag { white-space: nowrap; }
+@media (max-width: 680px) {
+  .pn-cols { grid-template-columns: 1fr; }
+  .pa-list { flex-direction: row; overflow-x: auto; position: static; }
+  .pa-list button { white-space: nowrap; }
+  .pm-list .pm-opt { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .pm-list .pm-opt .muted { display: none; }
+}
