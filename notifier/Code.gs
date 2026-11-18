@@ -1034,19 +1034,20 @@ function itsmMailIn() {
 }
 function itsmMailOne(m, id, area, cache, me) {
   var fromRaw = m.getFrom(), em = ((/<([^>]+)>/.exec(fromRaw) || [])[1] || fromRaw).trim().toLowerCase(), name = fromRaw.replace(/<[^>]+>/, "").replace(/"/g, "").trim() || em.split("@")[0];
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em) || em === me || /mailer-daemon|postmaster|no-?reply/.test(em)) return false;
+  var skip = function (why) { console.log("itsm mail-in skip [" + id + "] " + em + ": " + why); return false; };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em) || em === me || /mailer-daemon|postmaster|no-?reply/.test(em)) return skip("sender");
   var auto = String(m.getHeader("Auto-Submitted") || "").toLowerCase(), prec = String(m.getHeader("Precedence") || "").toLowerCase();
-  if ((auto && auto !== "no") || /bulk|junk|list|auto_reply/.test(prec) || m.getHeader("X-Autoreply") || m.getHeader("X-Autorespond")) return false;
+  if ((auto && auto !== "no") || /bulk|junk|list|auto_reply/.test(prec) || m.getHeader("X-Autoreply") || m.getHeader("X-Autorespond")) return skip("auto/bulk headers: " + auto + " " + prec);
   if (!cache[id]) {
-    var info = adminGet("itsm/" + id + "/info"); if (!info) { cache[id] = null; return false; }
+    var info = adminGet("itsm/" + id + "/info"); if (!info) { cache[id] = null; return skip("central not found"); }
     cache[id] = { info: info, settings: adminGet("itsm/" + id + "/data/settings") || {}, areas: adminGet("itsm/" + id + "/data/areas") || {}, ws: adminGet("workspaces/" + info.ws) || {}, lic: itsmLicensed(info.ws) || (!!info.owner && adminGet("admins/" + info.owner) === true), touched: 0 }; // same as the rules: admin-owned centres always pass
   }
-  var C = cache[id]; if (!C || !C.lic) return false;
-  var mi = C.settings.mailIn || {}; if (mi.enabled === false) return false;
+  var C = cache[id]; if (!C) return skip("central not found"); if (!C.lic) return skip("no ITSM licence");
+  var mi = C.settings.mailIn || {}; if (mi.enabled === false) return skip("intake disabled");
   var ppl = itsmPeople(C.info, C.ws), k = key(em), dom = em.split("@")[1], person = ppl[k];
   var okDomain = !!(C.info.domains || {})[dom.replace(/\./g, ",")];
   var accept = mi.accept || "members";
-  if (!person && !(accept === "domains" && okDomain) && accept !== "any") return false;
+  if (!person && !(accept === "domains" && okDomain) && accept !== "any") return skip("sender not allowed (" + accept + ")");
   if (area && !C.areas[area]) area = "";
   var subj = String(m.getSubject() || "(sem assunto)").replace(/^\s*((re|res|fw|fwd|enc|rv)\s*:\s*)+/i, "").trim().slice(0, 140) || "(sem assunto)";
   var link0 = CFG.site + "itsm/?id=" + encodeURIComponent(id);
@@ -1055,7 +1056,7 @@ function itsmMailOne(m, id, area, cache, me) {
     var recs = adminGet("itsm/" + id + "/data/records") || {}, rid = Object.keys(recs).filter(function (x) { return recs[x] && recs[x].key === ref[1]; })[0];
     if (rid) {
       var r0 = recs[rid], isReq = r0.requester && (r0.requester.k === k || String(r0.requester.email || "").toLowerCase() === em);
-      if (!isReq && !(person && person.agent)) return false;
+      if (!isReq && !(person && person.agent)) return skip("reply from someone outside the record");
       var u0 = {}; u0["data/comments/" + rid + "/" + itsmPushId()] = { by: em, t: Date.now(), text: mailBody(m) || "(mensagem vazia)", via: "email" };
       u0["data/records/" + rid + "/updated"] = Date.now();
       adminPatch("itsm/" + id, u0); C.touched++;
