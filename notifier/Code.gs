@@ -1039,7 +1039,7 @@ function itsmMailOne(m, id, area, cache, me) {
   if ((auto && auto !== "no") || /bulk|junk|list|auto_reply/.test(prec) || m.getHeader("X-Autoreply") || m.getHeader("X-Autorespond")) return false;
   if (!cache[id]) {
     var info = adminGet("itsm/" + id + "/info"); if (!info) { cache[id] = null; return false; }
-    cache[id] = { info: info, settings: adminGet("itsm/" + id + "/data/settings") || {}, areas: adminGet("itsm/" + id + "/data/areas") || {}, ws: adminGet("workspaces/" + info.ws) || {}, lic: itsmLicensed(info.ws), touched: 0 };
+    cache[id] = { info: info, settings: adminGet("itsm/" + id + "/data/settings") || {}, areas: adminGet("itsm/" + id + "/data/areas") || {}, ws: adminGet("workspaces/" + info.ws) || {}, lic: itsmLicensed(info.ws) || (!!info.owner && adminGet("admins/" + info.owner) === true), touched: 0 }; // same as the rules: admin-owned centres always pass
   }
   var C = cache[id]; if (!C || !C.lic) return false;
   var mi = C.settings.mailIn || {}; if (mi.enabled === false) return false;
