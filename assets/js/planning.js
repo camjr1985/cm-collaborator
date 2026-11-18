@@ -880,6 +880,11 @@
     const h = Math.round(ms / 3600000); if (h < 48) return h + " h";
     const d = ms / DAY; return nf(d, d < 10 ? 1 : 0) + " d";
   }
+  function knownSuppliers() { /* suppliers already used in impediments and in the project budget */
+    const o = {}; items().forEach(function (i) { blocksOf(i).forEach(function (b) { if (b.supplier) o[b.supplier] = 1; }); });
+    bLines().forEach(function (x) { if (x.supplier) o[x.supplier] = 1; });
+    return Object.keys(o).sort(function (a, b) { return a.localeCompare(b); });
+  }
   function blockers(id) { /* items whose open internal dependency points at this one */
     return items().filter(function (i) { const b = openBlock(i); return b && b.type === "internal" && b.deps && b.deps[id]; });
   }
@@ -898,7 +903,8 @@
       return '<div class="blk' + (open ? " open" : "") + '" style="--c:' + T.c + '"><div class="blk-h"><b>' + IC(T.ic, 14) + " " + esc(T.name) + '</b><span class="muted small">' + (open ? L("blocked for ", "bloqueado há ") + dur(Date.now() - b.since) : dur(b.until - b.since) + " · " + fmtTs(b.since) + " → " + fmtTs(b.until)) + "</span></div>" +
         (b.desc ? '<p class="small">' + esc(b.desc) + "</p>" : "") +
         (deps.length ? '<div class="dep-list">' + deps.map(chip).join("") + "</div>" : "") +
-        (b.party || b.contact || b.owner || b.eta ? '<p class="muted small">' + [b.party, b.contact, b.owner ? L("resolving: ", "resolvendo: ") + memberName(b.owner) : "", b.eta ? L("expected ", "previsão ") + fmt(b.eta) : ""].filter(Boolean).map(esc).join(" · ") + "</p>" : "") +
+        (b.supplier ? '<p class="small"><b>' + L("Supplier: ", "Fornecedor: ") + "</b>" + esc(b.supplier) + "</p>" : "") +
+        ((b.party && !b.supplier) || b.contact || b.owner || b.eta ? '<p class="muted small">' + [b.supplier ? "" : b.party, b.contact, b.owner ? L("resolving: ", "resolvendo: ") + memberName(b.owner) : "", b.eta ? L("expected ", "previsão ") + fmt(b.eta) : ""].filter(Boolean).map(esc).join(" · ") + "</p>" : "") +
         (b.resolution ? '<p class="muted small">✓ ' + esc(b.resolution) + "</p>" : "") +
         (allDone ? '<p class="blk-ok small">' + L("All the dependencies are done – you can resolve this impediment.", "Todas as dependências foram concluídas – você já pode resolver este impedimento.") + "</p>" : "") +
         (open && canEdit ? '<div class="dw-a"><button type="button" class="pl-btn sm primary" data-blk-res="' + b.id + '">' + L("Resolve", "Resolver") + '</button><button type="button" class="pl-btn sm ghost" data-blk-ed="' + b.id + '">' + L("Edit", "Editar") + "</button></div>" : "") + "</div>";
@@ -932,13 +938,14 @@
       }).join("") + "</fieldset>" +
       "<label>" + L("What is blocking?", "O que está bloqueando?") + '<textarea name="desc" rows="2" maxlength="400" required placeholder="' + esc(L("e.g. waiting for the payments API from the platform team", "ex.: aguardando a API de pagamentos do time de plataforma")) + '">' + esc(b.desc || "") + "</textarea></label>" +
       '<div class="bk-internal"><label>' + L("Depends on (tasks, stories, epics of this planning)", "Depende de (tarefas, histórias, épicos deste planejamento)") + '<input type="search" id="bkQ" placeholder="' + esc(L("Search by key or title", "Pesquisar por chave ou título")) + '"></label><div class="bk-pick" id="bkPick"></div><div class="dep-list" id="bkSel"></div></div>' +
-      '<div class="bk-external pl-2"><label>' + L("Who (company, team, person)", "Quem (empresa, equipe, pessoa)") + '<input name="party" maxlength="80" value="' + esc(b.party || "") + '"></label><label>' + L("Contact / reference (ticket, e-mail)", "Contato / referência (chamado, e-mail)") + '<input name="contact" maxlength="120" value="' + esc(b.contact || "") + '"></label></div>' +
+      '<div class="bk-supplier"><label>' + L("Supplier", "Fornecedor") + ' <span class="req">*</span><input name="supplier" list="bkSup" maxlength="80" value="' + esc(b.supplier || (b.type === "external" ? b.party || "" : "")) + '" placeholder="' + esc(L("e.g. TOTVS, AWS, Accenture", "ex.: TOTVS, AWS, Accenture")) + '"></label><datalist id="bkSup">' + knownSuppliers().map(function (x) { return '<option value="' + esc(x) + '">'; }).join("") + "</datalist></div>" +
+      '<div class="bk-external pl-2"><label class="bk-party">' + L("Who (team, area, person)", "Quem (equipe, área, pessoa)") + '<input name="party" maxlength="80" value="' + esc(b.type === "external" ? "" : b.party || "") + '"></label><label>' + L("Contact / reference (ticket, e-mail)", "Contato / referência (chamado, e-mail)") + '<input name="contact" maxlength="120" value="' + esc(b.contact || "") + '"></label></div>' +
       '<div class="pl-2"><label>' + L("Who is resolving", "Quem está resolvendo") + '<select name="owner"><option value="">—</option>' + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + (m.email === b.owner ? " selected" : "") + ">" + esc(m.name || m.email) + "</option>"; }).join("") + "</select></label><label>" + L("Expected resolution", "Previsão de solução") + '<input type="date" name="eta" value="' + esc(b.eta || "") + '"></label></div>' +
       "<label>" + L("Blocked since", "Bloqueado desde") + '<input type="datetime-local" name="since" value="' + local(b.since || Date.now()) + '" max="' + local(Date.now()) + '"></label>' +
       '<div class="pl-row-end">' + (bid ? '<button type="button" class="pl-btn ghost danger" id="bkDel">' + L("Delete", "Excluir") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + (bid ? L("Save", "Salvar") : L("Block item", "Bloquear item")) + "</button></div></form>", function (box, close) {
       box.querySelector(".pl-card").classList.add("wide");
       const f = box.querySelector("#bkF"), q = box.querySelector("#bkQ");
-      function kind() { const t = f.type.value; box.querySelector(".bk-internal").hidden = t !== "internal"; box.querySelector(".bk-external").hidden = ["external", "team", "approval", "info"].indexOf(t) < 0; }
+      function kind() { const t = f.type.value; box.querySelector(".bk-internal").hidden = t !== "internal"; box.querySelector(".bk-supplier").hidden = ["external", "environment"].indexOf(t) < 0; box.querySelector(".bk-external").hidden = ["external", "team", "approval", "info", "environment"].indexOf(t) < 0; box.querySelector(".bk-party").hidden = t === "external" || t === "environment"; f.supplier.required = t === "external"; }
       function drawSel() { box.querySelector("#bkSel").innerHTML = Object.keys(sel).map(function (x) { const o = data.items[x]; return o ? '<button type="button" class="dep-chip on" data-un="' + x + '">' + (TYPES[o.type] || TYPES.task).icon + " " + esc((o.key ? o.key + " · " : "") + o.title) + " ✕</button>" : ""; }).join(""); box.querySelectorAll("[data-un]").forEach(function (c) { c.onclick = function () { delete sel[c.dataset.un]; drawSel(); drawPick(); }; }); }
       function drawPick() {
         const s = (q.value || "").toLowerCase();
@@ -952,7 +959,9 @@
         e.preventDefault();
         const t = f.type.value, o = { type: t, desc: f.desc.value.trim(), since: f.since.value ? Math.min(Date.now(), new Date(f.since.value).getTime()) : Date.now(), by: b.by || me.email };
         if (t === "internal") { if (!Object.keys(sel).length) return toast(L("Choose at least one item it depends on", "Escolha pelo menos um item do qual ele depende")); o.deps = sel; }
-        if (["external", "team", "approval", "info"].indexOf(t) >= 0) { if (f.party.value.trim()) o.party = f.party.value.trim(); if (f.contact.value.trim()) o.contact = f.contact.value.trim(); }
+        if (t === "external" || t === "environment") { const sp = f.supplier.value.trim(); if (t === "external" && !sp) return toast(L("Inform the supplier", "Informe o fornecedor")); if (sp) { o.supplier = sp; o.party = sp; } }
+        else if (["team", "approval", "info"].indexOf(t) >= 0 && f.party.value.trim()) o.party = f.party.value.trim();
+        if (["external", "team", "approval", "info", "environment"].indexOf(t) >= 0 && f.contact.value.trim()) o.contact = f.contact.value.trim();
         if (f.owner.value) o.owner = f.owner.value; if (f.eta.value) o.eta = f.eta.value;
         if (b.until) o.until = b.until; if (b.resolution) o.resolution = b.resolution;
         const k = bid || "b" + Date.now().toString(36);
@@ -973,8 +982,9 @@
   function flowSection(W) {
     const BT = BLOCKT(), done = W.map(function (i) { return { i: i, f: flowOf(i) }; }).filter(function (x) { return x.f && x.f.done; });
     const avg = function (k) { return done.length ? done.reduce(function (s, x) { return s + x.f[k]; }, 0) / done.length : null; };
-    const byType = {}; let blTot = 0;
-    W.forEach(function (i) { blocksOf(i).forEach(function (b) { const ms = Math.max(0, (b.until || Date.now()) - b.since); byType[b.type] = (byType[b.type] || 0) + ms; blTot += ms; }); });
+    const byType = {}, bySup = {}; let blTot = 0;
+    W.forEach(function (i) { blocksOf(i).forEach(function (b) { const ms = Math.max(0, (b.until || Date.now()) - b.since); byType[b.type] = (byType[b.type] || 0) + ms; blTot += ms; if (b.supplier) { const x = bySup[b.supplier] = bySup[b.supplier] || { ms: 0, n: 0, open: 0 }; x.ms += ms; x.n++; if (!b.until) x.open++; } }); });
+    const sups = Object.keys(bySup).sort(function (a, b) { return bySup[b].ms - bySup[a].ms; });
     const open = W.map(function (i) { return { i: i, b: openBlock(i) }; }).filter(function (x) { return x.b; }).sort(function (a, b) { return a.b.since - b.b.since; });
     const gAvg = avg("gross"), nAvg = avg("net");
     const rows = Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; }), mx = Math.max(1, Math.max.apply(null, rows.map(function (k) { return byType[k]; }).concat([1])));
@@ -984,7 +994,8 @@
       "<div><span>Downstream</span><b>" + dur(avg("downNet")) + "</b><small>" + L("started → done", "iniciado → concluído") + "</small></div>" +
       '<div class="bl"><span>' + L("Blocked (avg)", "Bloqueado (média)") + "</span><b>" + dur(avg("blocked")) + "</b><small>" + (gAvg ? nf((gAvg - nAvg) / gAvg * 100, 0) + "% " + L("of the gross lead time", "do lead time bruto") : "–") + "</small></div></div>" +
       '<p class="muted small">' + L("Blocked time is not counted in the lead time: it is shown apart, by type of impediment.", "O tempo bloqueado não entra no lead time: ele aparece à parte, por tipo de impedimento.") + "</p></section>" +
-      '<section class="rp-card"><h3>' + L("Blocked time by type", "Tempo bloqueado por tipo") + "</h3>" + (rows.length ? '<div class="blk-bars">' + rows.map(function (k) { const T = BT[k] || BT.other; return '<div title="' + esc(T.name + ": " + dur(byType[k])) + '"><span>' + esc(T.name) + '</span><i style="width:' + Math.max(2, byType[k] / mx * 100) + '%"></i><b>' + dur(byType[k]) + "</b></div>"; }).join("") + "</div>" : '<p class="muted small">' + L("No impediments registered yet.", "Nenhum impedimento registrado ainda.") + "</p>") + "</section></div>" +
+      '<section class="rp-card"><h3>' + L("Blocked time by type", "Tempo bloqueado por tipo") + "</h3>" + (rows.length ? '<div class="blk-bars">' + rows.map(function (k) { const T = BT[k] || BT.other; return '<div title="' + esc(T.name + ": " + dur(byType[k])) + '"><span>' + esc(T.name) + '</span><i style="width:' + Math.max(2, byType[k] / mx * 100) + '%"></i><b>' + dur(byType[k]) + "</b></div>"; }).join("") + "</div>" : '<p class="muted small">' + L("No impediments registered yet.", "Nenhum impedimento registrado ainda.") + "</p>") +
+      (sups.length ? '<h3 class="bd-h3">' + L("Blocked time by supplier", "Tempo bloqueado por fornecedor") + '</h3><table class="rp-t"><thead><tr><th>' + L("Supplier", "Fornecedor") + "</th><th>" + L("Impediments", "Impedimentos") + "</th><th>" + L("Open", "Abertos") + "</th><th>" + L("Blocked time", "Tempo bloqueado") + "</th></tr></thead><tbody>" + sups.map(function (k) { const x = bySup[k]; return "<tr><td><b>" + esc(k) + "</b></td><td>" + x.n + '</td><td class="' + (x.open ? "late" : "") + '">' + x.open + "</td><td>" + dur(x.ms) + "</td></tr>"; }).join("") + "</tbody></table>" : "") + "</section></div>" +
       (open.length ? '<section class="rp-card"><h3>' + L("Open impediments", "Impedimentos abertos") + " (" + open.length + ')</h3><div class="rp-scroll"><table class="rp-t"><thead><tr><th>' + L("Item", "Item") + "</th><th>" + L("Type", "Tipo") + "</th><th>" + L("What", "O quê") + "</th><th>" + L("Depends on", "Depende de") + "</th><th>" + L("Blocked for", "Bloqueado há") + "</th></tr></thead><tbody>" +
         open.map(function (x) { const T = BT[x.b.type] || BT.other; return '<tr data-open="' + x.i.id + '"><td><b>' + esc(x.i.key || "") + "</b> " + esc(x.i.title) + "</td><td>" + esc(T.name) + "</td><td>" + esc(x.b.desc || "") + "</td><td>" + esc(Object.keys(x.b.deps || {}).map(function (d) { const o = data.items[d]; return o ? o.key || o.title : ""; }).concat(x.b.party ? [x.b.party] : []).join(", ")) + "</td><td>" + dur(Date.now() - x.b.since) + "</td></tr>"; }).join("") + "</tbody></table></div></section>" : "");
   }
@@ -1152,7 +1163,7 @@
     const num = function (n, v) { return '<input type="number" min="0" step="any" name="' + n + '" value="' + esc(v == null ? "" : v) + '">'; };
     modal("<h2>" + (lid ? L("Edit budget line", "Editar linha do orçamento") : L("New budget line", "Nova linha do orçamento")) + '</h2><form class="pl-form" id="blF"><div class="pl-2"><label>' + L("Type", "Tipo") + '<select name="cat"><option value="capex">CAPEX – ' + L("investment", "investimento") + '</option><option value="opex">OPEX – ' + L("operating cost", "custo operacional") + "</option></select></label><label>" + L("Group", "Grupo") + '<select name="group">' + Object.keys(G).map(function (k) { return '<option value="' + k + '">' + esc(G[k]) + "</option>"; }).join("") + "</select></label></div>" +
       "<label>" + L("Description", "Descrição") + '<input name="desc" required maxlength="120" value="' + esc(x.desc || "") + '" placeholder="' + esc(L("e.g. Integration consulting – sprint 1-4", "ex.: Consultoria de integração – sprints 1 a 4")) + '"></label>' +
-      '<div class="pl-2"><label>' + L("Month", "Mês") + '<input type="month" name="month" value="' + esc(x.month || "") + '"></label><label>' + L("Supplier", "Fornecedor") + '<input name="supplier" maxlength="80" value="' + esc(x.supplier || "") + '"></label></div>' +
+      '<div class="pl-2"><label>' + L("Month", "Mês") + '<input type="month" name="month" value="' + esc(x.month || "") + '"></label><label>' + L("Supplier", "Fornecedor") + '<input name="supplier" list="blSup" maxlength="80" value="' + esc(x.supplier || "") + '"><datalist id="blSup">' + knownSuppliers().map(function (v) { return '<option value="' + esc(v) + '">'; }).join("") + "</datalist></label></div>" +
       "<label>" + L("Linked to (initiative / epic / phase)", "Vinculado a (iniciativa / épico / fase)") + '<select name="item"><option value="">—</option>' + conts.map(function (c) { return '<option value="' + c.id + '"' + (c.id === x.item ? " selected" : "") + ">" + esc((TYPES[c.type] || TYPES.epic).name + " · " + (c.key ? c.key + " · " : "") + c.title) + "</option>"; }).join("") + "</select></label>" +
       '<div class="pl-3"><label>' + L("Planned", "Planejado") + num("planned", x.planned) + "</label><label>" + L("Committed", "Comprometido") + num("committed", x.committed) + "</label><label>" + L("Actual", "Realizado") + num("actual", x.actual) + "</label></div>" +
       "<label>" + L("Note", "Observação") + '<input name="note" maxlength="200" value="' + esc(x.note || "") + '"></label>' +

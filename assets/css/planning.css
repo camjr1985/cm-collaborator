@@ -744,3 +744,4 @@ a.pl-itsm:hover { background: #cdeee9; }
 .bd-tbl td:nth-child(n+7), .bd-tbl th:nth-child(n+7) { text-align: right; font-variant-numeric: tabular-nums; }
 .rp-t td.late { color: #a3262b; font-weight: 600; }
 .pl-tabs button { white-space: nowrap; }
+.blk-form .req { color: #a3262b; } .bk-supplier[hidden], .bk-party[hidden] { display: none !important; }

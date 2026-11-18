@@ -1,5 +1,12 @@
 /* CM Collaborator – Spanish (es) strings, keyed by the English source text (i18n.js dictionary + inline L()/LL() pairs). */
 window.MB_ES = {
+"e.g. TOTVS, AWS, Accenture": "ej.: TOTVS, AWS, Accenture",
+"Who (team, area, person)": "Quién (equipo, área, persona)",
+"Inform the supplier": "Indica el proveedor",
+"Supplier: ": "Proveedor: ",
+"Blocked time by supplier": "Tiempo bloqueado por proveedor",
+"Impediments": "Impedimentos",
+"Blocked time": "Tiempo bloqueado",
 "Internal dependency": "Dependencia interna",
 "Waiting for another task, story or epic of this planning.": "Esperando otra tarea, historia o épica de esta planificación.",
 "External dependency": "Dependencia externa",
