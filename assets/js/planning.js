@@ -39,7 +39,7 @@
     if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
     return { b: b, a: a };
   }
-  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs", kpi: L("Indicators", "Indicadores") };
+  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs", kpi: L("Indicators", "Indicadores"), budget: L("Budget", "Orçamento") };
 
   let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
   const pushT = {};
@@ -87,6 +87,7 @@
     if (!canEdit) return Promise.resolve();
     const u = {}; Object.keys(obj).forEach(function (k) { u["items/" + id + "/" + k] = obj[k] === undefined ? null : obj[k]; });
     if ("status" in obj && data.items[id]) { const nd = (statuses().find(function (x) { return x.id === obj.status; }) || {}).cat === "done", wasDone = cat(data.items[id]) === "done"; if (nd && !wasDone) u["items/" + id + "/doneAt"] = TS(); else if (!nd && wasDone) u["items/" + id + "/doneAt"] = null; }
+    if ("status" in obj && data.items[id] && !data.items[id].startedAt) { const ns = statuses().find(function (x) { return x.id === obj.status; }) || {}; if (ns.cat === "doing") u["items/" + id + "/startedAt"] = TS(); }
     u["items/" + id + "/updated"] = TS();
     const prevSt = data.items[id] ? data.items[id].status : null, w = data.items[id] && data.items[id].watch;
     const tellW = "status" in obj && obj.status !== prevSt && w && Object.keys(w).some(function (k) { return w[k] && w[k].status !== false && String(w[k].email).toLowerCase() !== String(me.email).toLowerCase(); });
@@ -155,7 +156,7 @@
     const m = method();
     let views = m.views.slice();
     if (views.indexOf("backlog") < 0 && boardsList().some(function (b) { return b.kind === "scrum"; })) views.splice(views.indexOf("board") + 1, 0, "backlog");
-    views = views.concat(["reports", "okr"]);
+    views = views.concat(["reports", "okr", "budget"]);
     if (kpiOn()) views.push("kpi");
     if (!view) { try { view = localStorage.getItem("cmcollab:plview:" + ID); } catch (e) { /* ignore */ } }
     if (views.indexOf(view) < 0) view = views[0];
@@ -196,7 +197,7 @@
     let mb = 0, ma = 0; all.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
     document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "") + (mb || ma ? ' · <span class="money" title="' + L("Budget vs actual", "Orçado x realizado") + '">' + L("Budget ", "Orçado ") + money(mb) + " · " + L("Actual ", "Realizado ") + '<b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></span>" : "");
     if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
-    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else list(v);
+    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else if (view === "budget") budgetView(v); else list(v);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
@@ -671,6 +672,7 @@
   const RPAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
   let rpt = { sprint: "", type: "", status: "", who: "", epic: "", unit: "sp" };
   function nf(n, d) { return (Number(n) || 0).toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { maximumFractionDigits: d || 0, minimumFractionDigits: d || 0 }); }
+  function cnum(n) { n = Number(n) || 0; if (Math.abs(n) < 10000) return nf(n); try { return new Intl.NumberFormat(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { notation: "compact", maximumFractionDigits: 1 }).format(n); } catch (e) { return nf(n); } }
   function pct(a, b) { return b ? nf(a / b * 100, 1) + "%" : "–"; }
   function donut(rows, total, label) {
     const R = 54, C = 2 * Math.PI * R; let off = 0;
@@ -684,15 +686,15 @@
   }
   function bars(groups, series, unitLbl) { /* grouped vertical bars, one axis */
     const max = Math.max(1, Math.max.apply(null, groups.map(function (g) { return Math.max.apply(null, series.map(function (s) { return g[s.k] || 0; })); })));
-    const W = Math.max(320, groups.length * (series.length * 16 + 26) + 40), H = 210, bw = 14, top = 24, base = H - 30;
+    const W = Math.max(320, groups.length * (series.length * 16 + 26) + 56), H = 210, bw = 14, top = 24, base = H - 30;
     let out = '<svg viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" class="rp-bars" role="img" aria-label="' + esc(unitLbl) + '">';
-    [0, .5, 1].forEach(function (t) { const y = base - (base - top) * t; out += '<line x1="30" x2="' + (W - 6) + '" y1="' + y + '" y2="' + y + '" class="rp-grid"/><text x="26" y="' + (y + 4) + '" text-anchor="end" class="rp-ax">' + nf(max * t) + "</text>"; });
+    [0, .5, 1].forEach(function (t) { const y = base - (base - top) * t; out += '<line x1="46" x2="' + (W - 6) + '" y1="' + y + '" y2="' + y + '" class="rp-grid"/><text x="42" y="' + (y + 4) + '" text-anchor="end" class="rp-ax">' + cnum(max * t) + "</text>"; });
     groups.forEach(function (g, gi) {
-      const gx = 40 + gi * (series.length * 16 + 26);
+      const gx = 56 + gi * (series.length * 16 + 26);
       series.forEach(function (s, si) {
         const v = g[s.k] || 0, h = (base - top) * v / max, x = gx + si * 16, y = base - h;
         out += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + Math.max(h, 0) + '" rx="3" fill="' + s.c + '"><title>' + esc(g.n + " · " + s.n + ": " + nf(v, 0)) + "</title></rect>";
-        if (h > 14) out += '<text x="' + (x + bw / 2) + '" y="' + (y - 3) + '" text-anchor="middle" class="rp-val">' + nf(v) + "</text>";
+        if (h > 14) out += '<text x="' + (x + bw / 2) + '" y="' + (y - 3) + '" text-anchor="middle" class="rp-val">' + cnum(v) + "</text>";
       });
       out += '<text x="' + (gx + series.length * 8) + '" y="' + (H - 12) + '" text-anchor="middle" class="rp-ax">' + esc(g.n.length > 12 ? g.n.slice(0, 11) + "…" : g.n) + "</text>";
     });
@@ -837,6 +839,335 @@
       };
     });
   }
+
+  /* ================= Impediments (blocks) and flow metrics =================
+     items/<id>/blocks/<bid> = { type, desc, since, until?, by, deps?{itemId:true}, party?, contact?, owner?, eta?, resolution? }
+     items/<id>/startedAt = first time the item entered a "doing" status (set in patch)
+     Lead time = created → done · upstream = created → started · downstream = started → done.
+     While a block is open the clock of the stage it is in stops: blocked time is subtracted from each stage and counted apart. */
+  function BLOCKT() {
+    return {
+      internal: { ic: "link", c: "#6250d6", name: L("Internal dependency", "Dependência interna"), desc: L("Waiting for another task, story or epic of this planning.", "Aguardando outra tarefa, história ou épico deste planejamento.") },
+      external: { ic: "people", c: "#c2410c", name: L("External dependency", "Dependência externa"), desc: L("Supplier, client, partner or another company.", "Fornecedor, cliente, parceiro ou outra empresa.") },
+      team: { ic: "people", c: "#2a78d6", name: L("Another team / area", "Outra equipe / área"), desc: L("Another team of the company that is not in this planning.", "Outra equipe da empresa que não está neste planejamento.") },
+      approval: { ic: "objective", c: "#b7791f", name: L("Approval / decision", "Aprovação / decisão"), desc: L("Waiting for a sign-off, budget or management decision.", "Aguardando aprovação, verba ou decisão da gestão.") },
+      info: { ic: "help", c: "#0f766e", name: L("Missing information", "Falta de informação"), desc: L("Requirements, data or answers that have not arrived.", "Requisitos, dados ou respostas que não chegaram.") },
+      environment: { ic: "integration", c: "#8e4ec6", name: L("Environment / infrastructure", "Ambiente / infraestrutura"), desc: L("Environment, access, licence or tool unavailable.", "Ambiente, acesso, licença ou ferramenta indisponível.") },
+      technical: { ic: "bug", c: "#e34948", name: L("Technical problem", "Problema técnico"), desc: L("Defect, technical debt or unknown to investigate.", "Defeito, dívida técnica ou incerteza a investigar.") },
+      resource: { ic: "people", c: "#5c6b80", name: L("People unavailable", "Pessoa indisponível"), desc: L("Absence, overload or missing skill.", "Ausência, sobrecarga ou falta de competência.") },
+      other: { ic: "more", c: "#5c6b80", name: L("Other", "Outro"), desc: L("Anything else that stops the work.", "Qualquer outra coisa que pare o trabalho.") }
+    };
+  }
+  function blocksOf(it) { const b = it.blocks || {}; return Object.keys(b).map(function (k) { return Object.assign({ id: k }, b[k]); }).filter(function (x) { return x.since; }).sort(function (a, c) { return (c.since || 0) - (a.since || 0); }); }
+  function openBlock(it) { return blocksOf(it).filter(function (b) { return !b.until; })[0] || null; }
+  function blockedMs(it, a, b) { /* union of the block intervals inside [a, b] */
+    const iv = blocksOf(it).map(function (x) { return [Math.max(a, x.since), Math.min(b, x.until || Date.now())]; }).filter(function (x) { return x[1] > x[0]; }).sort(function (x, y) { return x[0] - y[0]; });
+    let tot = 0, cs = null, ce = null;
+    iv.forEach(function (x) { if (cs === null || x[0] > ce) { if (cs !== null) tot += ce - cs; cs = x[0]; ce = x[1]; } else ce = Math.max(ce, x[1]); });
+    if (cs !== null) tot += ce - cs;
+    return tot;
+  }
+  function flowOf(it) {
+    const now = Date.now(), c = Number(it.created) || null; if (!c) return null;
+    const dn = Number(it.doneAt) || null, st = Number(it.startedAt) || null, end = dn || now, mid = st || end;
+    const up = Math.max(0, mid - c), down = st ? Math.max(0, end - st) : 0;
+    const bu = blockedMs(it, c, mid), bd = st ? blockedMs(it, st, end) : 0;
+    return { done: !!dn, started: !!st, gross: up + down, up: up, down: down, upNet: Math.max(0, up - bu), downNet: Math.max(0, down - bd), blocked: bu + bd, net: Math.max(0, up + down - bu - bd) };
+  }
+  function dur(ms) {
+    if (ms == null) return "–";
+    const m = Math.round(ms / 60000); if (m < 60) return m + " min";
+    const h = Math.round(ms / 3600000); if (h < 48) return h + " h";
+    const d = ms / DAY; return nf(d, d < 10 ? 1 : 0) + " d";
+  }
+  function blockers(id) { /* items whose open internal dependency points at this one */
+    return items().filter(function (i) { const b = openBlock(i); return b && b.type === "internal" && b.deps && b.deps[id]; });
+  }
+  function blockBadge(it) {
+    const b = openBlock(it); if (!b) return "";
+    const T = BLOCKT()[b.type] || BLOCKT().other;
+    const lim = Number(((data.settings || {}).notify || {}).blockedDays == null ? 7 : data.settings.notify.blockedDays) || 7, long = Date.now() - b.since > lim * DAY;
+    return '<span class="blk-badge' + (long ? " long" : "") + '" title="' + esc(T.name + ": " + (b.desc || "") + (long ? " · " + L("blocked for more than ", "bloqueado há mais de ") + lim + L(" days – alert sent by e-mail", " dias – alerta enviado por e-mail") : "")) + '">' + (long ? "⚠ " : "") + IC("lock", 12) + " " + L("Blocked", "Bloqueado") + " · " + dur(Date.now() - b.since) + "</span>";
+  }
+  function blockBlock(it) {
+    const BT = BLOCKT(), fl = flowOf(it), ob = openBlock(it), past = blocksOf(it).filter(function (b) { return b.until; }), bl = blockers(it.id);
+    const chip = function (x) { const o = data.items[x]; if (!o) return ""; return '<button type="button" class="dep-chip' + (cat(Object.assign({ id: x }, o)) === "done" ? " ok" : "") + '" data-open-it="' + x + '">' + (TYPES[o.type] || TYPES.task).icon + " " + esc((o.key ? o.key + " · " : "") + o.title) + " <i>" + esc(statusOf(o).name) + "</i></button>"; };
+    const one = function (b, open) {
+      const T = BT[b.type] || BT.other, deps = Object.keys(b.deps || {});
+      const allDone = open && b.type === "internal" && deps.length && deps.every(function (x) { const o = data.items[x]; return !o || cat(Object.assign({ id: x }, o)) === "done"; });
+      return '<div class="blk' + (open ? " open" : "") + '" style="--c:' + T.c + '"><div class="blk-h"><b>' + IC(T.ic, 14) + " " + esc(T.name) + '</b><span class="muted small">' + (open ? L("blocked for ", "bloqueado há ") + dur(Date.now() - b.since) : dur(b.until - b.since) + " · " + fmtTs(b.since) + " → " + fmtTs(b.until)) + "</span></div>" +
+        (b.desc ? '<p class="small">' + esc(b.desc) + "</p>" : "") +
+        (deps.length ? '<div class="dep-list">' + deps.map(chip).join("") + "</div>" : "") +
+        (b.party || b.contact || b.owner || b.eta ? '<p class="muted small">' + [b.party, b.contact, b.owner ? L("resolving: ", "resolvendo: ") + memberName(b.owner) : "", b.eta ? L("expected ", "previsão ") + fmt(b.eta) : ""].filter(Boolean).map(esc).join(" · ") + "</p>" : "") +
+        (b.resolution ? '<p class="muted small">✓ ' + esc(b.resolution) + "</p>" : "") +
+        (allDone ? '<p class="blk-ok small">' + L("All the dependencies are done – you can resolve this impediment.", "Todas as dependências foram concluídas – você já pode resolver este impedimento.") + "</p>" : "") +
+        (open && canEdit ? '<div class="dw-a"><button type="button" class="pl-btn sm primary" data-blk-res="' + b.id + '">' + L("Resolve", "Resolver") + '</button><button type="button" class="pl-btn sm ghost" data-blk-ed="' + b.id + '">' + L("Edit", "Editar") + "</button></div>" : "") + "</div>";
+    };
+    return '<div class="d-blocks"><div class="dw-h">' + IC("lock", 15) + " <b>" + L("Impediments and flow", "Impedimentos e fluxo") + "</b></div>" +
+      (fl ? '<div class="flow-m"><div><span>' + L("Lead time", "Lead time") + "</span><b>" + dur(fl.net) + "</b><small>" + (fl.done ? L("delivered", "entregue") : L("running", "em curso")) + "</small></div><div><span>Upstream</span><b>" + dur(fl.upNet) + "</b><small>" + L("before starting", "antes de iniciar") + "</small></div><div><span>Downstream</span><b>" + (fl.started ? dur(fl.downNet) : "–") + "</b><small>" + L("in progress → done", "em andamento → concluído") + '</small></div><div class="bl"><span>' + L("Blocked", "Bloqueado") + "</span><b>" + dur(fl.blocked) + "</b><small>" + L("not counted above", "fora das contagens") + "</small></div></div>" : "") +
+      (ob ? one(ob, true) : '<p class="muted small">' + L("No open impediment. When the work stops, register the impediment: the lead time clock pauses and the blocked time is counted apart.", "Nenhum impedimento aberto. Quando o trabalho parar, registre o impedimento: o relógio do lead time pausa e o tempo bloqueado é contado à parte.") + "</p>") +
+      (bl.length ? '<p class="small"><b>' + L("This item is blocking:", "Este item está bloqueando:") + '</b></p><div class="dep-list">' + bl.map(function (x) { return chip(x.id); }).join("") + "</div>" : "") +
+      (canEdit && !ob ? '<div class="dw-a"><button type="button" class="pl-btn sm" id="blkNew">' + IC("lock", 13) + " " + L("Register impediment", "Registrar impedimento") + "</button></div>" : "") +
+      (past.length ? "<details><summary class=\"small\">" + L("History", "Histórico") + " (" + past.length + ")</summary>" + past.map(function (b) { return one(b, false); }).join("") + "</details>" : "") + "</div>";
+  }
+  function fmtTs(t) { return t ? new Date(t).toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""; }
+  function bindBlocks(id) {
+    const d = document.getElementById("drawer"); if (!d) return;
+    d.querySelectorAll("[data-open-it]").forEach(function (b) { b.onclick = function () { openDrawer(b.dataset.openIt); }; });
+    const n = document.getElementById("blkNew"); if (n) n.onclick = function () { blockDialog(id, null); };
+    d.querySelectorAll("[data-blk-ed]").forEach(function (b) { b.onclick = function () { blockDialog(id, b.dataset.blkEd); }; });
+    d.querySelectorAll("[data-blk-res]").forEach(function (b) { b.onclick = function () { resolveBlock(id, b.dataset.blkRes); }; });
+  }
+  function refreshBlocks(id) {
+    setTimeout(function () { const b = document.querySelector("#drawer .d-blocks"); if (!b || openItem !== id || !data.items[id]) return; b.outerHTML = blockBlock(Object.assign({ id: id }, data.items[id])); bindBlocks(id); }, 150);
+  }
+  function blockDialog(id, bid) {
+    const it = Object.assign({ id: id }, data.items[id] || {}), BT = BLOCKT(), b = bid ? Object.assign({}, (it.blocks || {})[bid]) : { type: "internal" };
+    const cand = items().filter(function (i) { return i.id !== id; }).sort(byOrder), sel = Object.assign({}, b.deps || {});
+    const ppl = Object.keys(members).map(function (k) { return members[k]; });
+    const local = function (t) { const x = new Date(t - new Date(t).getTimezoneOffset() * 60000); return x.toISOString().slice(0, 16); };
+    modal("<h2>" + IC("lock", 18) + " " + (bid ? L("Edit impediment", "Editar impedimento") : L("Register impediment", "Registrar impedimento")) + '</h2><p class="muted small">' + esc((it.key ? it.key + " · " : "") + it.title) + " — " + L("while it is open, the lead time (upstream or downstream) stops and the blocked time is counted apart.", "enquanto estiver aberto, o lead time (upstream ou downstream) para e o tempo bloqueado é contado à parte.") + "</p>" +
+      '<form class="pl-form blk-form" id="bkF"><fieldset class="blk-types"><legend>' + L("Type of impediment", "Tipo de impedimento") + "</legend>" + Object.keys(BT).map(function (k) {
+        return '<label class="blk-t" style="--c:' + BT[k].c + '"><input type="radio" name="type" value="' + k + '"' + (b.type === k ? " checked" : "") + "><span>" + IC(BT[k].ic, 16) + "</span><b>" + esc(BT[k].name) + "</b><small>" + esc(BT[k].desc) + "</small></label>";
+      }).join("") + "</fieldset>" +
+      "<label>" + L("What is blocking?", "O que está bloqueando?") + '<textarea name="desc" rows="2" maxlength="400" required placeholder="' + esc(L("e.g. waiting for the payments API from the platform team", "ex.: aguardando a API de pagamentos do time de plataforma")) + '">' + esc(b.desc || "") + "</textarea></label>" +
+      '<div class="bk-internal"><label>' + L("Depends on (tasks, stories, epics of this planning)", "Depende de (tarefas, histórias, épicos deste planejamento)") + '<input type="search" id="bkQ" placeholder="' + esc(L("Search by key or title", "Pesquisar por chave ou título")) + '"></label><div class="bk-pick" id="bkPick"></div><div class="dep-list" id="bkSel"></div></div>' +
+      '<div class="bk-external pl-2"><label>' + L("Who (company, team, person)", "Quem (empresa, equipe, pessoa)") + '<input name="party" maxlength="80" value="' + esc(b.party || "") + '"></label><label>' + L("Contact / reference (ticket, e-mail)", "Contato / referência (chamado, e-mail)") + '<input name="contact" maxlength="120" value="' + esc(b.contact || "") + '"></label></div>' +
+      '<div class="pl-2"><label>' + L("Who is resolving", "Quem está resolvendo") + '<select name="owner"><option value="">—</option>' + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + (m.email === b.owner ? " selected" : "") + ">" + esc(m.name || m.email) + "</option>"; }).join("") + "</select></label><label>" + L("Expected resolution", "Previsão de solução") + '<input type="date" name="eta" value="' + esc(b.eta || "") + '"></label></div>' +
+      "<label>" + L("Blocked since", "Bloqueado desde") + '<input type="datetime-local" name="since" value="' + local(b.since || Date.now()) + '" max="' + local(Date.now()) + '"></label>' +
+      '<div class="pl-row-end">' + (bid ? '<button type="button" class="pl-btn ghost danger" id="bkDel">' + L("Delete", "Excluir") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + (bid ? L("Save", "Salvar") : L("Block item", "Bloquear item")) + "</button></div></form>", function (box, close) {
+      box.querySelector(".pl-card").classList.add("wide");
+      const f = box.querySelector("#bkF"), q = box.querySelector("#bkQ");
+      function kind() { const t = f.type.value; box.querySelector(".bk-internal").hidden = t !== "internal"; box.querySelector(".bk-external").hidden = ["external", "team", "approval", "info"].indexOf(t) < 0; }
+      function drawSel() { box.querySelector("#bkSel").innerHTML = Object.keys(sel).map(function (x) { const o = data.items[x]; return o ? '<button type="button" class="dep-chip on" data-un="' + x + '">' + (TYPES[o.type] || TYPES.task).icon + " " + esc((o.key ? o.key + " · " : "") + o.title) + " ✕</button>" : ""; }).join(""); box.querySelectorAll("[data-un]").forEach(function (c) { c.onclick = function () { delete sel[c.dataset.un]; drawSel(); drawPick(); }; }); }
+      function drawPick() {
+        const s = (q.value || "").toLowerCase();
+        const list = cand.filter(function (i) { return !sel[i.id] && (!s || (i.title || "").toLowerCase().indexOf(s) >= 0 || (i.key || "").toLowerCase().indexOf(s) >= 0); }).slice(0, 30);
+        box.querySelector("#bkPick").innerHTML = list.length ? list.map(function (i) { return '<button type="button" data-pk="' + i.id + '"><span class="ti" style="color:' + (TYPES[i.type] || TYPES.task).color + '">' + (TYPES[i.type] || TYPES.task).icon + '</span><span class="tk">' + esc(i.key || "") + "</span><span class=\"tt\">" + esc(i.title) + '</span><i>' + esc(statusOf(i).name) + "</i></button>"; }).join("") : '<p class="muted small">' + L("No items found.", "Nenhum item encontrado.") + "</p>";
+        box.querySelectorAll("[data-pk]").forEach(function (c) { c.onclick = function () { sel[c.dataset.pk] = true; drawSel(); drawPick(); }; });
+      }
+      f.querySelectorAll("[name=type]").forEach(function (r) { r.onchange = kind; });
+      q.oninput = drawPick; kind(); drawSel(); drawPick();
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const t = f.type.value, o = { type: t, desc: f.desc.value.trim(), since: f.since.value ? Math.min(Date.now(), new Date(f.since.value).getTime()) : Date.now(), by: b.by || me.email };
+        if (t === "internal") { if (!Object.keys(sel).length) return toast(L("Choose at least one item it depends on", "Escolha pelo menos um item do qual ele depende")); o.deps = sel; }
+        if (["external", "team", "approval", "info"].indexOf(t) >= 0) { if (f.party.value.trim()) o.party = f.party.value.trim(); if (f.contact.value.trim()) o.contact = f.contact.value.trim(); }
+        if (f.owner.value) o.owner = f.owner.value; if (f.eta.value) o.eta = f.eta.value;
+        if (b.until) o.until = b.until; if (b.resolution) o.resolution = b.resolution;
+        const k = bid || "b" + Date.now().toString(36);
+        ref("items/" + id + "/blocks/" + k).set(o).then(function () { close(); toast(bid ? L("Impediment updated", "Impedimento atualizado") : L("Item blocked – lead time paused", "Item bloqueado – lead time pausado")); refreshBlocks(id); });
+      };
+      const del = box.querySelector("#bkDel"); if (del) del.onclick = function () { ref("items/" + id + "/blocks/" + bid).remove().then(function () { close(); refreshBlocks(id); }); };
+    });
+  }
+  function resolveBlock(id, bid) {
+    modal("<h2>" + L("Resolve impediment", "Resolver impedimento") + '</h2><form class="pl-form" id="rsF"><label>' + L("How was it resolved? (optional)", "Como foi resolvido? (opcional)") + '<textarea name="r" rows="2" maxlength="300"></textarea></label><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Resolve – resume the clock", "Resolver – retomar o relógio") + "</button></div></form>", function (box, close) {
+      box.querySelector("#rsF").onsubmit = function (e) {
+        e.preventDefault(); const u = {}, r = box.querySelector("[name=r]").value.trim();
+        u["items/" + id + "/blocks/" + bid + "/until"] = Date.now(); if (r) u["items/" + id + "/blocks/" + bid + "/resolution"] = r;
+        db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Impediment resolved – lead time running again", "Impedimento resolvido – lead time voltou a contar")); refreshBlocks(id); });
+      };
+    });
+  }
+  function flowSection(W) {
+    const BT = BLOCKT(), done = W.map(function (i) { return { i: i, f: flowOf(i) }; }).filter(function (x) { return x.f && x.f.done; });
+    const avg = function (k) { return done.length ? done.reduce(function (s, x) { return s + x.f[k]; }, 0) / done.length : null; };
+    const byType = {}; let blTot = 0;
+    W.forEach(function (i) { blocksOf(i).forEach(function (b) { const ms = Math.max(0, (b.until || Date.now()) - b.since); byType[b.type] = (byType[b.type] || 0) + ms; blTot += ms; }); });
+    const open = W.map(function (i) { return { i: i, b: openBlock(i) }; }).filter(function (x) { return x.b; }).sort(function (a, b) { return a.b.since - b.b.since; });
+    const gAvg = avg("gross"), nAvg = avg("net");
+    const rows = Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; }), mx = Math.max(1, Math.max.apply(null, rows.map(function (k) { return byType[k]; }).concat([1])));
+    return '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Flow · lead time without impediments", "Fluxo · lead time sem impedimentos") + '</h3><div class="flow-m big">' +
+      "<div><span>" + L("Lead time (avg)", "Lead time (média)") + "</span><b>" + dur(nAvg) + "</b><small>" + done.length + " " + L("delivered items", "itens entregues") + "</small></div>" +
+      "<div><span>Upstream</span><b>" + dur(avg("upNet")) + "</b><small>" + L("created → started", "criado → iniciado") + "</small></div>" +
+      "<div><span>Downstream</span><b>" + dur(avg("downNet")) + "</b><small>" + L("started → done", "iniciado → concluído") + "</small></div>" +
+      '<div class="bl"><span>' + L("Blocked (avg)", "Bloqueado (média)") + "</span><b>" + dur(avg("blocked")) + "</b><small>" + (gAvg ? nf((gAvg - nAvg) / gAvg * 100, 0) + "% " + L("of the gross lead time", "do lead time bruto") : "–") + "</small></div></div>" +
+      '<p class="muted small">' + L("Blocked time is not counted in the lead time: it is shown apart, by type of impediment.", "O tempo bloqueado não entra no lead time: ele aparece à parte, por tipo de impedimento.") + "</p></section>" +
+      '<section class="rp-card"><h3>' + L("Blocked time by type", "Tempo bloqueado por tipo") + "</h3>" + (rows.length ? '<div class="blk-bars">' + rows.map(function (k) { const T = BT[k] || BT.other; return '<div title="' + esc(T.name + ": " + dur(byType[k])) + '"><span>' + esc(T.name) + '</span><i style="width:' + Math.max(2, byType[k] / mx * 100) + '%"></i><b>' + dur(byType[k]) + "</b></div>"; }).join("") + "</div>" : '<p class="muted small">' + L("No impediments registered yet.", "Nenhum impedimento registrado ainda.") + "</p>") + "</section></div>" +
+      (open.length ? '<section class="rp-card"><h3>' + L("Open impediments", "Impedimentos abertos") + " (" + open.length + ')</h3><div class="rp-scroll"><table class="rp-t"><thead><tr><th>' + L("Item", "Item") + "</th><th>" + L("Type", "Tipo") + "</th><th>" + L("What", "O quê") + "</th><th>" + L("Depends on", "Depende de") + "</th><th>" + L("Blocked for", "Bloqueado há") + "</th></tr></thead><tbody>" +
+        open.map(function (x) { const T = BT[x.b.type] || BT.other; return '<tr data-open="' + x.i.id + '"><td><b>' + esc(x.i.key || "") + "</b> " + esc(x.i.title) + "</td><td>" + esc(T.name) + "</td><td>" + esc(x.b.desc || "") + "</td><td>" + esc(Object.keys(x.b.deps || {}).map(function (d) { const o = data.items[d]; return o ? o.key || o.title : ""; }).concat(x.b.party ? [x.b.party] : []).join(", ")) + "</td><td>" + dur(Date.now() - x.b.since) + "</td></tr>"; }).join("") + "</tbody></table></div></section>" : "");
+  }
+
+  /* ================= AI: generate epics and user stories ================= */
+  function loadAIjs() {
+    if (window.CMAI) return Promise.resolve(window.CMAI);
+    return new Promise(function (res, rej) { const s = document.createElement("script"); s.src = "../assets/js/ai.js"; s.onload = function () { res(window.CMAI); }; s.onerror = rej; document.head.appendChild(s); });
+  }
+  function storyDesc(s) {
+    const lines = [];
+    if (s.as || s.want) lines.push(L("As ", "Como ") + (s.as || "…") + L(", I want ", ", quero ") + (s.want || "…") + (s.so ? L(", so that ", ", para ") + s.so : "") + ".");
+    if (s.description) lines.push("", s.description);
+    const ac = (s.criteria || []).filter(Boolean);
+    if (ac.length) { lines.push("", L("Acceptance criteria:", "Critérios de aceite:")); ac.forEach(function (c, i) { lines.push((i + 1) + ". " + (typeof c === "string" ? c : [c.given && L("Given ", "Dado ") + c.given, c.when && L("when ", "quando ") + c.when, c.then && L("then ", "então ") + c.then].filter(Boolean).join(", "))); }); }
+    return lines.join("\n");
+  }
+  function critText(c) { return typeof c === "string" ? c : [c.given && L("Given ", "Dado ") + c.given, c.when && L("when ", "quando ") + c.when, c.then && L("then ", "então ") + c.then].filter(Boolean).join(", "); }
+  function aiStoryDialog(preParent, preMode) {
+    const hasEpic = method().types.indexOf("epic") >= 0, hasStory = method().types.indexOf("story") >= 0;
+    const conts = items().filter(isContainer).sort(byOrder);
+    let mode = preMode || (hasStory ? "story" : "epic"), parent = preParent || "", res = null;
+    const P = function () { return parent && data.items[parent] ? Object.assign({ id: parent }, data.items[parent]) : null; };
+    const LANGN = window.MB_LANG === "es" ? "Español" : window.MB_LANG === "pt" ? (window.MB_VARIANT === "pt-pt" ? "Português de Portugal" : "Português do Brasil") : "English";
+    modal('<div class="ai-st"><header class="ai-st-h"><div><h2>' + IC("spark", 18) + " " + L("Generate with AI", "Gerar com IA") + '</h2><p>' + L("AI drafts epics and user stories with acceptance criteria from your description and the context it reads. You review before anything is created.", "A IA rascunha épicos e histórias de usuário com critérios de aceite a partir da sua descrição e do contexto que ela lê. Você revisa antes de criar.") + '</p></div><div class="ai-tabs"><span class="on" data-st="1"><i>1</i> ' + L("Description", "Descrição") + '</span><span data-st="2"><i>2</i> ' + L("Review", "Revisão") + '</span></div></header><div class="ai-st-b" id="aiB"></div></div>', function (box, close) {
+      box.querySelector(".pl-card").classList.add("wide", "ai-card");
+      const B = box.querySelector("#aiB");
+      function tab(n) { box.querySelectorAll("[data-st]").forEach(function (t) { t.classList.toggle("on", t.dataset.st === String(n)); t.classList.toggle("ok", Number(t.dataset.st) < n); }); }
+      function step1(txt) {
+        tab(1);
+        const p = P();
+        B.innerHTML = '<form class="pl-form" id="aiF"><div class="ai-modes">' +
+          (hasStory ? '<label><input type="radio" name="m" value="story"' + (mode === "story" ? " checked" : "") + "><b>" + L("User story", "História de usuário") + "</b><small>" + L("One story with acceptance criteria", "Uma história com critérios de aceite") + "</small></label>" : "") +
+          (hasEpic ? '<label><input type="radio" name="m" value="epic"' + (mode === "epic" ? " checked" : "") + "><b>" + L("Epic with stories", "Épico com histórias") + "</b><small>" + L("An epic split into 3–8 stories", "Um épico dividido em 3 a 8 histórias") + "</small></label>" : "") +
+          (hasStory ? '<label><input type="radio" name="m" value="split"' + (mode === "split" ? " checked" : "") + "><b>" + L("Stories for an epic", "Histórias para um épico") + "</b><small>" + L("Break the chosen epic into stories", "Quebrar o épico escolhido em histórias") + "</small></label>" : "") + "</div>" +
+          "<label>" + L("Describe the need", "Descreva a necessidade") + ' <span class="muted small">“' + L("As a [role], I want [action], so that [benefit].", "Como [perfil], quero [ação], para [benefício].") + "” " + L("or free text", "ou texto livre") + ' · <span id="aiN">0</span>/800 (min. 50)</span><textarea name="t" rows="5" maxlength="800">' + esc(txt || "") + "</textarea></label>" +
+          "<label>" + L("Link to (parent)", "Vincular a (pai)") + '<select name="p"><option value="">— ' + L("none", "nenhum") + " —</option>" + conts.map(function (c) { return '<option value="' + c.id + '"' + (c.id === parent ? " selected" : "") + ">" + esc((TYPES[c.type] || TYPES.epic).name + " · " + (c.key ? c.key + " · " : "") + c.title) + "</option>"; }).join("") + "</select></label>" +
+          '<div class="ai-src-h">' + L("Information sources", "Fontes de informação") + '</div><div class="ai-srcs" id="aiSrc"></div>' +
+          '<div class="ai-steps" id="aiSteps" hidden><div class="ok"><i>✓</i>' + L("Read context", "Ler contexto") + '</div><div class="run"><i></i>' + L("Draft story & criteria", "Rascunhar história e critérios") + "</div><div><i>3</i>" + L("Ready for review", "Pronto para revisão") + "</div></div>" +
+          '<p class="d-err" id="aiErr" hidden></p><div class="pl-row-end"><span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="aiGo">' + IC("spark", 14) + " " + L("Generate", "Gerar") + "</button></div></form>";
+        const f = B.querySelector("#aiF");
+        B.querySelector("[data-close]").onclick = close;
+        function src() {
+          const p2 = P(), sib = p2 ? children(p2.id) : [], gp = p2 && p2.parent && data.items[p2.parent];
+          B.querySelector("#aiSrc").innerHTML =
+            (p2 ? '<div class="ai-src"><small style="--c:' + (TYPES[p2.type] || TYPES.epic).color + '">● ' + esc((TYPES[p2.type] || TYPES.epic).name) + "</small><b>" + esc(p2.title) + "</b><span>" + esc(p2.key || "") + " · " + esc(statusOf(p2).name) + "</span></div>" : "") +
+            (gp ? '<div class="ai-src"><small style="--c:' + (TYPES[gp.type] || TYPES.initiative).color + '">● ' + esc((TYPES[gp.type] || TYPES.initiative).name) + "</small><b>" + esc(gp.title) + "</b><span>" + esc(gp.key || "") + "</span></div>" : "") +
+            '<div class="ai-src"><small style="--c:#1baf7a">● ' + L("Planning", "Planejamento") + "</small><b>" + esc(info.title) + "</b><span>" + esc(method().name) + (wsInfo.name ? " · " + esc(wsInfo.name) : "") + "</span></div>" +
+            (sib.length ? '<div class="ai-src"><small style="--c:#2a78d6">● ' + L("Existing items", "Itens existentes") + "</small><b>" + sib.length + " " + L("child items", "itens filhos") + "</b><span>" + L("avoids duplicates", "evita duplicados") + "</span></div>" : "");
+        }
+        const cnt = function () { B.querySelector("#aiN").textContent = f.t.value.length; };
+        f.t.oninput = cnt; cnt();
+        f.p.onchange = function () { parent = f.p.value; src(); }; src();
+        f.querySelectorAll("[name=m]").forEach(function (r) { r.onchange = function () { mode = r.value; }; });
+        f.onsubmit = function (e) {
+          e.preventDefault();
+          const t = f.t.value.trim(), er = B.querySelector("#aiErr");
+          if (mode === "split" && !P()) { er.hidden = false; er.textContent = L("Choose the epic to split.", "Escolha o épico a ser quebrado."); return; }
+          if (t.length < 50 && mode !== "split") { er.hidden = false; er.textContent = L("Describe the need with at least 50 characters.", "Descreva a necessidade com pelo menos 50 caracteres."); return; }
+          er.hidden = true; B.querySelector("#aiSteps").hidden = false; const go = B.querySelector("#aiGo"); go.disabled = true; go.textContent = L("Generating…", "Gerando…");
+          const p2 = P(), gp = p2 && p2.parent && data.items[p2.parent], sib = p2 ? children(p2.id).map(function (x) { return "- " + x.title; }).join("\n") : "";
+          const STORY = '{"title":"short title","as":"role","want":"action","so":"benefit","description":"2-4 sentences","criteria":[{"given":"","when":"","then":""}],"points":3}';
+          const shape = mode === "story" ? STORY : '{"epic":{"title":"","description":"","outcome":"measurable business outcome","criteria":[{"given":"","when":"","then":""}]},"stories":[' + STORY + "]}";
+          const prompt = "You are a senior product owner and agile coach. Write in " + LANGN + ".\n" +
+            (mode === "story" ? "Write ONE INVEST user story with 3-6 testable acceptance criteria in Given/When/Then and a Fibonacci story point estimate (1,2,3,5,8,13)." : mode === "epic" ? "Write ONE epic and split it into 3-8 INVEST user stories (vertical slices, each delivering value), each with 2-5 acceptance criteria in Given/When/Then and Fibonacci story points." : "Split the given epic into 3-8 INVEST user stories (vertical slices), each with 2-5 acceptance criteria in Given/When/Then and Fibonacci story points. Do not repeat existing child items. Return the epic object with the epic's current title.") +
+            " Be specific to the context; no generic filler.\nReturn ONLY JSON in this shape: " + shape + "\n\nCONTEXT\nPlanning: " + info.title + " (" + method().name + ")" + (wsInfo.name ? " · workspace " + wsInfo.name : "") +
+            (gp ? "\nInitiative: " + gp.title + (gp.desc ? " – " + String(gp.desc).slice(0, 600) : "") : "") +
+            (p2 ? "\nParent " + (TYPES[p2.type] || TYPES.epic).name + ": " + p2.title + (p2.desc ? " – " + String(p2.desc).slice(0, 1200) : "") : "") +
+            (sib ? "\nExisting child items:\n" + sib.slice(0, 1500) : "") + "\n\nNEED\n" + (t || "(split the parent epic)");
+          loadAIjs().then(function (AI) { return AI.generate("story", prompt); }).then(function (r) {
+            if (mode === "story") r = { stories: [r.stories ? r.stories[0] : r] };
+            if (!r || !(r.stories || []).length) throw new Error(L("The AI did not return stories. Try again with more detail.", "A IA não retornou histórias. Tente de novo com mais detalhes."));
+            res = r; step2(t);
+          }).catch(function (err) { go.disabled = false; go.innerHTML = IC("spark", 14) + " " + L("Generate", "Gerar"); B.querySelector("#aiSteps").hidden = true; er.hidden = false; er.textContent = (err && err.message) || String(err); });
+        };
+      }
+      function step2(txt) {
+        tab(2);
+        const ep = mode === "epic" ? res.epic || {} : null, PTS = [1, 2, 3, 5, 8, 13];
+        const sCard = function (s, i) { return '<article class="ai-story"><header><label class="chk"><input type="checkbox" data-inc="' + i + '" checked> <b>' + L("Story", "História") + " " + (i + 1) + '</b></label><select data-f="points" data-i="' + i + '">' + PTS.map(function (n) { return '<option' + (Number(s.points) === n ? " selected" : "") + ">" + n + "</option>"; }).join("") + '</select><span class="muted small">SP</span></header>' +
+          '<input data-f="title" data-i="' + i + '" value="' + esc(s.title || "") + '" maxlength="140">' +
+          '<div class="ai-asw"><label>' + L("As", "Como") + '<input data-f="as" data-i="' + i + '" value="' + esc(s.as || "") + '"></label><label>' + L("I want", "quero") + '<input data-f="want" data-i="' + i + '" value="' + esc(s.want || "") + '"></label><label>' + L("so that", "para") + '<input data-f="so" data-i="' + i + '" value="' + esc(s.so || "") + '"></label></div>' +
+          "<label>" + L("Description", "Descrição") + '<textarea rows="2" data-f="description" data-i="' + i + '">' + esc(s.description || "") + "</textarea></label>" +
+          "<label>" + L("Acceptance criteria (one per line)", "Critérios de aceite (um por linha)") + '<textarea rows="' + Math.min(6, (s.criteria || []).length + 1) + '" data-f="criteria" data-i="' + i + '">' + esc((s.criteria || []).map(critText).join("\n")) + "</textarea></label></article>"; };
+        B.innerHTML = '<form class="pl-form" id="aiR">' + (ep ? '<article class="ai-story ai-epic"><header><b>' + (TYPES.epic.icon || "") + " " + L("Epic", "Épico") + '</b></header><input name="et" value="' + esc(ep.title || "") + '" maxlength="140"><label>' + L("Description and outcome", "Descrição e resultado esperado") + '<textarea name="ed" rows="3">' + esc([ep.description, ep.outcome ? L("Outcome: ", "Resultado esperado: ") + ep.outcome : ""].filter(Boolean).join("\n\n")) + "</textarea></label>" + ((ep.criteria || []).length ? "<label>" + L("Acceptance criteria", "Critérios de aceite") + '<textarea name="ec" rows="3">' + esc(ep.criteria.map(critText).join("\n")) + "</textarea></label>" : "") + "</article>" : "") +
+          '<p class="muted small">' + (mode === "story" ? "" : res.stories.length + " " + L("stories – untick the ones you do not want.", "histórias – desmarque as que não quiser.")) + (P() && mode !== "epic" ? " " + L("They will be created under ", "Serão criadas em ") + esc(P().title) + "." : "") + "</p>" +
+          res.stories.map(sCard).join("") +
+          '<div class="pl-row-end"><button type="button" class="pl-btn" id="aiBack">← ' + L("Back", "Voltar") + '</button><button type="button" class="pl-btn" id="aiAgain">' + IC("sync", 14) + " " + L("Generate again", "Gerar de novo") + '</button><span class="sp"></span><button class="pl-btn primary" id="aiMk">' + L("Create items", "Criar itens") + "</button></div></form>";
+        const f = B.querySelector("#aiR");
+        f.querySelectorAll("[data-f]").forEach(function (inp) { inp.oninput = inp.onchange = function () { const s = res.stories[inp.dataset.i], k = inp.dataset.f; s[k] = k === "criteria" ? inp.value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean) : k === "points" ? Number(inp.value) : inp.value; }; });
+        B.querySelector("#aiBack").onclick = function () { step1(txt); };
+        B.querySelector("#aiAgain").onclick = function () { step1(txt); setTimeout(function () { const g = B.querySelector("#aiGo"); if (g) g.click(); }, 30); };
+        f.onsubmit = function (e) {
+          e.preventDefault();
+          const mk = B.querySelector("#aiMk"); mk.disabled = true; mk.textContent = L("Creating…", "Criando…");
+          const st = res.stories.filter(function (s, i) { const c = f.querySelector('[data-inc="' + i + '"]'); return !c || c.checked; });
+          const sType = hasStory ? "story" : "task";
+          let first = null;
+          const epicP = ep ? createItem({ type: "epic", title: f.et.value.trim() || ep.title, desc: [f.ed.value, f.ec && f.ec.value ? L("Acceptance criteria:", "Critérios de aceite:") + "\n" + f.ec.value : ""].filter(Boolean).join("\n\n"), parent: parent && data.items[parent] && data.items[parent].type === "initiative" ? parent : undefined, ai: true }) : Promise.resolve(parent || null);
+          epicP.then(function (pid) {
+            first = ep ? pid : null;
+            return st.reduce(function (pr, s) { return pr.then(function () { return createItem({ type: sType, title: s.title, desc: storyDesc(s), points: Number(s.points) || undefined, parent: pid || undefined, ai: true }).then(function (nid) { if (!first) first = nid; }); }); }, Promise.resolve());
+          }).then(function () { close(); toast((ep ? 1 : 0) + st.length + " " + L("items created with AI", "itens criados com IA")); if (first) setTimeout(function () { openDrawer(first); }, 400); }, function (err) { mk.disabled = false; mk.textContent = L("Create items", "Criar itens"); toast((err && err.message) || String(err)); });
+        };
+      }
+      step1("");
+    });
+  }
+
+  /* ================= Project budget =================
+     data.budget = { approved, contingency (%), owner, notes, lines/<id> = { cat: capex|opex, group, desc, item?, supplier?, month 'YYYY-MM', planned, committed, actual, note? } } */
+  function BGROUPS() {
+    return { people: L("Internal people", "Pessoas internas"), services: L("Third parties / services", "Terceiros / serviços"), software: L("Licences and software", "Licenças e software"), cloud: L("Infrastructure and cloud", "Infraestrutura e nuvem"), hardware: L("Hardware and equipment", "Hardware e equipamentos"), training: L("Training", "Treinamento"), travel: L("Travel", "Viagens"), contingency: L("Contingency", "Contingência"), other: L("Other", "Outros") };
+  }
+  function bLines() { const b = (data.budget || {}).lines || {}; return Object.keys(b).map(function (k) { return Object.assign({ id: k }, b[k]); }).sort(function (a, c) { return String(a.month || "").localeCompare(String(c.month || "")) || (a.created || 0) - (c.created || 0); }); }
+  function budgetView(v) {
+    const B = data.budget || {}, ls = bLines(), G = BGROUPS(), approved = Number(B.approved) || 0, cont = approved * (Number(B.contingency) || 0) / 100;
+    const sum = function (arr, k) { return arr.reduce(function (s, x) { return s + (Number(x[k]) || 0); }, 0); };
+    const pl = sum(ls, "planned"), cm = sum(ls, "committed"), ac = sum(ls, "actual"), fc = ls.reduce(function (s, x) { return s + Math.max(Number(x.planned) || 0, (Number(x.actual) || 0) + (Number(x.committed) || 0)); }, 0);
+    const bal = approved - ac - cm, its = items(), ib = its.reduce(function (s, i) { return s + (Number(i.budget) || 0); }, 0), ia = its.reduce(function (s, i) { return s + (Number(i.actual) || 0); }, 0);
+    const months = {}; ls.forEach(function (x) { const m = x.month || "—"; months[m] = months[m] || { n: m === "—" ? L("No month", "Sem mês") : perLabel(m), p: 0, a: 0 }; months[m].p += Number(x.planned) || 0; months[m].a += Number(x.actual) || 0; });
+    const mk = Object.keys(months).sort();
+    const split = ["capex", "opex"].map(function (c) { const a = ls.filter(function (x) { return (x.cat || "opex") === c; }); return { c: c, p: sum(a, "planned"), cm: sum(a, "committed"), a: sum(a, "actual") }; });
+    const byItem = {}; ls.forEach(function (x) { if (!x.item || !data.items[x.item]) return; byItem[x.item] = byItem[x.item] || { p: 0, a: 0, cm: 0 }; byItem[x.item].p += Number(x.planned) || 0; byItem[x.item].a += Number(x.actual) || 0; byItem[x.item].cm += Number(x.committed) || 0; });
+    const tile = function (lbl, val, sub, cls) { return '<div class="bd-tile' + (cls ? " " + cls : "") + '"><span>' + lbl + "</span><b>" + val + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; };
+    let h = '<div class="rp bd-wrap"><div class="kp-head"><div><h2>' + L("Project budget", "Orçamento do projeto") + '</h2><p class="muted small">' + L("Approved budget, CAPEX and OPEX lines by month, committed and actual – with balance and forecast.", "Orçamento aprovado, linhas de CAPEX e OPEX por mês, comprometido e realizado – com saldo e projeção.") + "</p></div>" +
+      '<div class="bd-acts">' + (canEdit ? '<button class="pl-btn" id="bdSet">' + IC("settings", 15) + " " + L("Approved budget", "Orçamento aprovado") + '</button><button class="pl-btn primary" id="bdNew">' + IC("plus", 15) + " " + L("New line", "Nova linha") + "</button>" : "") + '<button class="pl-btn" id="bdCsv">' + IC("export", 15) + " CSV</button></div></div>" +
+      '<div class="bd-tiles">' + tile(L("Approved", "Aprovado"), approved ? money(approved) : "–", B.contingency ? L("incl. contingency ", "inclui contingência ") + nf(B.contingency, 0) + "% (" + money(cont) + ")" : (canEdit ? L("set it in “Approved budget”", "defina em “Orçamento aprovado”") : "")) +
+      tile(L("Planned", "Planejado"), money(pl), approved ? pct(pl, approved) + L(" of approved", " do aprovado") : "") + tile(L("Committed", "Comprometido"), money(cm), L("orders and contracts", "pedidos e contratos")) +
+      tile(L("Actual", "Realizado"), money(ac), approved ? pct(ac, approved) + L(" used", " consumido") : "", ac > approved && approved ? "bad" : "") +
+      tile(L("Balance", "Saldo"), approved ? money(bal) : "–", L("approved − actual − committed", "aprovado − realizado − comprometido"), approved && bal < 0 ? "bad" : approved ? "good" : "") +
+      tile(L("Forecast", "Projeção"), money(fc), approved ? (fc > approved ? "⚠ " + L("above approved by ", "acima do aprovado em ") + money(fc - approved) : "✓ " + L("within approved", "dentro do aprovado")) : "", approved && fc > approved ? "bad" : "") + "</div>" +
+      (approved ? '<div class="bd-bar" title="' + esc(L("Actual ", "Realizado ") + money(ac) + " · " + L("Committed ", "Comprometido ") + money(cm)) + '"><i class="a" style="width:' + Math.min(100, ac / approved * 100) + '%"></i><i class="c" style="width:' + Math.max(0, Math.min(100 - Math.min(100, ac / approved * 100), cm / approved * 100)) + '%"></i></div><div class="rp-leg row"><span><i style="background:' + RPAL[1] + '"></i>' + L("Actual", "Realizado") + '</span><span><i style="background:' + RPAL[3] + '"></i>' + L("Committed", "Comprometido") + "</span><span>" + L("bar = approved budget", "barra = orçamento aprovado") + "</span></div>" : "") +
+      '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Planned × actual by month", "Planejado × realizado por mês") + "</h3>" + (mk.length ? '<div class="rp-scroll">' + bars(mk.map(function (m) { return months[m]; }), [{ k: "p", n: L("Planned", "Planejado"), c: RPAL[0] }, { k: "a", n: L("Actual", "Realizado"), c: RPAL[1] }], cur()) + "</div>" : '<p class="muted small">' + L("Add budget lines to see the months.", "Adicione linhas de orçamento para ver os meses.") + "</p>") + "</section>" +
+      '<section class="rp-card"><h3>CAPEX × OPEX</h3><table class="rp-t"><thead><tr><th></th><th>' + L("Planned", "Planejado") + "</th><th>" + L("Committed", "Comprometido") + "</th><th>" + L("Actual", "Realizado") + "</th><th>%</th></tr></thead><tbody>" + split.map(function (s) { return "<tr><td><b>" + s.c.toUpperCase() + "</b></td><td>" + money(s.p) + "</td><td>" + money(s.cm) + "</td><td>" + money(s.a) + "</td><td>" + pct(s.a, s.p) + "</td></tr>"; }).join("") + "</tbody></table>" +
+      (Object.keys(byItem).length ? '<h3 class="bd-h3">' + L("By initiative / epic", "Por iniciativa / épico") + '</h3><table class="rp-t"><tbody>' + Object.keys(byItem).map(function (k) { const o = data.items[k], x = byItem[k]; return '<tr data-open="' + k + '"><td>' + esc((o.key ? o.key + " · " : "") + o.title) + "</td><td>" + money(x.p) + '</td><td class="' + (x.a > x.p && x.p ? "late" : "") + '">' + money(x.a) + "</td></tr>"; }).join("") + "</tbody></table>" : "") +
+      (ib || ia ? '<p class="muted small">' + L("Also filled in on the planning items: budget ", "Também preenchido nos itens do planejamento: orçado ") + money(ib) + " · " + L("actual ", "realizado ") + money(ia) + L(" (not added to the lines above).", " (não somado às linhas acima).") + "</p>" : "") + "</section></div>" +
+      '<section class="rp-card"><h3>' + L("Budget lines", "Linhas do orçamento") + " (" + ls.length + ")</h3>" + (ls.length ? '<div class="rp-scroll"><table class="rp-t bd-tbl"><thead><tr><th>' + L("Month", "Mês") + "</th><th>" + L("Type", "Tipo") + "</th><th>" + L("Group", "Grupo") + "</th><th>" + L("Description", "Descrição") + "</th><th>" + L("Linked to", "Vinculado a") + "</th><th>" + L("Supplier", "Fornecedor") + "</th><th>" + L("Planned", "Planejado") + "</th><th>" + L("Committed", "Comprometido") + "</th><th>" + L("Actual", "Realizado") + "</th><th>" + L("Variance", "Variação") + "</th></tr></thead><tbody>" +
+        ls.map(function (x) { const vr = (Number(x.planned) || 0) - (Number(x.actual) || 0), o = x.item && data.items[x.item]; return '<tr data-bl="' + x.id + '"><td>' + esc(x.month ? perLabel(x.month) : "–") + '</td><td><span class="bd-cat ' + (x.cat || "opex") + '">' + (x.cat || "opex").toUpperCase() + "</span></td><td>" + esc(G[x.group] || G.other) + "</td><td>" + esc(x.desc || "") + "</td><td>" + esc(o ? (o.key || o.title) : "") + "</td><td>" + esc(x.supplier || "") + "</td><td>" + money(x.planned) + "</td><td>" + money(x.committed) + "</td><td>" + money(x.actual) + '</td><td class="' + (vr < 0 ? "late" : "") + '">' + money(vr) + "</td></tr>"; }).join("") +
+        '</tbody><tfoot><tr><td colspan="6"><b>Total</b></td><td><b>' + money(pl) + "</b></td><td><b>" + money(cm) + "</b></td><td><b>" + money(ac) + "</b></td><td><b>" + money(pl - ac) + "</b></td></tr></tfoot></table></div>" : '<p class="muted small">' + L("No lines yet. Add the planned costs (people, services, licences, infrastructure…) by month and mark CAPEX or OPEX.", "Ainda não há linhas. Adicione os custos planejados (pessoas, serviços, licenças, infraestrutura…) por mês e marque CAPEX ou OPEX.") + "</p>") + "</section></div>";
+    v.innerHTML = h;
+    const nb = document.getElementById("bdNew"); if (nb) nb.onclick = function () { budgetLine(null); };
+    const sb = document.getElementById("bdSet"); if (sb) sb.onclick = budgetSettings;
+    document.getElementById("bdCsv").onclick = function () {
+      const q = function (s) { s = String(s == null ? "" : s); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      const rows = [["Month", "Type", "Group", "Description", "Linked item", "Supplier", "Planned", "Committed", "Actual", "Note"]].concat(ls.map(function (x) { const o = x.item && data.items[x.item]; return [x.month, (x.cat || "opex").toUpperCase(), G[x.group] || "", x.desc, o ? o.key || o.title : "", x.supplier, x.planned, x.committed, x.actual, x.note]; }));
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + rows.map(function (r) { return r.map(q).join(","); }).join("\n")], { type: "text/csv" })); a.download = (info.title || "planning") + " - budget.csv"; a.click();
+    };
+    v.querySelectorAll("[data-bl]").forEach(function (r) { r.onclick = function () { if (canEdit) budgetLine(r.dataset.bl); }; });
+    v.querySelectorAll("[data-open]").forEach(function (r) { r.onclick = function () { openDrawer(r.dataset.open); }; });
+  }
+  function budgetSettings() {
+    const B = data.budget || {}, ppl = Object.keys(members).map(function (k) { return members[k]; });
+    modal("<h2>" + L("Approved budget", "Orçamento aprovado") + '</h2><form class="pl-form" id="bsF"><div class="pl-2"><label>' + L("Approved amount", "Valor aprovado") + " (" + cur() + ')<input type="number" min="0" step="any" name="approved" value="' + esc(B.approved == null ? "" : B.approved) + '"></label><label>' + L("Contingency included (%)", "Contingência incluída (%)") + '<input type="number" min="0" max="100" step="any" name="contingency" value="' + esc(B.contingency == null ? "" : B.contingency) + '"></label></div>' +
+      "<label>" + L("Budget owner", "Responsável pelo orçamento") + '<select name="owner"><option value="">—</option>' + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + (m.email === B.owner ? " selected" : "") + ">" + esc(m.name || m.email) + "</option>"; }).join("") + "</select></label>" +
+      "<label>" + L("Notes (approval, cost centre, PO…)", "Observações (aprovação, centro de custo, PO…)") + '<textarea name="notes" rows="2" maxlength="400">' + esc(B.notes || "") + "</textarea></label>" +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#bsF");
+      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["budget/approved"] = f.approved.value === "" ? null : Number(f.approved.value); u["budget/contingency"] = f.contingency.value === "" ? null : Number(f.contingency.value); u["budget/owner"] = f.owner.value || null; u["budget/notes"] = f.notes.value.trim() || null; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Saved", "Salvo")); }, fail); };
+    });
+  }
+  function budgetLine(lid) {
+    const x = lid ? Object.assign({}, ((data.budget || {}).lines || {})[lid]) : { cat: "opex", group: "services", month: today().slice(0, 7) }, G = BGROUPS();
+    const conts = items().filter(isContainer).sort(byOrder);
+    const num = function (n, v) { return '<input type="number" min="0" step="any" name="' + n + '" value="' + esc(v == null ? "" : v) + '">'; };
+    modal("<h2>" + (lid ? L("Edit budget line", "Editar linha do orçamento") : L("New budget line", "Nova linha do orçamento")) + '</h2><form class="pl-form" id="blF"><div class="pl-2"><label>' + L("Type", "Tipo") + '<select name="cat"><option value="capex">CAPEX – ' + L("investment", "investimento") + '</option><option value="opex">OPEX – ' + L("operating cost", "custo operacional") + "</option></select></label><label>" + L("Group", "Grupo") + '<select name="group">' + Object.keys(G).map(function (k) { return '<option value="' + k + '">' + esc(G[k]) + "</option>"; }).join("") + "</select></label></div>" +
+      "<label>" + L("Description", "Descrição") + '<input name="desc" required maxlength="120" value="' + esc(x.desc || "") + '" placeholder="' + esc(L("e.g. Integration consulting – sprint 1-4", "ex.: Consultoria de integração – sprints 1 a 4")) + '"></label>' +
+      '<div class="pl-2"><label>' + L("Month", "Mês") + '<input type="month" name="month" value="' + esc(x.month || "") + '"></label><label>' + L("Supplier", "Fornecedor") + '<input name="supplier" maxlength="80" value="' + esc(x.supplier || "") + '"></label></div>' +
+      "<label>" + L("Linked to (initiative / epic / phase)", "Vinculado a (iniciativa / épico / fase)") + '<select name="item"><option value="">—</option>' + conts.map(function (c) { return '<option value="' + c.id + '"' + (c.id === x.item ? " selected" : "") + ">" + esc((TYPES[c.type] || TYPES.epic).name + " · " + (c.key ? c.key + " · " : "") + c.title) + "</option>"; }).join("") + "</select></label>" +
+      '<div class="pl-3"><label>' + L("Planned", "Planejado") + num("planned", x.planned) + "</label><label>" + L("Committed", "Comprometido") + num("committed", x.committed) + "</label><label>" + L("Actual", "Realizado") + num("actual", x.actual) + "</label></div>" +
+      "<label>" + L("Note", "Observação") + '<input name="note" maxlength="200" value="' + esc(x.note || "") + '"></label>' +
+      '<div class="pl-row-end">' + (lid ? '<button type="button" class="pl-btn ghost danger" id="blDel">' + L("Delete", "Excluir") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#blF"); f.cat.value = x.cat || "opex"; f.group.value = x.group || "other";
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const o = { cat: f.cat.value, group: f.group.value, desc: f.desc.value.trim(), month: f.month.value || null, supplier: f.supplier.value.trim() || null, item: f.item.value || null, note: f.note.value.trim() || null, created: x.created || Date.now(), by: x.by || me.email };
+        ["planned", "committed", "actual"].forEach(function (k) { o[k] = f[k].value === "" ? null : Number(f[k].value); });
+        Object.keys(o).forEach(function (k) { if (o[k] === null) delete o[k]; });
+        save("budget/lines/" + (lid || "l" + Date.now().toString(36)), o).then(function () { close(); toast(L("Budget line saved", "Linha do orçamento salva")); });
+      };
+      const del = box.querySelector("#blDel"); if (del) del.onclick = function () { save("budget/lines/" + lid, null).then(close); };
+    });
+  }
   function reportsView(v) {
     const sps = Object.keys(data.sprints || {}).map(function (k) { return Object.assign({ id: k }, data.sprints[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     const conts = items().filter(isContainer).sort(byOrder);
@@ -916,6 +1247,7 @@
       '<section class="rp-card"><h3>' + L("Items by status", "Itens por status") + "</h3>" + donut(statusRows, W.length, L("Items by status", "Itens por status")) + "</section>" +
       '<section class="rp-card"><h3>' + L("Items by type", "Itens por tipo") + "</h3>" + donut(typeRows, W.length, L("Items by type", "Itens por tipo")) + "</section>" +
       '<section class="rp-card"><h3>' + L("Items by assignee", "Itens por responsável") + "</h3>" + donut(whoRows, W.length, L("Items by assignee", "Itens por responsável")) + "</section></div>" +
+      flowSection(W) +
       (sprRows.length ? '<div class="rp-grid2">' +
         '<section class="rp-card"><h3>' + L("Sprint delivery · story points", "Entrega por sprint · story points") + "</h3>" + tbl(["Sprint", L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes"), L("No SP (items)", "Sem SP (itens)"), L("% delivered", "% entregue")], sprRows.map(function (r) { return [esc(r.n), nf(r.sp), nf(r.dn), nf(r.rm), nf(r.noSp), pct(r.dn, r.sp)]; }), ["Total", nf(sum("sp")), nf(sum("dn")), nf(sum("rm")), nf(sum("noSp")), pct(sum("dn"), sum("sp"))]) + "</section>" +
         '<section class="rp-card"><h3>' + L("Planned × delivered × remaining (SP)", "Planejado × entregue × restante (SP)") + '</h3><div class="rp-scroll">' + bars(sprRows, [{ k: "sp", n: L("SP planned", "SP planejados"), c: "#2a78d6" }, { k: "dn", n: L("SP delivered", "SP entregues"), c: "#1baf7a" }, { k: "rm", n: L("SP remaining", "SP restantes"), c: "#6250d6" }], "SP") + "</div></section></div>" +
@@ -926,6 +1258,7 @@
       '<section class="rp-card"><h3>' + L("Budget × actual", "Orçado × realizado") + "</h3>" + (mb || ma ? '<div class="rp-money"><div><span>' + L("Budget", "Orçado") + "</span><b>" + money(mb) + "</b></div><div><span>" + L("Actual", "Realizado") + '</span><b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></div><div><span>" + L("Used", "Consumido") + "</span><b>" + pct(ma, mb) + '</b></div></div><span class="pbar big"><i style="width:' + Math.min(100, mb ? ma / mb * 100 : 0) + "%;background:" + (ma > mb ? "#e5484d" : "#1baf7a") + '"></i></span>' : '<p class="muted small">' + L("Fill in budget and actual on the items to follow the costs.", "Preencha orçado e realizado nos itens para acompanhar os custos.") + "</p>") + "</section></div>" +
       '<p class="muted small rp-foot">' + L("Updated live from this planning", "Atualizado ao vivo a partir deste planejamento") + " · " + new Date().toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { dateStyle: "short", timeStyle: "short" }) + "</p></div>";
     v.querySelectorAll("[data-rp]").forEach(function (sl) { sl.onchange = function () { rpt[sl.dataset.rp] = sl.value; reportsView(v); }; });
+    v.querySelectorAll(".rp-t tr[data-open]").forEach(function (r) { r.onclick = function () { openDrawer(r.dataset.open); }; });
     document.getElementById("rpCsv").onclick = function () {
       const q = function (x) { x = x == null ? "" : String(x); return /[",;\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
       const lines = [["Sprint", "SP planejados", "SP entregues", "SP restantes", "Sem SP (itens)", "Itens", "Itens concluídos"].join(",")].concat(sprRows.map(function (r) { return [r.n, r.sp, r.dn, r.rm, r.noSp, r.items, r.idone].map(q).join(","); }));
@@ -955,7 +1288,7 @@
   }
   function card(it) {
     const T = TYPES[it.type] || TYPES.task, par = it.parent && data.items[it.parent];
-    return '<article class="kb-card' + (overdue(it) ? " late" : "") + '" draggable="' + canEdit + '" data-id="' + it.id + '"><div class="kt">' + esc(it.title) + "</div>" + itsmBadge(it, false) +
+    return '<article class="kb-card' + (overdue(it) ? " late" : "") + (openBlock(it) ? " blocked" : "") + '" draggable="' + canEdit + '" data-id="' + it.id + '"><div class="kt">' + esc(it.title) + "</div>" + blockBadge(it) + itsmBadge(it, false) +
       (par ? '<span class="ep" style="--c:' + (TYPES[par.type] || TYPES.epic).color + '">' + esc(par.title) + "</span>" : "") +
       '<div class="km"><span class="ti" style="color:' + T.color + '">' + T.icon + '</span><span class="tk">' + esc(it.key || "") + "</span>" + (it.points ? '<span class="pts">' + esc(it.points) + "</span>" : "") +
       (it.end ? '<span class="due">' + fmt(it.end) + "</span>" : "") + (it.watch && Object.keys(it.watch).length ? '<span class="kw" title="' + esc(L("Alerts on: ", "Alertas ativos: ") + Object.keys(it.watch).map(function (k) { return memberName(it.watch[k].email); }).join(", ")) + '">' + IC("bell", 13) + "</span>" : "") + '<span class="sp"></span>' + (it.assignee ? '<span class="av" title="' + esc(memberName(it.assignee)) + '">' + esc(initials(it.assignee)) + "</span>" : "") + "</div></article>";
@@ -1195,7 +1528,8 @@
       (sps.length && !isContainer(it) ? "<label>Sprint<select name=\"sprint\"" + dis + '><option value="">Backlog</option>' + sps.map(function (k) { return '<option value="' + k + '"' + (k === it.sprint ? " selected" : "") + ">" + esc(data.sprints[k].name) + "</option>"; }).join("") + "</select></label>" : "") +
       "<label>" + L("Depends on (finish → start)", "Depende de (fim → início)") + '<select name="deps" multiple size="4"' + dis + ">" + others.map(function (o) { return '<option value="' + o.id + '"' + ((it.deps || {})[o.id] ? " selected" : "") + ">" + esc((o.key ? o.key + " · " : "") + o.title) + "</option>"; }).join("") + "</select></label>" +
       '<label class="chk prio"><input type="checkbox" name="prio"' + (it.prio ? " checked" : "") + dis + "> ★ " + L("Key activity – include in the e-mail alerts", "Atividade principal – incluir nos alertas por e-mail") + "</label>" +
-      watchBlock(it) +
+      watchBlock(it) + blockBlock(it) +
+      (canEdit && (it.type === "epic" || it.type === "initiative") ? '<button type="button" class="pl-btn sm ai-btn" id="dAi">' + IC("spark", 14) + " " + (it.type === "epic" ? L("Generate stories with AI", "Gerar histórias com IA") : L("Generate epic with AI", "Gerar épico com IA")) + "</button>" : "") +
       (allKrs().length ? "<label>" + L("Contributes to (OKR)", "Contribui para (OKR)") + '<select name="krs" multiple size="' + Math.min(5, allKrs().length) + '"' + dis + ">" + allKrs().map(function (k) { return '<option value="' + k.ref + '"' + ((it.krs || {})[k.ref] ? " selected" : "") + ">" + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
       itsmBadge(it, true) +
       (it.src && it.src.board ? '<a class="pl-src" href="../board/?id=' + encodeURIComponent(it.src.board) + '">' + IC("board", 15) + " " + L("Open the source board (process step)", "Abrir o quadro de origem (passo do processo)") + "</a>" : "") +
@@ -1205,6 +1539,8 @@
       '<p class="muted small">' + (it.by ? L("Created by ", "Criado por ") + esc(memberName(it.by)) : "") + (it.ext ? " · " + (it.ext.url ? '<a href="' + esc(it.ext.url) + '" target="_blank" rel="noopener">' + esc((PROV[it.ext.source] ? PROV[it.ext.source].short : it.ext.source) + " ") + esc(it.ext.key || "") + " ↗</a>" : esc(it.ext.source) + " " + esc(it.ext.key || "")) : "") + (it.ext && it.ext.assigneeName && !it.assignee ? " · " + L("Assignee in ", "Responsável no ") + (PROV[it.ext.source] ? PROV[it.ext.source].short : "") + ": " + esc(it.ext.assigneeName) : "") + "</p>" +
       (canEdit ? '<p class="d-err" id="dErr" hidden></p><div class="d-actions"><button type="button" class="pl-btn" id="dCancel" disabled>' + L("Cancel changes", "Cancelar alterações") + '</button><button type="button" class="pl-btn primary" id="dSave" disabled>' + L("Save", "Salvar") + "</button></div>" : "") + "</form>";
     document.getElementById("dX").onclick = closeDrawer;
+    bindBlocks(id);
+    const dai = document.getElementById("dAi"); if (dai) dai.onclick = function () { aiStoryDialog(id, it.type === "epic" ? "split" : "epic"); };
     document.querySelectorAll(".tl-row.sel").forEach(function (r) { r.classList.remove("sel"); });
     const row = document.querySelector('.tl-row[data-open="' + id + '"]'); if (row) row.classList.add("sel");
     if (!canEdit) return;
@@ -1306,10 +1642,11 @@
     const types = method().types;
     const m = document.createElement("div"); m.id = "crMenu"; m.className = "cr-menu";
     m.innerHTML = '<div class="cr-h">' + L("Create", "Criar") + "</div>" + types.map(function (t) { const T = TYPES[t]; return '<button data-ct="' + t + '"><span class="ti" style="color:' + T.color + '">' + T.icon + "</span><span><b>" + esc(T.name) + "</b><small>" + esc(T.desc) + "</small></span></button>"; }).join("") +
-      '<div class="cr-sep"></div><button data-ct="_okr"><span class="ti" style="color:#0f766e">' + IC("objective") + "</span><span><b>" + L("Objective (OKR)", "Objetivo (OKR)") + "</b><small>" + L("A goal with measurable key results.", "Uma meta com resultados-chave mensuráveis.") + "</small></span></button>";
+      '<div class="cr-sep"></div><button data-ct="_ai"><span class="ti" style="color:#8e4ec6">' + IC("spark") + "</span><span><b>" + L("Generate with AI", "Gerar com IA") + "</b><small>" + L("Epics and user stories with acceptance criteria.", "Épicos e histórias de usuário com critérios de aceite.") + "</small></span></button>" +
+      '<button data-ct="_okr"><span class="ti" style="color:#0f766e">' + IC("objective") + "</span><span><b>" + L("Objective (OKR)", "Objetivo (OKR)") + "</b><small>" + L("A goal with measurable key results.", "Uma meta com resultados-chave mensuráveis.") + "</small></span></button>";
     document.body.appendChild(m);
     const r = anchor.getBoundingClientRect(); m.style.top = r.bottom + 6 + "px"; m.style.left = Math.max(8, Math.min(window.innerWidth - 300, r.right - 290)) + "px";
-    m.onclick = function (e) { const b = e.target.closest("[data-ct]"); if (!b) return; m.remove(); if (b.dataset.ct === "_okr") objDialog(); else quickCreate(b.dataset.ct); };
+    m.onclick = function (e) { const b = e.target.closest("[data-ct]"); if (!b) return; m.remove(); if (b.dataset.ct === "_okr") objDialog(); else if (b.dataset.ct === "_ai") aiStoryDialog(null); else quickCreate(b.dataset.ct); };
     setTimeout(function () { document.addEventListener("click", function off(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener("click", off); } }); }, 0);
   }
   function quickCreate(preType) {
@@ -1699,13 +2036,14 @@
       '<fieldset><legend>' + L("What to watch", "O que acompanhar") + '</legend><label class="chk"><input type="checkbox" name="ms"' + (N.scope.milestones ? " checked" : "") + "> ◆ " + L("Milestones", "Marcos") + ' <span class="muted">(' + nMs + ')</span></label><label class="chk"><input type="checkbox" name="key"' + (N.scope.key ? " checked" : "") + "> ★ " + L("Key activities (mark ★ in the item)", "Atividades principais (marque ★ no item)") + ' <span class="muted">(' + nKey + ')</span></label><label class="chk"><input type="checkbox" name="all"' + (N.scope.all ? " checked" : "") + "> " + L("All items with a due date", "Todos os itens com prazo") + "</label></fieldset>" +
       '<fieldset><legend>' + L("Warn in advance", "Avisar com antecedência") + '</legend><div class="day-chips">' + [14, 7, 5, 3, 2, 1].map(function (d) { return '<label><input type="checkbox" name="b' + d + '"' + (N.before.indexOf(d) >= 0 ? " checked" : "") + "><span>" + d + " " + L(d === 1 ? "day" : "days", d === 1 ? "dia" : "dias") + "</span></label>"; }).join("") + '</div><p class="muted small">' + L("Plus a warning on the due date itself.", "Mais um aviso no próprio dia do prazo.") + "</p></fieldset>" +
       '<fieldset><legend>' + L("When something is late", "Quando algo atrasar") + '</legend><select name="overdue">' + [["daily", L("Warn every day until it is done", "Avisar todos os dias até concluir")], ["every3", L("Warn every 3 days", "Avisar a cada 3 dias")], ["weekly", L("Warn once a week", "Avisar uma vez por semana")], ["off", L("Don't warn about delays", "Não avisar atrasos")]].map(function (o) { return '<option value="' + o[0] + '"' + (N.overdue === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></fieldset>" +
+      '<fieldset><legend>' + IC("lock", 14) + " " + L("Long impediments", "Impedimentos longos") + '</legend><label>' + L("Warn when an item stays blocked for", "Avisar quando um item ficar bloqueado por") + '<select name="blk">' + [[7, L("more than 7 days (recommended)", "mais de 7 dias (recomendado)")], [3, L("more than 3 days", "mais de 3 dias")], [5, L("more than 5 days", "mais de 5 dias")], [14, L("more than 14 days", "mais de 14 dias")], [0, L("do not warn", "não avisar")]].map(function (o) { return '<option value="' + o[0] + '"' + (Number(N.blockedDays == null ? 7 : N.blockedDays) === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + '</select></label><p class="muted small">' + L("Goes to the item's responsible, who is resolving the impediment, the card followers and the planning owner – and repeats every 7 days while it stays blocked. Works even with the alerts above turned off.", "Vai para o responsável do item, quem está resolvendo o impedimento, quem acompanha o card e o dono do planejamento – e repete a cada 7 dias enquanto continuar bloqueado. Funciona mesmo com os alertas acima desligados.") + "</p></fieldset>" +
       '<fieldset><legend>' + L("Who receives", "Quem recebe") + '</legend><label class="chk"><input type="checkbox" name="toA"' + (N.to.assignee !== false ? " checked" : "") + "> " + L("The person responsible for each item", "O responsável de cada item") + '</label><label class="chk"><input type="checkbox" name="toO"' + (N.to.owner ? " checked" : "") + "> " + L("The planning owner", "O dono do planejamento") + "</label>" +
       '<label>' + L("Also notify (e.g. PMO, sponsor)", "Avisar também (ex.: PMO, sponsor)") + '<select name="watchers" multiple size="' + Math.min(5, Math.max(2, ppl.length)) + '">' + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + ((N.to.watchers || []).indexOf(m.email) >= 0 ? " selected" : "") + ">" + esc((m.name || m.email) + " · " + m.email) + "</option>"; }).join("") + "</select></label></fieldset>" +
       '<p class="muted small" id="alStatus"></p>' +
       '<div class="pl-row-end"><button type="button" class="pl-btn" id="alTest">' + IC("send", 14) + " " + L("Send now (test)", "Enviar agora (teste)") + '</button><span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#alF");
       function read() {
-        return { enabled: f.enabled.checked, before: [14, 7, 5, 3, 2, 1].filter(function (d) { return f["b" + d].checked; }), scope: { milestones: f.ms.checked, key: f.key.checked, all: f.all.checked }, overdue: f.overdue.value,
+        return { enabled: f.enabled.checked, before: [14, 7, 5, 3, 2, 1].filter(function (d) { return f["b" + d].checked; }), scope: { milestones: f.ms.checked, key: f.key.checked, all: f.all.checked }, overdue: f.overdue.value, blockedDays: Number(f.blk.value),
           to: { assignee: f.toA.checked, owner: f.toO.checked, watchers: Array.prototype.map.call(f.watchers.selectedOptions, function (o) { return o.value; }) }, by: me.email, at: Date.now() };
       }
       notify("digest-status", {}).then(function (j) { const st = box.querySelector("#alStatus"); if (!st) return; st.innerHTML = j && j.ok && j.daily ? "✅ " + L("Automatic daily sending is active.", "Envio diário automático ativo.") : "⏳ " + L("Automatic daily sending is being activated by the administrator – meanwhile use “Send now”.", "O envio diário automático está sendo ativado pelo administrador – enquanto isso, use “Enviar agora”."); });

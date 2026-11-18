@@ -708,6 +708,20 @@ function digestCompute(planId, P, W, today, test) {
   var members = W.members || {}, winfo = W.info || {};
   var memberEmail = function (e) { if (!e) return null; var m = members[key(e)]; if (m && (!m.expires || m.expires > Date.now())) return m.email; if (winfo.ownerEmail && winfo.ownerEmail.toLowerCase() === String(e).toLowerCase()) return winfo.ownerEmail; if (info.createdBy && info.createdBy.toLowerCase() === String(e).toLowerCase()) return info.createdBy; return null; };
   var owner = winfo.ownerEmail || info.createdBy || null, per = {};
+  /* long impediments: an open block (no "until") for more than blockedDays (default 7) → on day N and every 7 days after; on by default */
+  var bd = cfg.blockedDays == null ? 7 : Number(cfg.blockedDays), BTN = { internal: "Dependência interna", external: "Dependência externa", team: "Outra equipe / área", approval: "Aprovação / decisão", info: "Falta de informação", environment: "Ambiente / infraestrutura", technical: "Problema técnico", resource: "Pessoa indisponível", other: "Outro" };
+  if (bd > 0) Object.keys(items).forEach(function (k) {
+    var it = items[k]; if (!it || cat(it.status) === "done") return;
+    var bl = it.blocks || {}, open = null;
+    Object.keys(bl).forEach(function (b) { if (bl[b] && bl[b].since && !bl[b].until && (!open || bl[b].since < open.since)) open = bl[b]; });
+    if (!open) return;
+    var days = Math.floor((Date.now() - open.since) / 864e5);
+    if (days < bd || (!test && (days - bd) % 7 !== 0)) return;
+    var deps = Object.keys(open.deps || {}).map(function (x) { return (items[x] || {}).key || (items[x] || {}).title || ""; }).filter(String).join(", ");
+    var row = { key: it.key, title: it.title, type: it.type, end: it.end, d: -days, kind: "blocked", prio: !!it.prio, assignee: it.assignee || "", btype: BTN[open.type] || open.type || "", bdesc: open.desc || "", bdeps: deps || open.party || "" };
+    var put = function (e) { if (!e) return; e = e.toLowerCase(); var l = per[e] = per[e] || []; if (!l.some(function (x) { return x.kind === "blocked" && x.key === row.key && x.title === row.title; })) l.push(row); };
+    [it.assignee, open.owner, open.by, owner].concat(Object.keys(it.watch || {}).map(function (w) { return (it.watch[w] || {}).email; })).forEach(function (e) { put(memberEmail(e) || (e && e === owner ? owner : null)); });
+  });
   Object.keys(items).forEach(function (k) {
     var it = items[k]; if (!it.end || cat(it.status) === "done") return;
     var d = dayDiff(it.end, today), send = false, kind = null;
@@ -740,20 +754,22 @@ function digestSend(planId, P, W, per, brand, lang) {
   var fd = function (s) { return s ? s.split("-").reverse().join("/") : "–"; };
   Object.keys(per).slice(0, CFG.maxPerCall).forEach(function (to) {
     var list = per[to].sort(function (a, b) { return a.d - b.d; });
-    var late = list.filter(function (x) { return x.kind === "late"; }), tod = list.filter(function (x) { return x.kind === "today"; }), soon = list.filter(function (x) { return x.kind === "soon"; });
+    var blk = list.filter(function (x) { return x.kind === "blocked"; }), late = list.filter(function (x) { return x.kind === "late"; }), tod = list.filter(function (x) { return x.kind === "today"; }), soon = list.filter(function (x) { return x.kind === "soon"; });
     var row = function (x) {
       var lbl = x.kind === "late" ? (pt ? (-x.d) + " dia(s) de atraso" : (-x.d) + " day(s) late") : x.kind === "today" ? (pt ? "vence hoje" : "due today") : (pt ? "em " + x.d + " dia(s)" : "in " + x.d + " day(s)");
       var col = x.kind === "late" ? "#e5484d" : x.kind === "today" ? "#c27c00" : "#2f80ed";
       return '<tr style="border-top:1px solid #e3e7ef"><td style="padding:8px">' + (x.type === "milestone" ? "◆ " : x.prio ? "★ " : "") + "<b>" + esc(x.key || "") + "</b> " + esc(x.title) + '</td><td style="padding:8px">' + (x.assignee ? esc(nameOf(x.assignee)) : "–") + '</td><td style="padding:8px">' + fd(x.end) + '</td><td style="padding:8px;color:' + col + ';font-weight:bold">' + lbl + "</td></tr>";
     };
+    var brow = function (x) { return '<tr style="border-top:1px solid #e3e7ef"><td style="padding:8px"><b>' + esc(x.key || "") + "</b> " + esc(x.title) + '<br><span style="color:#5c6b80;font-size:13px">' + esc(x.btype) + (x.bdesc ? " – " + esc(x.bdesc) : "") + (x.bdeps ? " · " + (pt ? "depende de: " : "depends on: ") + esc(x.bdeps) : "") + '</span></td><td style="padding:8px">' + (x.assignee ? esc(nameOf(x.assignee)) : "–") + '</td><td style="padding:8px;color:#e5484d;font-weight:bold;white-space:nowrap">' + (pt ? "bloqueado há " + (-x.d) + " dias" : "blocked for " + (-x.d) + " days") + "</td></tr>"; };
+    var bsec = blk.length ? '<h3 style="margin:16px 0 4px;font-size:15px">' + (pt ? "Impedimentos há mais de " : "Blocked for more than ") + Math.min.apply(null, blk.map(function (x) { return -x.d; })) + (pt ? " dias" : " days") + '</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="background:#fdeeee;text-align:left"><th style="padding:8px">Item</th><th style="padding:8px">' + (pt ? "Responsável" : "Owner") + '</th><th style="padding:8px"></th></tr>' + blk.map(brow).join("") + "</table>" : "";
     var sec = function (title, arr) { return arr.length ? '<h3 style="margin:16px 0 4px;font-size:15px">' + title + '</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="background:#f3f5f9;text-align:left"><th style="padding:8px">Item</th><th style="padding:8px">' + (pt ? "Responsável" : "Owner") + '</th><th style="padding:8px">' + (pt ? "Prazo" : "Due") + '</th><th style="padding:8px"></th></tr>' + arr.map(row).join("") + "</table>" : ""; };
     var html = '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:640px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
       '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + " · " + (pt ? "Alertas do planejamento" : "Planning alerts") + '</div><div style="padding:20px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
-      "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + (pt ? "Resumo dos prazos que você acompanha no planejamento <b>“" : "Deadlines you follow in the planning <b>“") + esc(info.title || planId) + "”</b>:</p>" +
-      sec(pt ? "Em atraso" : "Overdue", late) + sec(pt ? "Vencem hoje" : "Due today", tod) + sec(pt ? "Próximos prazos" : "Coming up", soon) +
+      "<p>" + (pt ? "Olá " : "Hi ") + esc(nameOf(to).split(" ")[0]) + ",</p><p>" + (pt ? "Resumo dos prazos e impedimentos que você acompanha no planejamento <b>“" : "Deadlines and impediments you follow in the planning <b>“") + esc(info.title || planId) + "”</b>:</p>" +
+      bsec + sec(pt ? "Em atraso" : "Overdue", late) + sec(pt ? "Vencem hoje" : "Due today", tod) + sec(pt ? "Próximos prazos" : "Coming up", soon) +
       '<p style="text-align:center;margin:22px 0"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + (pt ? "Abrir o planejamento" : "Open the planning") + " →</a></p></div>" +
       brandSig(brand, pt) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">' + (pt ? "Alerta automático configurado no planejamento (menu Alertas por e-mail) ou no próprio card (Alertas deste card) · " : "Automatic alert set up in the planning (E-mail alerts) or on the card itself (Alerts for this card) · ") + esc(brand) + " · " + CFG.company + "</div></div></div>";
-    var subj = (late.length ? (pt ? "⚠ " + late.length + " em atraso · " : "⚠ " + late.length + " overdue · ") : "") + (pt ? "Alertas: " : "Alerts: ") + (info.title || planId);
+    var subj = (blk.length ? (pt ? "⛔ " + blk.length + " bloqueado(s) · " : "⛔ " + blk.length + " blocked · ") : "") + (late.length ? (pt ? "⚠ " + late.length + " em atraso · " : "⚠ " + late.length + " overdue · ") : "") + (pt ? "Alertas: " : "Alerts: ") + (info.title || planId);
     var text = html.replace(/<\/tr>|<\/p>|<\/h3>|<br>|<\/div>/g, "\n").replace(/<\/td>|<\/th>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
     MailApp.sendEmail(to, subj, text, opt); sent.push(to);
@@ -780,7 +796,8 @@ function dailyDigest() {
   Object.keys(plans).forEach(function (pid) {
     var P = plans[pid]; if (!P || !P.info || !P.data) return;
     var hasWatch = Object.keys(P.data.items || {}).some(function (k) { var w = (P.data.items[k] || {}).watch; return w && Object.keys(w).length; });
-    if (!((P.data.settings || {}).notify || {}).enabled && !hasWatch) return;
+    var hasBlock = Object.keys(P.data.items || {}).some(function (k) { var b = (P.data.items[k] || {}).blocks || {}; return Object.keys(b).some(function (x) { return b[x] && b[x].since && !b[x].until; }); });
+    if (!((P.data.settings || {}).notify || {}).enabled && !hasWatch && !hasBlock) return;
     var ws = P.info.ws; if (!wsCache[ws]) wsCache[ws] = adminGet("workspaces/" + ws) || {};
     var per = digestCompute(pid, P, wsCache[ws], today, false);
     if (Object.keys(per).length && MailApp.getRemainingDailyQuota() > Object.keys(per).length) total += digestSend(pid, P, wsCache[ws], per, CFG.brand, "pt").length;
