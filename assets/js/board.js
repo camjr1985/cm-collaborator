@@ -1213,19 +1213,25 @@
       const list = window.MBTemplateList ? window.MBTemplateList().filter(function (x) { return x.kind === "kit"; }) : [];
       const cats = window.MB_KIT_CATS || {};
       h += '<p class="muted">Insert a ready-made template into this board. Everything stays editable – move, recolour, add post-its.</p>';
-      (window.MB_KIT_CAT_ORDER || ["executive", "feedback", "agile", "tech", "data", "diagram", "strategy"]).forEach(function (c) {
-        const items = list.filter(function (x) { return x.cat === c; });
-        if (!items.length) return;
-        h += '<h3 class="tpl-cat no-i18n">' + esc(cats[c] || c) + '</h3><div class="tpl-grid">' + items.map(function (x) {
-          return '<button class="tpl-card" data-kit="' + x.id + '"><span class="tpl-pv">' + window.MBTemplatePreview(x.id) + '</span><b class="no-i18n">' + esc(x.name) + '</b><small class="no-i18n">' + esc(x.desc) + "</small></button>";
-        }).join("") + "</div>";
-      });
+      const seenA = {}, areas = ["agile", "strategy", "product"].concat(window.MB_KIT_CAT_ORDER || ["executive", "feedback", "tech", "data", "diagram"]).filter(function (c) { if (seenA[c]) return false; seenA[c] = 1; return list.some(function (x) { return x.cat === c; }); });
+      let cur = ""; try { cur = localStorage.getItem("cm:kitArea") || ""; } catch (e) {}
+      if (areas.indexOf(cur) < 0) cur = areas.indexOf("agile") >= 0 ? "agile" : areas[0];
+      h += '<div class="tpl-pick"><div class="tpl-areas no-i18n" role="tablist">' + areas.map(function (c) {
+        return '<button role="tab" data-karea="' + c + '"' + (c === cur ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + "><span>" + esc(cats[c] || c) + "</span><small>" + list.filter(function (x) { return x.cat === c; }).length + "</small></button>";
+      }).join("") + '</div><div class="tpl-grid">' + list.filter(function (x) { return areas.indexOf(x.cat) >= 0; }).map(function (x) {
+        return '<button class="tpl-card" data-kit="' + x.id + '" data-cat="' + x.cat + '"' + (x.cat === cur ? "" : " hidden") + '><span class="tpl-pv">' + window.MBTemplatePreview(x.id) + '</span><b class="no-i18n">' + esc(x.name) + '</b><small class="no-i18n">' + esc(x.desc) + "</small></button>";
+      }).join("") + "</div></div>";
     } else h += planPane();
     modal(h, function (root) {
       els.modal.classList.add("wide");
       root.querySelector("#tplClose").onclick = closeModal;
       root.querySelectorAll("[data-ttab]").forEach(function (b) { b.onclick = function () { templatesModal(b.dataset.ttab); }; });
       root.querySelectorAll("[data-kit]").forEach(function (b) { b.onclick = function () { closeModal(); insertKit(b.dataset.kit); }; });
+      root.querySelectorAll("[data-karea]").forEach(function (b) { b.onclick = function () {
+        const c = b.dataset.karea; try { localStorage.setItem("cm:kitArea", c); } catch (e) {}
+        root.querySelectorAll("[data-karea]").forEach(function (x) { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
+        root.querySelectorAll(".tpl-card[data-cat]").forEach(function (x) { x.hidden = x.dataset.cat !== c; });
+      }; });
       if (tab === "plan") bindPlanPane(root);
     });
   }

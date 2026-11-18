@@ -1,5 +1,7 @@
 /* CM Collaborator – Spanish (es) strings, keyed by the English source text (i18n.js dictionary + inline L()/LL() pairs). */
 window.MB_ES = {
+"Choose an area, then the template – everything stays editable.": "Elige el área y luego la plantilla – todo sigue siendo editable.",
+"Areas": "Áreas",
 "Visual workspace for mentoring": "Espacio visual para mentoría",
 "Know your mentee. Prioritise what matters. Act together.": "Conoce a tu mentorizado. Prioriza lo que importa. Actúen juntos.",
 "A collaborative whiteboard built for mentors and their mentees: persona map, priority matrix and RICE scoring on one live canvas.": "Un tablero colaborativo creado para mentores y mentorizados: mapa de persona, matriz de priorización y RICE en un único lienzo en vivo.",

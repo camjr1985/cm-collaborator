@@ -28,25 +28,31 @@
   /* ---------------- pieces ---------------- */
   function startStrip(canCreate) {
     if (!canCreate) return "";
-    return '<section class="hub-sec start-sec"><div class="hub-sec-head"><h2>Start something new</h2><span class="muted small">' + t("Pick a template – everything stays editable.") + "</span></div>" +
-      tplChips() +
+    const ar = tplAreas(), cur = tplArea(ar);
+    return '<section class="hub-sec start-sec"><div class="hub-sec-head"><h2>Start something new</h2><span class="muted small">' + esc(LL("Choose an area, then the template – everything stays editable.", "Escolha a área e depois o template – tudo continua editável.")) + "</span></div>" +
+      '<div class="tpl-pick"><div class="tpl-areas no-i18n" role="tablist" aria-label="' + esc(LL("Areas", "Áreas")) + '">' + ar.map(function (a) {
+        return '<button role="tab" data-tcat="' + a.id + '" aria-selected="' + (a.id === cur) + '"' + (a.id === cur ? ' class="on"' : "") + "><span>" + esc(a.name) + '</span><small>' + a.n + "</small></button>";
+      }).join("") + "</div>" +
       '<div class="tpl-strip" id="tplStrip">' + TPL.map(function (x) {
-        return '<button class="tpl-tile' + (x.id === "blank" ? " blank" : "") + '" data-new="' + x.id + '" data-cat="' + esc(x.cat || "") + '"><span class="tpl-pv">' + pv(x.id) + '</span><b class="no-i18n">' + esc(x.name) + "</b></button>";
-      }).join("") + "</div></section>";
+        const c = x.cat || "basic";
+        return '<button class="tpl-tile' + (x.id === "blank" ? " blank" : "") + '" data-new="' + x.id + '" data-cat="' + esc(c) + '"' + (x.id === "blank" || c === cur ? "" : " hidden") + '><span class="tpl-pv">' + pv(x.id) + '</span><b class="no-i18n">' + esc(x.name) + "</b></button>";
+      }).join("") + "</div></div></section>";
   }
-  /* category chips over the template strip (Design e UX, Design Thinking, Processos…) */
-  function tplChips() {
-    const cats = window.MB_KIT_CATS || {}, order = (window.MB_KIT_CAT_ORDER || []).filter(function (c) { return TPL.some(function (x) { return x.cat === c; }); });
-    if (!order.length) return "";
-    return '<div class="tpl-chips no-i18n" role="tablist"><button class="on" data-tcat="">' + esc(LL("All", "Todos")) + "</button>" + order.map(function (c) { return '<button data-tcat="' + c + '">' + esc(cats[c] || c) + "</button>"; }).join("") + "</div>";
+  /* template areas (Agile, Estratégia, Design e UX…): pick the area first, then see only its templates */
+  function tplAreas() {
+    const cats = window.MB_KIT_CATS || {}, seen = {};
+    const order = ["agile", "strategy", "product"].concat(window.MB_KIT_CAT_ORDER || [], ["mentoring", "basic"]).filter(function (c) { if (seen[c]) return false; seen[c] = 1; return true; });
+    return order.map(function (c) { return { id: c, name: c === "mentoring" ? LL("Mentoring", "Mentoria") : c === "basic" ? LL("Basic", "Básico") : cats[c] || c, n: TPL.filter(function (x) { return (x.cat || "basic") === c; }).length }; })
+      .filter(function (a) { return a.n && !(a.id === "basic" && a.n === 1); });
   }
+  function tplArea(ar) { let v = ""; try { v = localStorage.getItem("cm:tplArea") || ""; } catch (e) {} return ar.some(function (a) { return a.id === v; }) ? v : (ar[0] || {}).id; }
   function bindChips() {
     el.querySelectorAll("[data-tcat]").forEach(function (b) {
       b.onclick = function () {
-        el.querySelectorAll("[data-tcat]").forEach(function (x) { x.classList.toggle("on", x === b); });
+        el.querySelectorAll("[data-tcat]").forEach(function (x) { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
         const c = b.dataset.tcat, strip = el.querySelector("#tplStrip");
-        strip.querySelectorAll(".tpl-tile").forEach(function (t) { t.hidden = !!c && t.dataset.cat !== c && t.dataset.new !== "blank"; });
-        strip.scrollLeft = 0;
+        try { localStorage.setItem("cm:tplArea", c); } catch (e) {}
+        strip.querySelectorAll(".tpl-tile").forEach(function (t) { t.hidden = t.dataset.cat !== c && t.dataset.new !== "blank"; });
       };
     });
   }
