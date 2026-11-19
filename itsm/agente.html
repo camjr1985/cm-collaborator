@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Guia do agente de Monitoramento · CM Collaborator</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/type.css">
+  <style>
+    body { margin: 0; background: #f3f5f9; color: #1d2433; font-family: Inter, system-ui, sans-serif; font-size: var(--fs-14, 14px); line-height: 1.6; }
+    header { background: #0e1a33; color: #fff; padding: 28px 20px; }
+    header .w, main { max-width: 860px; margin: 0 auto; }
+    header h1 { margin: 6px 0 4px; font-size: var(--fs-24, 24px); }
+    header p { margin: 0; color: #c9d3e6; }
+    .k { color: #2cc4b3; font-weight: 600; font-size: var(--fs-12, 12px); letter-spacing: .06em; text-transform: uppercase; }
+    main { padding: 20px; }
+    section { background: #fff; border: 1px solid #e3e7ef; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+    h2 { font-size: var(--fs-20, 20px); margin: 0 0 8px; color: #0e1a33; }
+    h3 { font-size: var(--fs-16, 16px); margin: 14px 0 6px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-12, 12px); }
+    pre { background: #0e1a33; color: #e8eef9; border-radius: 10px; padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    p code, li code { background: #eef1f6; border-radius: 5px; padding: 1px 5px; }
+    ol, ul { padding-left: 20px; }
+    .note { background: #fdf6e3; border: 1px solid #f0dca0; border-radius: 10px; padding: 10px 12px; }
+    table { width: 100%; border-collapse: collapse; } td, th { text-align: left; padding: 6px 8px; border-top: 1px solid #e3e7ef; vertical-align: top; }
+    footer { text-align: center; color: #5b6478; font-size: var(--fs-12, 12px); padding: 10px 20px 30px; }
+  </style>
+</head>
+<body>
+  <header><div class="w"><span class="k">ITSM · Monitoramento</span><h1>Guia de instalação do agente e das integrações</h1><p>Servidores e bancos de dados on-premise, na AWS e na Azure ligados ao CMDB: se algo cair ou passar do limite, a central abre o incidente sozinha, liga o SLA e avisa a equipe.</p></div></header>
+  <main>
+    <section>
+      <h2>Antes de começar</h2>
+      <ol>
+        <li>No ITSM, cadastre o servidor ou banco no <b>CMDB</b> e escolha a <b>criticidade</b> (ela define a prioridade do incidente automático: Crítica = P1, Alta = P2, Média = P3, Baixa = P4).</li>
+        <li>Abra a aba <b>Monitoramento</b> → <b>Novo monitor</b>, escolha o item do CMDB e o tipo. Ao salvar, a central mostra o comando de instalação com um token único.</li>
+        <li><b>Copie o comando na hora:</b> por segurança, o token aparece uma vez só. Se perder, abra o monitor e use <b>Instalar / novo token</b>.</li>
+      </ol>
+      <p class="note">O agente só faz conexões de <b>saída por HTTPS</b> (porta 443) para <code>script.google.com</code>. Não é preciso abrir portas nem liberar acesso de fora. Nenhuma senha de banco ou credencial de nuvem é enviada à plataforma.</p>
+    </section>
+
+    <section>
+      <h2>Linux (Ubuntu, Debian, RHEL, Amazon Linux)</h2>
+      <p>Requisitos: <code>bash</code>, <code>curl</code> e acesso de root. Funciona em servidores físicos, VMs e instâncias EC2.</p>
+      <pre>curl -fsSL https://camjr1985.github.io/cm-collaborator/itsm/agent/install.sh | sudo bash -s -- --token SEU_TOKEN --url URL_DA_CENTRAL</pre>
+      <p>Opções (no fim do comando):</p>
+      <ul>
+        <li><code>--ports "localhost:5432,10.0.0.5:3306"</code> – testa se o banco ou serviço responde na porta (PostgreSQL, MySQL, SQL Server etc.).</li>
+        <li><code>--services "nginx,postgresql"</code> – confere se o serviço do systemd está ativo.</li>
+        <li><code>--interval 10</code> – envio a cada 10 min (mínimo 5).</li>
+      </ul>
+      <h3>O que é instalado</h3>
+      <ul><li><code>/usr/local/bin/cm-agent.sh</code> (o agente) e <code>/etc/cm-agent.conf</code> (token, só root lê).</li><li>Agendamento: <code>cm-agent.timer</code> do systemd (ou <code>/etc/cron.d/cm-agent</code>).</li></ul>
+      <h3>Testar e remover</h3>
+      <pre>sudo /usr/local/bin/cm-agent.sh          # envia um batimento agora
+systemctl list-timers cm-agent.timer     # próximo envio
+curl -fsSL https://camjr1985.github.io/cm-collaborator/itsm/agent/install.sh | sudo bash -s -- --uninstall</pre>
+    </section>
+
+    <section>
+      <h2>Windows Server (2016 ou mais novo)</h2>
+      <p>Abra o <b>PowerShell como Administrador</b> e cole o comando da aba Monitoramento:</p>
+      <pre>iwr https://camjr1985.github.io/cm-collaborator/itsm/agent/install.ps1 -UseBasicParsing -OutFile $env:TEMP\cm-install.ps1; powershell -ExecutionPolicy Bypass -File $env:TEMP\cm-install.ps1 -Token SEU_TOKEN -Url URL_DA_CENTRAL</pre>
+      <p>Opções: <code>-Ports "localhost:1433"</code>, <code>-Services "MSSQLSERVER,W3SVC"</code>, <code>-Interval 10</code>.</p>
+      <p>Instala em <code>C:\ProgramData\CMAgent</code> (acesso só de SYSTEM e Administradores) e cria a tarefa agendada <b>CM Collaborator Agent</b>, que roda como SYSTEM.</p>
+      <pre>powershell -ExecutionPolicy Bypass -File C:\ProgramData\CMAgent\cm-agent.ps1     # envia agora
+powershell -ExecutionPolicy Bypass -File $env:TEMP\cm-install.ps1 -Uninstall         # remove</pre>
+    </section>
+
+    <section>
+      <h2>AWS – alarmes do CloudWatch (RDS, EC2, ELB…)</h2>
+      <ol>
+        <li>No ITSM, crie um monitor do tipo <b>AWS CloudWatch</b> e copie o <b>endpoint</b>.</li>
+        <li>No console da AWS → <b>SNS</b> → <b>Tópicos</b> → crie um tópico (ex.: <code>cm-itsm</code>).</li>
+        <li>No tópico → <b>Criar assinatura</b> → protocolo <b>HTTPS</b> → cole o endpoint. A central confirma a assinatura sozinha (aparece "Assinatura do SNS confirmada" nos eventos).</li>
+        <li>No <b>CloudWatch</b> → <b>Alarmes</b>, em cada alarme (ex.: CPU do RDS &gt; 80%, StatusCheckFailed da EC2), escolha o tópico como ação para os estados <b>Em alarme</b> e <b>OK</b>.</li>
+      </ol>
+      <p>Estado ALARM abre ou atualiza o incidente; OK normaliza e, se configurado, resolve.</p>
+    </section>
+
+    <section>
+      <h2>Azure – Azure Monitor (VMs, Azure SQL, App Service…)</h2>
+      <ol>
+        <li>No ITSM, crie um monitor do tipo <b>Azure Monitor</b> e copie a <b>URI do webhook</b>.</li>
+        <li>No portal da Azure → <b>Monitor</b> → <b>Alertas</b> → <b>Grupos de ações</b> → <b>Criar</b>.</li>
+        <li>Em <b>Ações</b>, escolha <b>Webhook</b>, cole a URI e marque <b>Habilitar o esquema de alerta comum</b>.</li>
+        <li>Ligue o grupo de ações às regras de alerta (ex.: CPU da VM &gt; 85%, DTU do Azure SQL &gt; 90%).</li>
+      </ol>
+      <p>Severidade Sev0/Sev1 = fora do ar; Sev2 a Sev4 = degradado. "Resolved" normaliza.</p>
+    </section>
+
+    <section>
+      <h2>Sites e APIs (sem instalar nada)</h2>
+      <p>Monitor do tipo <b>Site / API (HTTP)</b>: a plataforma testa a URL a cada 10 min ou mais. Erro 5xx ou sem resposta = fora do ar; 4xx, lentidão acima do limite ou certificado SSL inválido = degradado.</p>
+    </section>
+
+    <section>
+      <h2>Como o incidente é aberto</h2>
+      <table>
+        <tr><th>Situação</th><th>O que a central faz</th></tr>
+        <tr><td>Sem batimento por 3 intervalos</td><td>"Sem sinal"; abre o incidente na verificação seguinte.</td></tr>
+        <tr><td>Fora do ar (HTTP, alarme AWS, Sev0/1 Azure)</td><td>Abre o incidente no 2º sinal ruim seguido, para não disparar por um "pisca-pisca".</td></tr>
+        <tr><td>Limite de CPU, memória, disco ou check local</td><td>"Degradado"; abre o incidente no 3º sinal ruim seguido.</td></tr>
+        <tr><td>Problema continua</td><td>Mantém um incidente por monitor e registra as mudanças como comentários.</td></tr>
+        <tr><td>Voltou ao normal</td><td>Comenta e, se o monitor estiver configurado assim, resolve o incidente sozinho.</td></tr>
+        <tr><td>Mudança aprovada ou agendada, com janela em andamento e o mesmo IC</td><td>Não abre incidente (janela de manutenção).</td></tr>
+      </table>
+      <p>O incidente sai com a prioridade da criticidade do IC, o SLA da central e e-mail para o grupo escolhido no monitor (dentro do limite diário de e-mails da central).</p>
+    </section>
+
+    <section>
+      <h2>Limites do piloto</h2>
+      <ul>
+        <li>Até <b>10 monitores por central</b> (até 5 de HTTP).</li>
+        <li>Agente a cada <b>5 min</b> ou mais; HTTP a cada <b>10 min</b> ou mais; no máximo 1 batimento por minuto por monitor.</li>
+        <li>Eventos guardados por 7 dias (últimos 200 por central).</li>
+      </ul>
+    </section>
+  </main>
+  <footer>© 2026 Digital Agile Technology · CM Collaborator. Uso exclusivo de clientes do CM Collaborator.</footer>
+</body>
+</html>

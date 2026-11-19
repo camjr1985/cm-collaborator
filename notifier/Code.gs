@@ -29,7 +29,10 @@ function doGet() { return json({ ok: true, service: CFG.brand + " notifier", quo
 
 function doPost(e) {
   try {
+    var q = (e && e.parameter) || {};
+    if (/^mon-/.test(String(q.k || ""))) return json(monIngest(String(q.k), String(q.t || ""), (e.postData && e.postData.contents) || ""));
     var req = JSON.parse(e.postData.contents || "{}");
+    if (/^mon-/.test(String(req.kind || ""))) return json(monIngest(String(req.kind), String(req.token || ""), req));
     var brand = String(req.brand || "").replace(/[^\w À-ÿ&.·-]/g, "").trim().slice(0, 40) || CFG.brand;
     var who = verify(req.idToken);
     if (req.kind === "assign" || req.kind === "due" || req.kind === "watch") return json(planNotify(req, who, brand));
@@ -1104,4 +1107,171 @@ function installItsmMailIn() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === "itsmMailIn") ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger("itsmMailIn").timeBased().everyMinutes(5).create();
   return itsmMailIn();
+}
+
+/* ---------------- ITSM Monitoring (F1): agent heartbeats, AWS/Azure alerts, HTTP checks ----------------
+ * Free tier only (Apps Script + Firebase Spark). Limits: MON.maxCentral monitors per centre, MON.maxPlatform in total,
+ * agent interval >= 5 min, HTTP >= 10 min, at most 1 beat per monitor per minute.
+ * Data: itsm/<id>/data/monitors/<mid>, itsm/<id>/data/monEvents/<eid>, monIdx/<sha256(token)> = {c, m}.
+ * Ingest: POST to the web app with ?k=mon-beat|mon-aws|mon-azure&t=<token> (or JSON {kind, token}).
+ * monCheck (every 5 min, installMonCheck): silence, HTTP checks, incidents, recovery. */
+var MON = { maxCentral: 10, maxHttp: 5, maxPlatform: 30, minAgent: 5, minHttp: 10, silentAfter: 3, failsToOpen: 2, keepEvents: 200, keepDays: 7 };
+var CRIT_P = { critical: "P1", high: "P2", medium: "P3", low: "P4" };
+function sha256hex(t) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, t, Utilities.Charset.UTF_8).map(function (b) { return ("0" + (b & 255).toString(16)).slice(-2); }).join(""); }
+function monLookup(token) {
+  if (!/^[A-Za-z0-9_-]{24,80}$/.test(token)) return null;
+  var h = sha256hex(token), cache = CacheService.getScriptCache(), ck = "monidx:" + h, hit = cache.get(ck);
+  if (hit) return hit === "-" ? null : JSON.parse(hit);
+  var x = adminGet("monIdx/" + h); cache.put(ck, x ? JSON.stringify(x) : "-", 600);
+  return x;
+}
+function monPlatformCount() {
+  var cache = CacheService.getScriptCache(), v = cache.get("moncount");
+  if (v) return Number(v);
+  var r = UrlFetchApp.fetch(CFG.db + "/monIdx.json?shallow=true&access_token=" + encodeURIComponent(ScriptApp.getOAuthToken()), { muteHttpExceptions: true });
+  var n = r.getResponseCode() === 200 ? Object.keys(JSON.parse(r.getContentText() || "{}") || {}).length : 0;
+  cache.put("moncount", String(n), 600); return n;
+}
+function monIngest(kind, token, body) {
+  var ref = monLookup(token); if (!ref || !ref.c || !ref.m) return { ok: false, error: "unknown token" };
+  var cache = CacheService.getScriptCache(), rk = "monrate:" + ref.m;
+  if (kind === "mon-beat" && cache.get(rk)) return { ok: true, throttled: true };
+  if (kind === "mon-beat") cache.put(rk, "1", 55);
+  if (monPlatformCount() > MON.maxPlatform) return { ok: false, error: "platform monitor limit reached" };
+  var mon = adminGet("itsm/" + ref.c + "/data/monitors/" + ref.m); if (!mon) return { ok: false, error: "monitor removed" };
+  var info = adminGet("itsm/" + ref.c + "/info") || {};
+  if (!(itsmLicensed(info.ws) || (!!info.owner && adminGet("admins/" + info.owner) === true))) return { ok: false, error: "no ITSM licence" };
+  var now = Date.now(), path = "itsm/" + ref.c + "/data/monitors/" + ref.m;
+  if (kind === "mon-beat") {
+    var b = typeof body === "string" ? JSON.parse(body || "{}") : body, m = b.metrics || {};
+    var met = { cpu: num(m.cpu), mem: num(m.mem), disk: num(m.disk), load: num(m.load), up: num(m.uptime) };
+    var checks = (b.checks || []).slice(0, 10).map(function (c) { return { name: String(c.name || "").slice(0, 60), ok: !!c.ok, msg: String(c.msg || "").slice(0, 160) }; });
+    var th = mon.thresholds || {}, over = [];
+    ["cpu", "mem", "disk"].forEach(function (k) { if (met[k] != null && th[k] && met[k] >= Number(th[k])) over.push(k.toUpperCase() + " " + met[k] + "% (limite " + th[k] + "%)"); });
+    checks.forEach(function (c) { if (!c.ok) over.push("Check " + c.name + " falhou" + (c.msg ? ": " + c.msg : "")); });
+    var st = over.length ? "degraded" : "up", u = { lastBeat: now, lastMetrics: met, checks: checks, host: String(b.host || "").slice(0, 80), agentVer: String(b.version || "").slice(0, 20) };
+    monTransition(ref.c, ref.m, mon, info, st, over.join(" · "), u);
+    return { ok: true, status: st, interval: Math.max(MON.minAgent, Number(mon.interval) || MON.minAgent) };
+  }
+  if (kind === "mon-aws") {
+    var sns = typeof body === "string" ? JSON.parse(body || "{}") : body;
+    if (sns.Type === "SubscriptionConfirmation" && /^https:\/\/sns\.[a-z0-9-]+\.amazonaws\.com\//.test(String(sns.SubscribeURL || ""))) { UrlFetchApp.fetch(sns.SubscribeURL, { muteHttpExceptions: true }); monEvent(ref.c, ref.m, "info", "Assinatura do SNS confirmada"); return { ok: true, confirmed: true }; }
+    if (sns.MessageId && cache.get("monmsg:" + sns.MessageId)) return { ok: true, dup: true };
+    if (sns.MessageId) cache.put("monmsg:" + sns.MessageId, "1", 21600);
+    var msg = {}; try { msg = JSON.parse(sns.Message || "{}"); } catch (x) { msg = { AlarmName: String(sns.Subject || "Alerta"), NewStateValue: "ALARM", NewStateReason: String(sns.Message || "") }; }
+    var alarm = String(msg.NewStateValue || "") === "ALARM", txt = (msg.AlarmName || "Alarme CloudWatch") + " – " + String(msg.NewStateReason || "").slice(0, 300);
+    monTransition(ref.c, ref.m, mon, info, alarm ? "down" : "up", txt, { lastBeat: now });
+    return { ok: true };
+  }
+  if (kind === "mon-azure") {
+    var az = typeof body === "string" ? JSON.parse(body || "{}") : body, ess = ((az.data || {}).essentials) || {};
+    var aid = ess.alertId || az.id; if (aid && cache.get("monmsg:" + aid + ess.monitorCondition)) return { ok: true, dup: true };
+    if (aid) cache.put("monmsg:" + aid + ess.monitorCondition, "1", 21600);
+    var fired = String(ess.monitorCondition || "Fired") === "Fired", sev = String(ess.severity || "");
+    monTransition(ref.c, ref.m, mon, info, fired ? (sev === "Sev0" || sev === "Sev1" ? "down" : "degraded") : "up", (ess.alertRule || "Alerta Azure Monitor") + (sev ? " (" + sev + ")" : "") + (ess.description ? " – " + String(ess.description).slice(0, 300) : ""), { lastBeat: now });
+    return { ok: true };
+  }
+  return { ok: false, error: "unknown kind" };
+}
+function num(v) { var n = Number(v); return isFinite(n) ? Math.round(n * 10) / 10 : null; }
+function monEvent(c, mid, type, msg) {
+  var u = {}; u["itsm/" + c + "/data/monEvents/" + itsmPushId()] = { mid: mid, t: Date.now(), type: type, msg: String(msg || "").slice(0, 400) }; adminPatch("", u);
+}
+/* status machine: up | degraded | down | silent. Opens one incident per monitor (needs MON.failsToOpen bad signals in a row, so a blip does not page anyone);
+ * events while it is open become comments; recovery comments and, if autoResolve, resolves it. Maintenance windows (approved changes that cite the CI) silence it. */
+function monTransition(c, mid, mon, info, st, reason, extra) {
+  var now = Date.now(), base = "itsm/" + c + "/data/monitors/" + mid + "/", u = {}, prev = mon.status || "new", bad = st === "down" || st === "silent" || st === "degraded";
+  Object.keys(extra || {}).forEach(function (k) { u[base + k] = extra[k]; });
+  u[base + "status"] = st; u[base + "statusAt"] = prev === st ? (mon.statusAt || now) : now;
+  var fails = bad ? (Number(mon.fails) || 0) + 1 : 0; u[base + "fails"] = fails;
+  if (prev !== st) u["itsm/" + c + "/data/monEvents/" + itsmPushId()] = { mid: mid, t: now, type: st, msg: String(reason || (st === "up" ? "Normalizado" : st)).slice(0, 400) };
+  adminPatch("", u);
+  if (bad && !mon.openRec && fails >= (st === "down" || st === "silent" ? MON.failsToOpen : MON.failsToOpen + 1) && !monInMaintenance(c, mon.ci)) monOpenIncident(c, mid, mon, info, st, reason);
+  else if (bad && mon.openRec && prev !== st) monComment(c, mon.openRec, "Monitoramento: " + st + " – " + reason);
+  else if (!bad && mon.openRec && prev !== "up") monRecover(c, mid, mon, reason);
+}
+function monInMaintenance(c, ci) {
+  if (!ci) return false;
+  var recs = adminGet("itsm/" + c + "/data/records") || {}, now = Date.now();
+  return Object.keys(recs).some(function (k) { var r = recs[k]; return r && r.kind === "change" && (r.cis || {})[ci] && (r.status === "approved" || r.status === "scheduled") && r.window && r.window.start && r.window.end && new Date(r.window.start).getTime() <= now && new Date(r.window.end).getTime() >= now; });
+}
+function monComment(c, rid, text) { var u = {}; u["itsm/" + c + "/data/comments/" + rid + "/" + itsmPushId()] = { by: "monitor", t: Date.now(), text: String(text).slice(0, 1000), via: "monitor" }; u["itsm/" + c + "/data/records/" + rid + "/updated"] = Date.now(); adminPatch("", u); }
+function monOpenIncident(c, mid, mon, info, st, reason) {
+  var settings = adminGet("itsm/" + c + "/data/settings") || {}, sla = adminGet("itsm/" + c + "/data/sla") || {}, ci = mon.ci ? adminGet("itsm/" + c + "/data/cmdb/cis/" + mon.ci) : null;
+  var prio = CRIT_P[(ci || {}).criticality] || "P2", ciName = (ci || {}).name || mon.name || "IC";
+  var rec = { kind: "incident", status: "new", title: (st === "silent" ? "Sem sinal: " : st === "degraded" ? "Degradado: " : "Fora do ar: ") + ciName, desc: "Aberto automaticamente pelo Monitoramento.\n" + String(reason || ""),
+    priority: prio, impact: prio === "P1" ? "high" : "medium", urgency: prio === "P1" || prio === "P2" ? "high" : "medium", source: "monitor", created: Date.now(), updated: Date.now(), by: "monitor", group: mon.group || (settings.groups && settings.groups.sd ? "sd" : null), monitor: mid };
+  if (mon.ci) { rec.cis = {}; rec.cis[mon.ci] = true; }
+  if (ci && ci.service) rec.service = ci.service;
+  Object.keys(rec).forEach(function (k) { if (rec[k] == null) delete rec[k]; });
+  rec.sla = itsmTargets(rec, sla); rec.key = itsmNextKey(c, (settings.prefixes || {}).incident || "INC");
+  var rid = itsmPushId(), u = {};
+  u["itsm/" + c + "/data/records/" + rid] = rec;
+  u["itsm/" + c + "/data/history/" + rid + "/" + itsmPushId()] = { by: "monitor", t: Date.now(), field: "created", to: "new", via: "monitor" };
+  u["itsm/" + c + "/data/monitors/" + mid + "/openRec"] = rid;
+  adminPatch("", u);
+  monNotify(c, info, settings, rec, rid, "Incidente automático: " + rec.key + " · " + rec.title, "O Monitoramento detectou um problema em <b>" + esc(ciName) + "</b>: " + esc(reason || st) + ".");
+}
+function monRecover(c, mid, mon, reason) {
+  var rid = mon.openRec, r = adminGet("itsm/" + c + "/data/records/" + rid), u = {}, now = Date.now();
+  u["itsm/" + c + "/data/monitors/" + mid + "/openRec"] = null;
+  u["itsm/" + c + "/data/comments/" + rid + "/" + itsmPushId()] = { by: "monitor", t: now, text: "Monitoramento: normalizado" + (reason ? " – " + String(reason).slice(0, 300) : "") + ".", via: "monitor" };
+  if (r && mon.autoResolve !== false && ["new", "doing", "waiting"].indexOf(r.status) >= 0) {
+    u["itsm/" + c + "/data/records/" + rid + "/status"] = "resolved"; u["itsm/" + c + "/data/records/" + rid + "/resolvedAt"] = now;
+    u["itsm/" + c + "/data/records/" + rid + "/closeCode"] = "Resolvido automaticamente (Monitoramento)"; u["itsm/" + c + "/data/records/" + rid + "/resolution"] = "Serviço normalizado (detectado pelo Monitoramento).";
+    if (r.sla && !r.sla.stopAt) { u["itsm/" + c + "/data/records/" + rid + "/sla/stopAt"] = now; if (!r.sla.respAt) u["itsm/" + c + "/data/records/" + rid + "/sla/respAt"] = now; }
+    u["itsm/" + c + "/data/history/" + rid + "/" + itsmPushId()] = { by: "monitor", t: now, field: "status", from: r.status, to: "resolved", via: "monitor" };
+  }
+  u["itsm/" + c + "/data/records/" + rid + "/updated"] = now;
+  adminPatch("", u);
+}
+function monNotify(c, info, settings, rec, rid, subject, intro) {
+  var ws = adminGet("workspaces/" + info.ws) || {}, ppl = itsmPeople(info, ws), groups = settings.groups || {}, g = groups[rec.group] || {};
+  var list = Object.keys(g.members || {}).filter(function (x) { return ppl[x] && ppl[x].agent; });
+  if (!list.length) list = Object.keys(ppl).filter(function (x) { return ppl[x].mgr; });
+  list = list.slice(0, 8);
+  if (!list.length || MailApp.getRemainingDailyQuota() < list.length + 5 || !itsmCap(c, settings, list.length)) return;
+  var link = CFG.site + "itsm/?id=" + encodeURIComponent(c) + "&rec=" + encodeURIComponent(rid);
+  list.forEach(function (x) { itsmMail(CFG.brand, ppl[x], subject, "Monitoramento", intro, rec, link, ""); });
+}
+function monHttp(c, mid, mon, info) {
+  var t0 = Date.now(), st = "up", why = "", url = String(mon.target || "");
+  if (!/^https?:\/\//.test(url)) return;
+  try {
+    var r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true, validateHttpsCertificates: true }), code = r.getResponseCode(), ms = Date.now() - t0, lim = Number((mon.thresholds || {}).ms) || 5000;
+    if (code >= 500 || code === 0) { st = "down"; why = "HTTP " + code; }
+    else if (code >= 400) { st = "degraded"; why = "HTTP " + code; }
+    else if (ms > lim) { st = "degraded"; why = "Resposta lenta: " + ms + " ms (limite " + lim + " ms)"; }
+    monTransition(c, mid, mon, info, st, why, { lastBeat: Date.now(), lastMetrics: { code: code, ms: ms } });
+  } catch (e) {
+    monTransition(c, mid, mon, info, "down", /certificate|SSL|ssl/.test(e.message) ? "Certificado SSL inválido ou vencido" : "Sem resposta: " + String(e.message).slice(0, 120), { lastBeat: Date.now(), lastMetrics: { code: 0 } });
+  }
+}
+function monCheck() {
+  var lock = LockService.getScriptLock(); if (!lock.tryLock(1000)) return 0;
+  try {
+    var idx = adminGet("monIdx") || {}, byC = {}, n = 0, now = Date.now(), P = PropertiesService.getScriptProperties();
+    Object.keys(idx).slice(0, MON.maxPlatform).forEach(function (h) { var x = idx[h]; if (x && x.c) (byC[x.c] = byC[x.c] || []).push(x.m); });
+    Object.keys(byC).forEach(function (c) {
+      var mons = adminGet("itsm/" + c + "/data/monitors") || {}, info = adminGet("itsm/" + c + "/info") || {};
+      if (!(itsmLicensed(info.ws) || (!!info.owner && adminGet("admins/" + info.owner) === true))) return;
+      byC[c].slice(0, MON.maxCentral).forEach(function (mid) {
+        var mon = mons[mid]; if (!mon || mon.paused) return;
+        var iv = Math.max(mon.kind === "http" ? MON.minHttp : MON.minAgent, Number(mon.interval) || 0) * 60000;
+        if (mon.kind === "http") { var last = Number(P.getProperty("monhttp:" + mid) || 0); if (now - last >= iv - 30000) { P.setProperty("monhttp:" + mid, String(now)); monHttp(c, mid, mon, info); n++; } return; }
+        if (mon.kind === "agent" && mon.lastBeat && now - mon.lastBeat > iv * MON.silentAfter && mon.status !== "silent") { monTransition(c, mid, mon, info, "silent", "Sem batimento há " + Math.round((now - mon.lastBeat) / 60000) + " min", {}); n++; }
+        else if (mon.kind === "agent" && mon.status === "silent" && !mon.openRec && (Number(mon.fails) || 0) < MON.failsToOpen) { monTransition(c, mid, mon, info, "silent", "Continua sem batimento", {}); n++; }
+      });
+      var ev = adminGet("itsm/" + c + "/data/monEvents") || {}, keys = Object.keys(ev).sort(), cut = now - MON.keepDays * 864e5, del = {};
+      keys.forEach(function (k, i) { if ((ev[k] || {}).t < cut || i < keys.length - MON.keepEvents) del["itsm/" + c + "/data/monEvents/" + k] = null; });
+      if (Object.keys(del).length) adminPatch("", del);
+    });
+    console.log("monCheck: " + n);
+    return n;
+  } finally { lock.releaseLock(); }
+}
+function installMonCheck() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === "monCheck") ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger("monCheck").timeBased().everyMinutes(5).create();
+  return monCheck();
 }

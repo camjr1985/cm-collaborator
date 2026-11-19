@@ -350,7 +350,7 @@
     if (isAgent()) {
       db.ref("itsm/" + ID + "/info").on("value", function (s) { if (s.val()) { info = s.val(); } }, function () { /* ignore */ });
       db.ref("itsm/" + ID + "/data").on("value", function (snap) {
-        data = Object.assign({ settings: {}, records: {}, comments: {}, notes: {}, history: {}, catalog: {}, kb: {}, cmdb: {}, sla: {}, counters: {} }, snap.val() || {});
+        data = Object.assign({ settings: {}, records: {}, comments: {}, notes: {}, history: {}, catalog: {}, kb: {}, cmdb: {}, sla: {}, counters: {}, monitors: {}, monEvents: {} }, snap.val() || {});
         const sig = tabs().map(function (t) { return t[0]; }).join() + "|" + areas().length;
         if (!document.getElementById("view") || (sig !== boot._sig && !dragging && !document.querySelector(".pl-modal"))) { boot._sig = sig; shell(); } else if (dragging) pendingRender = true; else renderView();
         refreshDrawer();
@@ -394,7 +394,7 @@
   const TABS = [
     ["portal", "Portal", "portal"], ["queue", "Fila", "list"], ["boards", "Quadros", "kanban"], ["incident", "Incidentes", "incident"], ["request", "Requisições", "request"],
     ["problem", "Problemas", "problem"], ["change", "Mudanças", "change"], ["improvement", "Melhorias", "improvement"], ["security", "SOC", "shield"], ["catalog", "Catálogo", "catalog"],
-    ["kb", "Conhecimento", "kb"], ["cmdb", "CMDB", "cmdb"], ["dash", "Painel", "dashboard"], ["settings", "Administração", "settings"]
+    ["kb", "Conhecimento", "kb"], ["cmdb", "CMDB", "cmdb"], ["monitor", "Monitoramento", "pulse"], ["dash", "Painel", "dashboard"], ["settings", "Administração", "settings"]
   ];
   function hasSoc() { return areas().some(function (a) { return a.soc; }) || recs().some(function (r) { return r.kind === "security"; }); }
   function tabs() { return TABS.filter(function (t) { if (!isAgent()) return t[0] === "portal"; if (t[0] === "settings") return isMgr(); if (t[0] === "security") return hasSoc(); return true; }); }
@@ -414,7 +414,7 @@
   function renderView() {
     const el = document.getElementById("view"); if (!el) return;
     const keep = el.scrollTop;
-    const V = { portal: portalView, queue: queueView, boards: boardsView, incident: kindView, request: kindView, problem: kindView, change: kindView, improvement: kindView, security: kindView, catalog: catalogView, kb: kbView, cmdb: cmdbView, dash: dashView, settings: settingsView };
+    const V = { portal: portalView, queue: queueView, boards: boardsView, incident: kindView, request: kindView, problem: kindView, change: kindView, improvement: kindView, security: kindView, monitor: monitorView, catalog: catalogView, kb: kbView, cmdb: cmdbView, dash: dashView, settings: settingsView };
     (V[view] || (isAgent() ? queueView : portalView))(el);
     el.scrollTop = keep;
   }
@@ -847,13 +847,115 @@
   /* ---------------- CMDB (service configuration management) ---------------- */
   const CIT = { service: "Serviço", application: "Aplicação", server: "Servidor", database: "Banco de dados", network: "Rede", equipment: "Equipamento", cloud: "Nuvem", other: "Outro" };
   const RELT = { depends: "depende de", runs: "roda em", connects: "conecta com" };
+
+  /* ---------------- Monitoramento (submódulo do ITSM, F1) ----------------
+   * Monitores ligados aos ICs do CMDB: agente (Linux/Windows), HTTP/HTTPS, alertas AWS CloudWatch (SNS) e Azure Monitor.
+   * Ingestão e verificação no notificador (Apps Script): incidente automático, comentário e resolução ao normalizar. */
+  const MON_LIM = { central: 10, http: 5, platform: 30, agentMin: 5, httpMin: 10 };
+  const MON_K = { agent: ["Agente (servidor ou VM)", "server"], http: ["Site / API (HTTP)", "link"], aws: ["AWS CloudWatch", "cmdb"], azure: ["Azure Monitor", "cmdb"] };
+  const MON_ST = { up: ["No ar", "green"], degraded: ["Degradado", "amber"], down: ["Fora do ar", "red"], silent: ["Sem sinal", "gray"], new: ["Aguardando 1º sinal", "gray"] };
+  function monitors() { return list(data.monitors).sort(byName); }
+  function monOfCi(ci) { return monitors().filter(function (m) { return m.ci === ci; }); }
+  function monWorst(ms) { const o = ["down", "silent", "degraded", "new", "up"]; return ms.map(function (m) { return m.status || "new"; }).sort(function (a, b) { return o.indexOf(a) - o.indexOf(b); })[0]; }
+  function monDot(ci) { const ms = monOfCi(ci); if (!ms.length) return ""; const st = monWorst(ms), x = MON_ST[st] || MON_ST.new; return '<span class="it-mdot ' + x[1] + '" title="' + esc(x[0]) + '" aria-label="' + esc(x[0]) + '"></span>'; }
+  function monChip(st) { const x = MON_ST[st || "new"] || MON_ST.new; return '<span class="it-tag ' + x[1] + '">' + esc(x[0]) + "</span>"; }
+  function b64url(bytes) { let b = ""; bytes.forEach(function (x) { b += String.fromCharCode(x); }); return btoa(b).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+  function newToken() { const a = new Uint8Array(24); crypto.getRandomValues(a); return b64url(a); }
+  function sha256(t) { return crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)).then(function (h) { return Array.prototype.map.call(new Uint8Array(h), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }); }
+  function monitorView(el) {
+    const ms = monitors(), ev = list(data.monEvents).sort(function (a, b) { return (b.t || 0) - (a.t || 0); }).slice(0, 40);
+    const cnt = {}; ms.forEach(function (m) { const k = m.status || "new"; cnt[k] = (cnt[k] || 0) + 1; });
+    const http = ms.filter(function (m) { return m.kind === "http"; }).length;
+    el.innerHTML = '<div class="it-bar"><h2 class="it-h2">' + IC("pulse", 20) + ' Monitoramento <span class="muted small">CMDB ligado a servidores, bancos e serviços (AWS, Azure e on-premise)</span></h2><button class="pl-btn primary" id="monNew"' + (ms.length >= MON_LIM.central ? " disabled" : "") + ">" + IC("plus", 15) + " Novo monitor</button></div>" +
+      '<div class="it-kpis">' + ["down", "silent", "degraded", "up"].map(function (k) { return '<div class="it-kpi"><b>' + (cnt[k] || 0) + '</b><span>' + monChip(k) + "</span></div>"; }).join("") + "</div>" +
+      '<p class="muted small it-monlim">Piloto gratuito: ' + ms.length + " de " + MON_LIM.central + " monitores nesta central (" + http + " de " + MON_LIM.http + " HTTP) · agente a cada " + MON_LIM.agentMin + " min ou mais · HTTP a cada " + MON_LIM.httpMin + " min ou mais · e-mails dentro do limite diário da central.</p>" +
+      (ms.length ? '<div class="it-mgrid">' + ms.map(function (m) {
+        const lm = m.lastMetrics || {}, k = MON_K[m.kind] || MON_K.agent;
+        const met = m.kind === "agent" ? ["cpu", "mem", "disk"].filter(function (x) { return lm[x] != null; }).map(function (x) { return '<span class="it-met' + ((m.thresholds || {})[x] && lm[x] >= m.thresholds[x] ? " hot" : "") + '">' + x.toUpperCase() + " " + lm[x] + "%</span>"; }).join("") : m.kind === "http" && lm.code != null ? '<span class="it-met">HTTP ' + lm.code + '</span><span class="it-met">' + lm.ms + " ms</span>" : "";
+        return '<button class="it-mcard st-' + esc(m.status || "new") + '" data-mon="' + esc(m.id) + '"><span class="it-mhead">' + IC(k[1], 16) + "<b>" + esc(m.name) + "</b>" + monChip(m.status) + '</span><span class="muted small">' + esc(k[0]) + (m.ci ? " · IC " + esc(ciName(m.ci) || "–") : "") + '</span><span class="it-mets">' + met + '</span><span class="muted small">' + (m.lastBeat ? "Último sinal " + esc(ago(m.lastBeat)) : "Ainda sem sinal") + (m.openRec && (data.records || {})[m.openRec] ? " · " + esc(data.records[m.openRec].key) + " aberto" : "") + "</span></button>";
+      }).join("") + "</div>" : '<div class="it-empty">' + IC("pulse", 26) + "<p>Ligue um item do CMDB a um monitor. Quando ele cair ou passar do limite, a central abre o incidente sozinha, liga o SLA e avisa o grupo responsável.</p></div>") +
+      '<h3 class="it-h3">Eventos recentes</h3>' + (ev.length ? '<ul class="it-mev">' + ev.map(function (e) { const m = (data.monitors || {})[e.mid] || {}; return "<li>" + monChip(e.type === "info" ? "new" : e.type) + " <b>" + esc(m.name || "Monitor removido") + "</b> " + esc(e.msg || "") + ' <span class="muted small">' + esc(fmtDT(e.t)) + "</span></li>"; }).join("") + "</ul>" : '<p class="muted small">Nenhum evento ainda.</p>') +
+      '<p class="small"><a href="./agente.html" target="_blank" rel="noopener">' + IC("help", 14) + " Guia de instalação do agente e das integrações com AWS e Azure</a></p>";
+    const nb = el.querySelector("#monNew"); nb.onclick = function () { editMonitor(null); };
+    el.querySelectorAll("[data-mon]").forEach(function (b) { b.onclick = function () { editMonitor(b.dataset.mon); }; });
+  }
+  function editMonitor(id) {
+    const m = id ? data.monitors[id] : { kind: "agent", interval: 5, thresholds: { cpu: 90, mem: 90, disk: 90, ms: 5000 }, autoResolve: true };
+    const cis = list((data.cmdb || {}).cis).sort(byName), th = m.thresholds || {};
+    if (!cis.length && !id) { toast("Cadastre primeiro o item de configuração no CMDB."); view = "cmdb"; shell(); return; }
+    modal("<h2>" + IC("pulse", 20) + " " + (id ? esc(m.name) : "Novo monitor") + "</h2>" + (id ? '<p class="small">' + monChip(m.status) + (m.host ? " · " + esc(m.host) : "") + (m.agentVer ? " · agente " + esc(m.agentVer) : "") + (m.lastBeat ? " · último sinal " + esc(fmtDT(m.lastBeat)) : "") + "</p>" : "") +
+      '<form class="pl-form" id="monF"><label>Nome<input name="name" required maxlength="60" value="' + esc(m.name || "") + '" placeholder="ex.: SRV-ERP-01 ou API de pagamentos"></label>' +
+      '<div class="pl-2"><label>Item do CMDB<select name="ci" required>' + cis.map(function (c) { return opt(c.id, c.name, m.ci || ""); }).join("") + "</select></label>" +
+      "<label>Tipo" + sel("kind", Object.keys(MON_K).map(function (k) { return [k, MON_K[k][0]]; }), m.kind, id ? " disabled" : "") + "</label></div>" +
+      '<label data-mk="http">Endereço (URL)<input name="target" type="url" maxlength="300" placeholder="https://api.empresa.com.br/health" value="' + esc(m.target || "") + '"></label>' +
+      '<div class="pl-2"><label data-mk="agent http">Intervalo (min)<input name="interval" type="number" min="5" max="60" value="' + esc(m.interval || 5) + '"></label>' +
+      "<label>Grupo que recebe o incidente" + sel("group", [["", "Central de serviço (padrão)"]].concat(groups().map(function (g) { return [g.id, g.name]; })), m.group || "") + "</label></div>" +
+      '<fieldset class="it-areasel" data-mk="agent"><legend>Limites que geram alerta (%)</legend><label>CPU<input name="cpu" type="number" min="1" max="100" value="' + esc(th.cpu || 90) + '"></label><label>Memória<input name="mem" type="number" min="1" max="100" value="' + esc(th.mem || 90) + '"></label><label>Disco<input name="disk" type="number" min="1" max="100" value="' + esc(th.disk || 90) + '"></label></fieldset>' +
+      '<label data-mk="http">Tempo de resposta máximo (ms)<input name="ms" type="number" min="200" max="30000" value="' + esc(th.ms || 5000) + '"></label>' +
+      '<label class="chk"><input type="checkbox" name="auto"' + (m.autoResolve !== false ? " checked" : "") + "> Resolver o incidente sozinho quando normalizar</label>" +
+      '<label class="chk"><input type="checkbox" name="paused"' + (m.paused ? " checked" : "") + "> Pausar este monitor</label>" +
+      '<div class="pl-row-end">' + (id ? '<button type="button" class="pl-btn danger" id="monDel">Excluir</button><button type="button" class="pl-btn" id="monTok">' + IC("lock", 14) + " Instalar / novo token</button><span class=\"sp\"></span>" : "") + '<button type="button" class="pl-btn" data-close>Cancelar</button><button class="pl-btn primary">' + (id ? "Salvar" : "Criar e instalar") + "</button></div></form>", function (w, close) {
+      const f = w.querySelector("#monF");
+      const vis = function () { const k = f.kind.value; w.querySelectorAll("[data-mk]").forEach(function (x) { x.hidden = x.dataset.mk.split(" ").indexOf(k) < 0; }); f.target.required = k === "http"; f.interval.min = k === "http" ? MON_LIM.httpMin : MON_LIM.agentMin; if (Number(f.interval.value) < Number(f.interval.min)) f.interval.value = f.interval.min; };
+      f.kind.onchange = vis; vis();
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const k = f.kind.value, iv = Math.max(k === "http" ? MON_LIM.httpMin : MON_LIM.agentMin, Number(f.interval.value) || 5);
+        if (!id && monitors().length >= MON_LIM.central) return toast("Limite do piloto: " + MON_LIM.central + " monitores por central.");
+        if (!id && k === "http" && monitors().filter(function (x) { return x.kind === "http"; }).length >= MON_LIM.http) return toast("Limite do piloto: " + MON_LIM.http + " monitores HTTP por central.");
+        if (k === "http" && !/^https?:\/\/[^\s]+$/.test(f.target.value.trim())) return toast("Informe uma URL que comece com http:// ou https://");
+        const v = { name: f.name.value.trim().slice(0, 60), ci: f.ci.value, interval: iv, group: f.group.value || null, autoResolve: f.auto.checked, paused: f.paused.checked || null,
+          thresholds: { cpu: Number(f.cpu.value) || 90, mem: Number(f.mem.value) || 90, disk: Number(f.disk.value) || 90, ms: Number(f.ms.value) || 5000 }, target: k === "http" ? f.target.value.trim() : null };
+        if (id) { db.ref("itsm/" + ID + "/data/monitors/" + id).update(v).then(function () { toast("Monitor salvo"); close(); }, fail); return; }
+        v.kind = k; v.status = "new"; v.created = now(); v.by = me.email;
+        const mid = db.ref("itsm/" + ID + "/data/monitors").push().key;
+        issueToken(mid, v, null).then(function (tok) { close(); installDialog(mid, Object.assign({ id: mid }, v), tok); }, fail);
+      };
+      const del = w.querySelector("#monDel"); if (del) del.onclick = function () {
+        confirmBox("Excluir monitor", "O monitor para de receber sinais (o agente instalado passa a ser recusado). Os incidentes já abertos continuam na fila.", "Excluir", true).then(function (ok) {
+          if (!ok) return; const u = {}; u["itsm/" + ID + "/data/monitors/" + id] = null; if (m.tokenHash) u["monIdx/" + m.tokenHash] = null;
+          db.ref().update(u).then(close, fail);
+        });
+      };
+      const tk = w.querySelector("#monTok"); if (tk) tk.onclick = function () {
+        confirmBox("Gerar novo token", "O token atual deixa de valer: o agente ou o webhook já instalado precisa ser atualizado com o novo comando.", "Gerar", false).then(function (ok) {
+          if (!ok) return; issueToken(id, null, m.tokenHash).then(function (tok) { close(); installDialog(id, m, tok); }, fail);
+        });
+      };
+    }, true);
+  }
+  function issueToken(mid, value, oldHash) {
+    const tok = newToken();
+    return sha256(tok).then(function (h) {
+      const u = {};
+      if (value) { value.tokenHash = h; u["itsm/" + ID + "/data/monitors/" + mid] = value; } else u["itsm/" + ID + "/data/monitors/" + mid + "/tokenHash"] = h;
+      u["monIdx/" + h] = { c: ID, m: mid };
+      if (oldHash) u["monIdx/" + oldHash] = null;
+      return db.ref().update(u).then(function () { return tok; });
+    });
+  }
+  function installDialog(mid, m, tok) {
+    const url = window.CMCOLLAB_MAILER || "", site = location.origin + location.pathname.replace(/\/itsm\/.*$/, "/itsm/"), hook = function (k) { return url + "?k=" + k + "&t=" + tok; };
+    const blocks = m.kind === "agent" ? [
+      ["Linux (Ubuntu, Debian, RHEL, Amazon Linux) – como root", "curl -fsSL " + site + "agent/install.sh | sudo bash -s -- --token " + tok + " --url " + url],
+      ["Windows Server – PowerShell como Administrador", "iwr " + site + "agent/install.ps1 -UseBasicParsing -OutFile $env:TEMP\\cm-install.ps1; powershell -ExecutionPolicy Bypass -File $env:TEMP\\cm-install.ps1 -Token " + tok + " -Url " + url]
+    ] : m.kind === "aws" ? [["Endpoint HTTPS para a assinatura do SNS (o tópico do alarme do CloudWatch)", hook("mon-aws")]] : m.kind === "azure" ? [["URI do webhook no Action Group (marque “Habilitar o esquema de alerta comum”)", hook("mon-azure")]] : [];
+    modal("<h2>" + IC("lock", 20) + " " + (m.kind === "http" ? "Monitor criado" : "Instalar – " + esc(m.name)) + "</h2>" +
+      (m.kind === "http" ? '<p class="small">O notificador da plataforma vai testar <b>' + esc(m.target) + "</b> a cada " + esc(m.interval) + " min (status, tempo de resposta e certificado SSL). Não precisa instalar nada.</p>" :
+        '<p class="it-banner amber small"><b>Copie agora:</b> por segurança, o token aparece só desta vez (guardamos apenas o código de verificação). Se perder, gere um novo.</p>' +
+        blocks.map(function (b, i) { return '<p class="small"><b>' + esc(b[0]) + '</b></p><div class="it-cmd"><code id="cmd' + i + '">' + esc(b[1]) + '</code><button type="button" class="pl-btn sm" data-copy="cmd' + i + '">Copiar</button></div>'; }).join("") +
+        '<p class="small">Passo a passo completo, requisitos e como remover: <a href="./agente.html" target="_blank" rel="noopener">guia de instalação</a>.</p>') +
+      '<div class="pl-row-end"><button type="button" class="pl-btn primary" data-close>Concluir</button></div>', function (w) {
+      w.querySelectorAll("[data-copy]").forEach(function (b) { b.onclick = function () { const t = w.querySelector("#" + b.dataset.copy).textContent; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { toast("Copiado"); }, function () { toast("Selecione o texto e copie com Ctrl+C"); }); }; });
+    }, true);
+  }
   function cmdbView(el) {
     const cis = list((data.cmdb || {}).cis).sort(byName), rels = list((data.cmdb || {}).rels);
     const used = function (c) { return recs().filter(function (r) { return (r.cis || {})[c] && !I.isDone(r); }).length; };
     el.innerHTML = '<div class="it-bar"><h2 class="it-h2">' + IC("cmdb", 20) + ' CMDB <span class="muted small">Gerenciamento de configuração de serviço</span></h2><button class="pl-btn" id="relNew">' + IC("link", 14) + ' Relacionamento</button><button class="pl-btn primary" id="ciNew">' + IC("plus", 14) + " Item de configuração</button></div>" +
       (cis.length ? '<div class="it-tablewrap"><table class="it-table"><thead><tr><th>Nome</th><th>Tipo</th><th>Serviço</th><th>Dono</th><th>Fornecedor</th><th>Situação</th><th>Relacionamentos</th><th>Registros abertos</th></tr></thead><tbody>' + cis.map(function (c) {
         const out = rels.filter(function (r) { return r.from === c.id; }).map(function (r) { return RELT[r.type] + " " + ciName(r.to); }), inn = rels.filter(function (r) { return r.to === c.id; }).length;
-        return '<tr data-ci="' + esc(c.id) + '" tabindex="0"><td data-l="Nome"><b>' + esc(c.name) + '</b></td><td data-l="Tipo">' + esc(CIT[c.type] || c.type || "") + '</td><td data-l="Serviço">' + esc(svcName(c.service)) + '</td><td data-l="Dono">' + esc(c.owner ? nameOf(c.owner) : "") + '</td><td data-l="Fornecedor">' + esc(c.supplier || "") + '</td><td data-l="Situação">' + esc({ live: "Em operação", planned: "Planejado", retired: "Desativado" }[c.status] || "") + '</td><td data-l="Relacionamentos" class="small">' + esc(out.join(" · ")) + (inn ? ' <span class="muted">(' + inn + " dependem dele)</span>" : "") + '</td><td data-l="Abertos">' + used(c.id) + "</td></tr>";
+        return '<tr data-ci="' + esc(c.id) + '" tabindex="0"><td data-l="Nome">' + monDot(c.id) + "<b>" + esc(c.name) + '</b></td><td data-l="Tipo">' + esc(CIT[c.type] || c.type || "") + '</td><td data-l="Serviço">' + esc(svcName(c.service)) + '</td><td data-l="Dono">' + esc(c.owner ? nameOf(c.owner) : "") + '</td><td data-l="Fornecedor">' + esc(c.supplier || "") + '</td><td data-l="Situação">' + esc({ live: "Em operação", planned: "Planejado", retired: "Desativado" }[c.status] || "") + '</td><td data-l="Relacionamentos" class="small">' + esc(out.join(" · ")) + (inn ? ' <span class="muted">(' + inn + " dependem dele)</span>" : "") + '</td><td data-l="Abertos">' + used(c.id) + "</td></tr>";
       }).join("") + "</tbody></table></div>" : '<div class="it-empty">' + IC("cmdb", 26) + "<p>Cadastre os itens de configuração (sistemas, servidores, equipamentos) e ligue-os a incidentes, problemas e mudanças.</p></div>");
     el.querySelector("#ciNew").onclick = function () { editCI(null); };
     el.querySelector("#relNew").onclick = relDialog;
@@ -873,14 +975,15 @@
       '<label>Situação<select name="status">' + opt("planned", "Planejado", c.status) + opt("live", "Em operação", c.status) + opt("retired", "Desativado", c.status) + "</select></label></div>" +
       '<div class="pl-2"><label>Serviço/produto<select name="service">' + opt("", "–", c.service || "") + svcs.map(function (s) { return opt(s.id, s.name, c.service || ""); }).join("") + "</select></label>" +
       '<label>Dono<select name="owner">' + opt("", "–", c.owner || "") + agents().map(function (a) { return opt(a.email, a.name, c.owner || ""); }).join("") + "</select></label></div>" +
-      '<label>Fornecedor (terceiro)<input name="supplier" maxlength="80" value="' + esc(c.supplier || "") + '"></label>' +
+      '<div class="pl-2"><label>Fornecedor (terceiro)<input name="supplier" maxlength="80" value="' + esc(c.supplier || "") + '"></label>' +
+      '<label>Criticidade<select name="criticality">' + opt("critical", "Crítica (P1)", c.criticality || "high") + opt("high", "Alta (P2)", c.criticality || "high") + opt("medium", "Média (P3)", c.criticality || "high") + opt("low", "Baixa (P4)", c.criticality || "high") + "</select></label></div>" +
       '<label>Observações<textarea name="notes" rows="2" maxlength="1000">' + esc(c.notes || "") + "</textarea></label>" +
       (id ? '<div class="it-sub"><b>Relacionamentos</b><ul>' + (rels.map(function (r) { return "<li>" + esc(ciName(r.from)) + " " + esc(RELT[r.type]) + " " + esc(ciName(r.to)) + ' <button type="button" class="link" data-drel="' + esc(r.id) + '">remover</button></li>'; }).join("") || '<li class="muted small">Nenhum</li>') + "</ul>" +
         "<b>Impacto</b><p class=\"small\">" + (imp.length ? "Se este item parar, afeta: " + esc(imp.map(ciName).join(", ")) : "Nenhum item depende dele.") + "</p>" +
         "<b>Registros ligados</b><ul>" + (recsCI.map(function (r) { return '<li><button type="button" class="link" data-open="' + esc(r.id) + '">' + esc(r.key + " " + r.title) + "</button> " + stChip(r) + "</li>"; }).join("") || '<li class="muted small">Nenhum</li>') + "</ul></div>" : "") +
       '<div class="pl-row-end">' + (id ? '<button type="button" class="pl-btn danger" id="ciDel">Excluir</button><span class="sp"></span>' : "") + '<button type="button" class="pl-btn" data-close>Cancelar</button><button class="pl-btn primary">Salvar</button></div></form>', function (w, close) {
       const f = w.querySelector("#ciF");
-      f.onsubmit = function (e) { e.preventDefault(); const v = { name: f.name.value.trim(), type: f.type.value, status: f.status.value, service: f.service.value || null, owner: f.owner.value || null, supplier: f.supplier.value.trim() || null, notes: f.notes.value.trim() || null }; const ref = db.ref("itsm/" + ID + "/data/cmdb/cis"); (id ? ref.child(id).update(v) : ref.push(v)).then(close, fail); };
+      f.onsubmit = function (e) { e.preventDefault(); const v = { name: f.name.value.trim(), type: f.type.value, status: f.status.value, service: f.service.value || null, owner: f.owner.value || null, supplier: f.supplier.value.trim() || null, criticality: f.criticality.value, notes: f.notes.value.trim() || null }; const ref = db.ref("itsm/" + ID + "/data/cmdb/cis"); (id ? ref.child(id).update(v) : ref.push(v)).then(close, fail); };
       w.querySelectorAll("[data-drel]").forEach(function (b) { b.onclick = function () { db.ref("itsm/" + ID + "/data/cmdb/rels/" + b.dataset.drel).remove().then(close, fail); }; });
       w.querySelectorAll("[data-open]").forEach(function (b) { b.onclick = function () { close(); openDrawer(b.dataset.open); }; });
       const d = w.querySelector("#ciDel"); if (d) d.onclick = function () { const u = {}; u["cmdb/cis/" + id] = null; list((data.cmdb || {}).rels).forEach(function (r) { if (r.from === id || r.to === id) u["cmdb/rels/" + r.id] = null; }); db.ref("itsm/" + ID + "/data").update(u).then(close, fail); };

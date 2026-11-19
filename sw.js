@@ -1,5 +1,5 @@
 /* CM Collaborator service worker – network first (always fresh when online), cache fallback when offline. */
-const CACHE = "cmcollab-v34";
+const CACHE = "cmcollab-v35";
 const CORE = ["./", "./workspaces/", "./board/", "./assets/css/type.css", "./assets/css/site.css", "./assets/css/board.css", "./assets/js/i18n-es.js", "./assets/js/i18n.js", "./assets/js/config.js", "./assets/js/auth.js", "./assets/js/board.js", "./assets/js/ai.js", "./assets/js/sync.js", "./assets/js/hub.js", "./assets/js/templates/kits.js", "./assets/js/templates/kits2.js", "./assets/js/icons.js", "./assets/js/modules.js", "./assets/favicon.svg", "./assets/app/icon-192.png"];
 self.addEventListener("install", function (e) { e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(CORE); }).catch(function () {})); self.skipWaiting(); });
 self.addEventListener("activate", function (e) {

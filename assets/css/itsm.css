@@ -346,3 +346,27 @@
 .it-csvrow { margin-top: 6px; }
 #polF { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; }
 #polF input, #polF select { min-width: 0; width: 100%; }
+
+/* ---- Monitoramento (F1) ---- */
+.it-tag.green { background: #e3f6ee; color: #11724a; }
+.it-tag.amber { background: #fdf1d8; color: #8a5a00; }
+.it-tag.red { background: #fde8e8; color: #b42318; }
+.it-kpi > b { font-size: var(--fs-24); font-weight: 700; color: var(--navy, #0e1a33); }
+.it-monlim { margin: -4px 0 12px; }
+.it-mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; margin-bottom: 16px; }
+.it-mcard { display: grid; gap: 6px; text-align: left; font: inherit; background: #fff; border: 1px solid var(--line); border-left: 4px solid #c5ccd8; border-radius: 12px; padding: 12px; cursor: pointer; min-width: 0; }
+.it-mcard:hover { border-color: #2cc4b3; }
+.it-mcard.st-up { border-left-color: #12a36a; }
+.it-mcard.st-degraded { border-left-color: #e0a100; }
+.it-mcard.st-down { border-left-color: #d92d20; }
+.it-mhead { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.it-mhead b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.it-mets { display: flex; flex-wrap: wrap; gap: 4px; }
+.it-met { font-size: var(--fs-12); background: #f3f5f9; border-radius: 6px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
+.it-met.hot { background: #fde8e8; color: #b42318; font-weight: 600; }
+.it-mdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: #c5ccd8; }
+.it-mdot.green { background: #12a36a; } .it-mdot.amber { background: #e0a100; } .it-mdot.red { background: #d92d20; }
+.it-mev { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.it-mev li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-13); }
+.it-cmd { display: flex; gap: 8px; align-items: flex-start; background: #0e1a33; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+.it-cmd code { flex: 1; min-width: 0; color: #e8eef9; background: none; font-size: var(--fs-12); word-break: break-all; white-space: pre-wrap; }
