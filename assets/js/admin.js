@@ -6,7 +6,7 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null;
+  let db, me, accounts = {}, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short", year: "numeric" }); }
@@ -68,8 +68,9 @@
       db.ref("feedback").once("value").catch(function () { return { val: function () { return {}; } }; }),
       db.ref("signups").once("value").catch(function () { return { val: function () { return {}; } }; }),
       db.ref("entitlements").once("value").catch(function () { return { val: function () { return null; } }; }),
-      db.ref("moduleRequests").once("value").catch(function () { return { val: function () { return null; } }; })
-    ]).then(function (r) { announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
+      db.ref("moduleRequests").once("value").catch(function () { return { val: function () { return null; } }; }),
+      db.ref("users").once("value").catch(function () { return { val: function () { return {}; } }; })
+    ]).then(function (r) { accounts = r[7].val() || {}; announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
   }
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { if (okMsg) toast(okMsg); return load(); }).catch(fail);
@@ -623,6 +624,14 @@
       const q = c.dataset.umod2.split("|"), per = (el.querySelector('[data-uper="' + q[0] + '"]') || {}).value;
       ref("entitlements/users/" + q[0] + "/" + q[1], c.checked ? grantObj(per) : null, c.checked ? LL("Module granted", "Módulo concedido") : LL("Module turned off", "Módulo desligado"));
     }; });
+    el.querySelectorAll("[data-gbtn]").forEach(function (b) { b.onclick = function () {
+      const k = b.dataset.gbtn, q = function (a) { return (el.querySelector("[" + a + '="' + k + '"]') || {}).value; }, wsId = q("data-gws"), days = Number(q("data-gdays")) || 0;
+      const usr = buildUsers()[k]; if (!wsId || !usr || !ws[wsId]) return;
+      const expires = days ? Date.now() + days * DAY : null, u = {};
+      u["workspaces/" + wsId + "/members/" + k] = { email: usr.email, name: usr.name || usr.email.split("@")[0], role: q("data-grole") || "editor", invitedAt: TS(), invitedBy: me.email, expires: expires };
+      u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
+      update(u, LL("Access granted", "Acesso concedido"));
+    }; });
     const uf = document.getElementById("umForm"); if (uf) uf.onsubmit = function (e) {
       e.preventDefault(); const em = uf.email.value.trim().toLowerCase(); if (!validEmail(em)) return toast(LL("Enter a valid e-mail", "Informe um e-mail válido"));
       ref("entitlements/users/" + A.key(em) + "/" + uf.mod.value, grantObj(uf.per.value), LL("Module granted", "Módulo concedido"));
@@ -655,8 +664,15 @@
         u.acc.push({ id: id, k: k, ws: (w.info || {}).name || id, m: m, st: accSt(m), boards: Object.keys(w.boards || {}).length, plans: Object.keys(w.plannings || {}).length, games: Object.keys(w.games || {}).length, itsm: Object.keys(w.itsm || {}).length });
       });
     });
+    /* signed-in accounts that have no access yet (users/<key>, written by auth.js at every sign-in) */
+    if (!OWNER) Object.keys(accounts).forEach(function (k) {
+      const a = accounts[k] || {}; if (!a.email) return;
+      const u = map[k] || (map[k] = { k: k, name: a.name || "", email: a.email, acc: [] });
+      u.acct = a; if (!u.name && a.name) u.name = a.name;
+    });
     Object.keys(map).forEach(function (k) {
       const u = map[k], act = u.acc.filter(function (a) { return a.st !== "off"; });
+      if (!u.acc.length) { u.st = "noacc"; u.next = null; u.off = 0; u.boards = u.plans = u.games = u.itsm = 0; u.noRenew = false; u.role = "editor"; return; }
       const lim = act.filter(function (a) { return a.st !== "none"; }).map(function (a) { return a.m.expires; });
       u.next = lim.length ? Math.min.apply(null, lim) : null;
       u.st = act.some(function (a) { return a.st === "soon"; }) ? "soon" : !act.length ? "off" : act.some(function (a) { return a.st === "ok"; }) ? "ok" : "none";
@@ -673,6 +689,7 @@
     return map;
   }
   function stLabel(u) {
+    if (u.st === "noacc") return '<span class="lic off">' + LL("No access yet", "Sem acesso ainda") + "</span>";
     if (u.st === "none") return '<span class="lic none">' + LL("No time limit", "Sem prazo") + "</span>";
     if (u.st === "off") return '<span class="lic off">' + LL("Expired", "Expirado") + "</span>";
     const d = daysLeft(u.next);
@@ -743,7 +760,7 @@
     const chip = function (st, l) { return '<button class="fchip' + ((UF.st || "all") === st ? " on" : "") + '" data-ust="' + st + '">' + l + ' <span class="count">' + n(st) + "</span></button>"; };
     const nsel = Object.keys(SEL).filter(function (k) { return map[k]; }).length;
     let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Users & licences", "Usuários e licenças") + '</h2><p class="muted small">' + LL("One row per person: what they can open, until when, and the decision to extend or not. Select people to act in bulk; click a person for the details.", "Uma linha por pessoa: o que ela acessa, até quando, e a decisão de prorrogar ou não. Selecione pessoas para agir em lote; clique na pessoa para ver os detalhes.") + '</p></div><div class="sec-acts"><button class="btn sm" id="uCsv">' + LL("Export CSV", "Exportar CSV") + "</button></div></div>";
-    h += '<div class="fbar">' + chip("all", LL("All", "Todos")) + chip("soon", LL("Expiring ≤ 7d", "Vencendo ≤ 7 dias")) + chip("off", LL("Expired", "Expirados")) + chip("ok", LL("Active", "Ativos")) + chip("none", LL("No limit", "Sem prazo")) + chip("norenew", LL("Won't renew", "Não renovar")) + "</div>";
+    h += '<div class="fbar">' + chip("all", LL("All", "Todos")) + chip("soon", LL("Expiring ≤ 7d", "Vencendo ≤ 7 dias")) + chip("off", LL("Expired", "Expirados")) + chip("ok", LL("Active", "Ativos")) + chip("noacc", LL("No access yet", "Sem acesso")) + chip("none", LL("No limit", "Sem prazo")) + chip("norenew", LL("Won't renew", "Não renovar")) + "</div>";
     h += '<div class="fbar f2"><input id="uQ" type="search" value="' + esc(UF.q || "") + '" placeholder="' + esc(LL("Search name, e-mail or workspace", "Buscar nome, e-mail ou workspace")) + '"><select id="uWs" class="no-i18n"><option value="">' + LL("All workspaces", "Todos os workspaces") + "</option>" + ids.map(function (id) { return '<option value="' + esc(id) + '"' + (UF.ws === id ? " selected" : "") + ">" + esc(ws[id].info.name) + "</option>"; }).join("") + '</select><select id="uSort"><option value="name">' + LL("Sort: name", "Ordenar: nome") + '</option><option value="exp"' + (UF.sort === "exp" ? " selected" : "") + ">" + LL("Sort: nearest expiry", "Ordenar: validade mais próxima") + "</option></select></div>";
     h += '<div class="bulk"' + (nsel ? "" : " hidden") + '><b>' + plural(nsel, LL("selected", "selecionado"), LL("selected", "selecionados")) + '</b><span class="muted small">' + (UF.ws ? LL("in workspace ", "no workspace ") + esc((ws[UF.ws] && ws[UF.ws].info.name) || "") : LL("in all their workspaces", "em todos os workspaces deles")) + '</span><span class="sp"></span>' +
       '<span class="bl">' + LL("Extend", "Prorrogar") + '</span><button class="btn sm" data-bulk="add|7">+7</button><button class="btn sm" data-bulk="add|14">+14</button><button class="btn sm" data-bulk="add|30">+30</button><input type="date" id="bDate" aria-label="' + esc(LL("Until date", "Até a data")) + '"><button class="btn sm" data-bulk="date">' + LL("Set date", "Definir data") + '</button>' +
@@ -755,10 +772,10 @@
         const wsn = u.acc.map(function (a) { return a.ws; });
         return '<tr data-row="' + esc(u.k) + '"' + (SEL[u.k] ? ' class="sel"' : "") + '><td class="ck"><input type="checkbox" data-sel="' + esc(u.k) + '"' + (SEL[u.k] ? " checked" : "") + ' aria-label="' + esc(u.email) + '"></td>' +
           '<td data-l="' + esc(LL("Person", "Pessoa")) + '"><button class="lnk-u" data-user="' + esc(u.k) + '"><span class="av sm no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><span><b class="no-i18n">' + esc(u.name || "—") + '</b><span class="muted no-i18n">' + esc(u.email) + "</span></span></button></td>" +
-          '<td data-l="Workspaces" class="no-i18n wsn" title="' + esc(wsn.join(" · ")) + '">' + esc(wsn[0]) + (wsn.length > 1 ? "<small>+ " + esc(wsn.slice(1, 3).join(", ")) + (wsn.length > 3 ? " +" + (wsn.length - 3) : "") + "</small>" : "") + "</td>" +
+          '<td data-l="Workspaces" class="no-i18n wsn" title="' + esc(wsn.join(" · ")) + '">' + (wsn.length ? esc(wsn[0]) : '<span class="muted">' + LL("signed in, no workspace", "entrou, sem workspace") + "</span>") + (wsn.length > 1 ? "<small>+ " + esc(wsn.slice(1, 3).join(", ")) + (wsn.length > 3 ? " +" + (wsn.length - 3) : "") + "</small>" : "") + "</td>" +
           '<td data-l="' + esc(LL("Access", "Acessos")) + '">' + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + (u.games ? " · " + plural(u.games, LL("game", "partida"), LL("games", "partidas")) : "") + (u.itsm ? " · " + plural(u.itsm, LL("service centre", "central ITSM"), LL("service centres", "centrais ITSM")) : "") + "</td>" +
           '<td data-l="' + esc(LL("Role", "Papel")) + '">' + roleLabel(u.role) + "</td>" +
-          '<td data-l="' + esc(LL("Valid until", "Validade")) + '" class="tnum">' + (u.st === "none" ? "—" : fmtShort(u.next)) + (u.off && u.st !== "off" ? '<span class="muted small"> · ' + plural(u.off, LL("expired", "expirado"), LL("expired", "expirados")) + "</span>" : "") + "</td>" +
+          '<td data-l="' + esc(LL("Valid until", "Validade")) + '" class="tnum">' + (u.st === "none" || u.st === "noacc" ? "—" : fmtShort(u.next)) + (u.off && u.st !== "off" ? '<span class="muted small"> · ' + plural(u.off, LL("expired", "expirado"), LL("expired", "expirados")) + "</span>" : "") + "</td>" +
           '<td data-l="' + esc(LL("Status", "Situação")) + '">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + "</td>" +
           (OWNER ? "" : '<td data-l="' + esc(LL("Modules", "Módulos")) + '">' + (Object.keys(em).length ? Object.keys(em).map(function (id) { return '<span class="lic ok" title="' + esc(LL("Via: ", "Por: ") + em[id].join(", ")) + '">' + esc((MODS().find(function (m) { return m.id === id; }) || {}).name || id) + "</span>"; }).join(" ") : '<span class="muted small">' + LL("Core", "Base") + "</span>") + "</td>") +
           '<td data-l="E-mails" class="mails">' + (u.acc.some(function (a) { return a.m.welcomed; }) ? '<span title="' + esc(LL("Welcome sent", "Boas-vindas enviado")) + '">✓ ✉</span>' : '<span class="muted" title="' + esc(LL("Welcome not sent", "Boas-vindas não enviado")) + '">✉</span>') + (u.acc.some(function (a) { return a.m.prospected; }) ? ' <span class="xp prospected">' + LL("Prosp.", "Prosp.") + "</span>" : "") + "</td>" +
@@ -771,6 +788,12 @@
     const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 14) : ""; };
     return '<div class="adm-drawer-bg" data-dclose></div><aside class="adm-drawer" role="dialog" aria-label="' + esc(u.name || u.email) + '"><header><span class="av no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><div><h2 class="no-i18n">' + esc(u.name || u.email) + '</h2><span class="muted no-i18n">' + esc(u.email) + '</span></div><button class="btn sm ghost" data-dclose aria-label="' + esc(LL("Close", "Fechar")) + '">✕</button></header>' +
       '<div class="d-sum">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + '<span class="muted small">' + plural(u.acc.length, "workspace", "workspaces") + " · " + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + (u.games ? " · " + plural(u.games, LL("game", "partida"), LL("games", "partidas")) : "") + "</span></div>" +
+      (function () {
+        const have = {}; u.acc.forEach(function (a) { have[a.id] = 1; });
+        const opts = Object.keys(ws).filter(function (id) { return !have[id] && ws[id] && ws[id].info; }).sort(function (a, b) { return String(ws[a].info.name || a).localeCompare(String(ws[b].info.name || b)); });
+        return '<section class="d-acc d-give"><div class="d-acc-h"><b>' + LL("Give access to a workspace", "Dar acesso a um workspace") + '</b></div>' + (u.acct ? '<p class="muted small">' + LL("Account: ", "Conta: ") + esc(u.acct.provider === "google.com" ? "Google" : u.acct.provider === "microsoft.com" ? "Microsoft" : LL("e-mail link", "link por e-mail")) + (u.acct.verified ? " · " + LL("e-mail confirmed", "e-mail confirmado") : "") + (u.acct.last ? " · " + LL("last sign-in ", "último acesso ") + fmtDate(u.acct.last) : "") + "</p>" : "") +
+          (opts.length ? '<div class="d-acts"><select data-gws="' + esc(u.k) + '" class="no-i18n">' + opts.map(function (id) { return '<option value="' + esc(id) + '">' + esc(ws[id].info.name || id) + "</option>"; }).join("") + '</select><select data-grole="' + esc(u.k) + '"><option value="editor">' + LL("Editor", "Editor") + '</option><option value="viewer">' + LL("Viewer", "Leitor") + '</option></select><select data-gdays="' + esc(u.k) + '"><option value="0">' + LL("No time limit", "Sem prazo") + '</option><option value="7">7 ' + LL("days", "dias") + '</option><option value="14">14 ' + LL("days", "dias") + '</option><option value="30">30 ' + LL("days", "dias") + '</option><option value="90">90 ' + LL("days", "dias") + '</option></select><button class="btn sm primary" data-gbtn="' + esc(u.k) + '">' + LL("Give access", "Dar acesso") + "</button></div>" : '<p class="muted small">' + LL("Already in every workspace.", "Já está em todos os workspaces.") + "</p>") + "</section>";
+      })() +
       (OWNER ? "" : (function () { const em = effMods(u); return '<section class="d-acc d-mods"><div class="d-acc-h"><b>' + LL("Add-on modules", "Módulos adicionais") + "</b>" + periodSel('data-uper="' + esc(u.k) + '"') + "</div>" + MODS().map(function (m) { const g = userMods(u.k)[m.id], via = (em[m.id] || []).filter(function (x) { return x !== LL("individual", "individual"); }); return '<label class="mtog"><input type="checkbox" data-umod2="' + esc(u.k) + "|" + m.id + '"' + (gActive(g) ? " checked" : "") + "> <b>" + esc(m.name) + "</b> <span>" + esc(LL("individual: ", "individual: ") + grantTxt(g)) + (via.length ? " · " + esc(LL("company package: ", "pacote da empresa: ") + via.join(", ")) : "") + "</span></label>"; }).join("") + '<p class="muted small">' + LL("Company packages are set in Modules & packages.", "Pacotes de empresa ficam em Módulos e pacotes.") + "</p></section>"; })()) +
       u.acc.map(function (a) {
         const w = ws[a.id], ref = a.id + "|" + a.k, bl = w.boards || {}, pl = w.plannings || {};

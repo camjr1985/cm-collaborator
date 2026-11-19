@@ -33,19 +33,36 @@
   }
   function base(name) { return "https://www.gstatic.com/firebasejs/" + V + "/firebase-" + name + "-compat.js"; }
 
+  function cleanLinkUrl() {
+    const u = new URL(location.href);
+    ["apiKey", "oobCode", "mode", "lang", "continueUrl", "tenantId"].forEach(function (p) { u.searchParams.delete(p); });
+    history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+  }
+  function firstUser() { return new Promise(function (res) { const off = window.firebase.auth().onAuthStateChanged(function (u) { off(); res(u); }); }); }
   function completeEmailLink() {
     const a = window.firebase.auth();
     if (!a.isSignInWithEmailLink(location.href)) return Promise.resolve();
-    let email = null;
-    try { email = localStorage.getItem(EMAIL_KEY); } catch (e) { /* ignore */ }
-    if (!email) email = window.prompt((window.MBt || String)("Confirm your e-mail to finish signing in"));
-    if (!email) return Promise.resolve();
-    return a.signInWithEmailLink(email, location.href).then(function () {
-      try { localStorage.removeItem(EMAIL_KEY); } catch (e) { /* ignore */ }
-      const u = new URL(location.href);
-      ["apiKey", "oobCode", "mode", "lang", "continueUrl", "tenantId"].forEach(function (p) { u.searchParams.delete(p); });
-      history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+    /* already signed in (e.g. with Google, or the link was opened again): do not ask for the e-mail – just clean the address */
+    return firstUser().then(function (cur) {
+      if (cur) { cleanLinkUrl(); return; }
+      let email = null;
+      try { email = localStorage.getItem(EMAIL_KEY); } catch (e) { /* ignore */ }
+      if (!email) email = window.prompt((window.MBt || String)("Confirm your e-mail to finish signing in"));
+      if (!email) { cleanLinkUrl(); return; }
+      return a.signInWithEmailLink(email.trim(), location.href).then(function () {
+        try { localStorage.removeItem(EMAIL_KEY); } catch (e) { /* ignore */ }
+        cleanLinkUrl();
+      }, function (e) { cleanLinkUrl(); throw e; });
     });
+  }
+  /* every signed-in account is listed for the admins (Admin → Users), even before it gets any access */
+  function registerAccount(u) {
+    if (!u || !u.email) return;
+    try { if (sessionStorage.getItem("cm:acct") === u.uid) return; } catch (e) { /* ignore */ }
+    const r = window.firebase.database().ref("users/" + key(u.email)), prov = ((u.providerData || [])[0] || {}).providerId || "password";
+    r.update({ email: u.email.toLowerCase(), name: u.displayName || null, provider: prov, verified: !!u.emailVerified, last: window.firebase.database.ServerValue.TIMESTAMP }).then(function () {
+      return r.child("first").transaction(function (v) { return v || Date.now(); });
+    }).then(function () { try { sessionStorage.setItem("cm:acct", u.uid); } catch (e) { /* ignore */ } }, function () { /* rules not published yet */ });
   }
 
   function ready() {
@@ -55,11 +72,11 @@
       .then(function () { return Promise.all([load(base("auth")), load(base("database"))]); })
       .then(function () {
         if (!window.firebase.apps.length) window.firebase.initializeApp(cfg);
-        return completeEmailLink().catch(function (e) { console.warn(e); alert(e.message); });
+        return completeEmailLink().catch(function (e) { console.warn(e); if (e && e.code !== "auth/invalid-action-code" && e.code !== "auth/expired-action-code") alert(e.message); });
       })
       .then(function () {
         return new Promise(function (res) {
-          const off = window.firebase.auth().onAuthStateChanged(function (u) { off(); current = u; res(u); });
+          const off = window.firebase.auth().onAuthStateChanged(function (u) { off(); current = u; registerAccount(u); res(u); });
         });
       });
     return readyP;

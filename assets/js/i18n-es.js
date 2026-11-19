@@ -1,5 +1,13 @@
 /* CM Collaborator – Spanish (es) strings, keyed by the English source text (i18n.js dictionary + inline L()/LL() pairs). */
 window.MB_ES = {
+"No access yet": "Sin acceso aún",
+"signed in, no workspace": "entró, sin workspace",
+"Give access to a workspace": "Dar acceso a un workspace",
+"Account: ": "Cuenta: ",
+"e-mail link": "enlace por correo",
+"e-mail confirmed": "correo confirmado",
+"last sign-in ": "último acceso ",
+"Already in every workspace.": "Ya está en todos los workspaces.",
 "Manage health, safety and the environment (SHE) in one place, separate from the IT service desk.": "Gestiona salud, seguridad y medio ambiente (SHE) en un solo lugar, separado de la mesa de servicio de TI.",
 "Records with workflow and deadlines: accidents and CAT, near misses, PPE, exams and absences": "Registros con flujo y plazos: accidentes y CAT, casi accidentes, EPI, exámenes y bajas",
 "SHE: environmental incidents, inspections and non-conformities": "SHE: incidentes ambientales, inspecciones y no conformidades",
