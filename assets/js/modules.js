@@ -31,14 +31,14 @@
       desc: L("Service desk, incidents, requests, problems, changes, SLAs and CMDB – connectable to Planning.", "Central de serviço, incidentes, requisições, problemas, mudanças, SLAs e CMDB – conectável ao Planning.") },
     { id: "game", name: "Business Game", full: L("Business Game – business simulation for education", "Business Game – simulação empresarial para educação"), icon: "game", path: "game/", area: "education",
       desc: L("Round-based business simulation for classes, customizable per institution – connectable to Planning.", "Simulação empresarial por rodadas para turmas, customizável por instituição – conectável ao Planning.") },
-    { id: "sst", name: L("Occupational health", "Saúde Ocupacional"), full: L("Occupational health and SHE", "Saúde Ocupacional e SHE"), icon: "sst", path: "sst/", area: "ohs",
+    { id: "sst", name: L("Health", "Saúde"), full: L("Health – work safety and SHE", "Saúde – segurança do trabalho e SHE"), icon: "sst", path: "sst/", area: "ohs",
       desc: L("Accidents, CAT, near misses, PPE, occupational exams, absences, environmental incidents, action plans, FR/SR indicators and SST/SHE planning templates – separate from the IT service desk.", "Acidentes, CAT, quase-acidentes, EPI, exames ocupacionais, afastamentos, incidentes ambientais, planos de ação, indicadores TF/TG e templates de planejamento de SST/SHE – separado da central de TI.") }
   ];
   const PACKAGES = [
     { id: "essencial", name: L("Essential", "Essencial"), mods: [], desc: L("Boards + Planning (core)", "Quadros + Planning (base)") },
     { id: "service", name: L("Service", "Serviços"), mods: ["itsm"], desc: L("Core + ITSM", "Base + ITSM") },
     { id: "educacao", name: L("Education", "Educação"), mods: ["game"], desc: L("Core + Business Game", "Base + Business Game") },
-    { id: "sst", name: L("Health and safety", "Saúde e segurança"), mods: ["sst"], desc: L("Core + Occupational health", "Base + Saúde Ocupacional") },
+    { id: "sst", name: L("Health and safety", "Saúde e segurança"), mods: ["sst"], desc: L("Core + Health", "Base + Saúde") },
     { id: "empresarial", name: L("Enterprise", "Empresarial"), mods: ["itsm", "game", "sst"], desc: L("Core + all add-on modules", "Base + todos os módulos adicionais") }
   ];
   function get(id) { return LIST.find(function (m) { return m.id === id; }) || null; }
@@ -91,7 +91,7 @@
       { id: "planning", name: L("Planning", "Planejamento"), desc: L("Roadmap, Waterfall, Scrum, Kanban, OKRs and reports", "Roadmap, Waterfall, Scrum, Kanban, OKRs e relatórios"), core: true, icon: "planning", href: "workspaces/#planejamento" },
       { id: "itsm", name: "ITSM", desc: L("Service management (ITIL 4)", "Gestão de serviços (ITIL 4)"), icon: "itsm", href: "itsm/" },
       { id: "game", name: "Business Game", desc: L("Business simulation for education", "Simulação empresarial para educação"), icon: "game", href: "workspaces/#business-game" },
-      { id: "sst", name: L("Occupational health", "Saúde Ocupacional"), desc: L("Health, safety and SHE (environment)", "Saúde, segurança e SHE (meio ambiente)"), icon: "sst", href: "sst/" }
+      { id: "sst", name: L("Health", "Saúde"), desc: L("Work health & safety centre and SHE", "Central de Saúde e Segurança do Trabalho e SHE"), icon: "sst", href: "sst/" }
     ];
   }
   const pageOk = {};

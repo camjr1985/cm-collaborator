@@ -400,7 +400,24 @@
       u["sst/" + sp.id + "/counter"] = rs.length;
       Object.keys(recs).forEach(function (rk) { u["sst/" + sp.id + "/records/" + rk] = recs[rk]; });
     });
-    return db.ref().update(u).then(function () { return ["sst licences", "modules", "itsm demo centres removed", "sst records"]; });
+    /* employees with ASO, NR training and PPE (some overdue, some due soon) */
+    const day = function (n) { return new Date(nowTs + n * D).toISOString().slice(0, 10); };
+    const PEOPLE = [["Ana Paula Ribeiro", "1001", "Operadora de prensa", "Produção – linha 2", -400, -380, [["NR-12", "Segurança em máquinas", -700, 24]], [["Luva anticorte", "12345", -200, 3]]],
+      ["Bruno Carvalho", "1002", "Técnico de manutenção", "Manutenção", -900, -340, [["NR-10", "Segurança em eletricidade", -760, 24], ["NR-35", "Trabalho em altura", -500, 24]], [["Cinto paraquedista", "35529", -100, 12]]],
+      ["Carla Mendes", "1003", "Auxiliar de almoxarifado", "Almoxarifado", -120, -110, [["NR-11", "Empilhadeira / movimentação de cargas", -350, 12]], [["Botina de segurança", "40377", -170, 6]]],
+      ["Diego Santos", "1004", "Operador de empilhadeira", "Expedição", -600, -300, [["NR-11", "Empilhadeira / movimentação de cargas", -380, 12]], [["Protetor auricular", "5674", -20, 3]]],
+      ["Elaine Costa", "1005", "Técnica de segurança", "SESMT", -1500, -200, [["NR-05", "CIPA", -330, 12], ["NR-23", "Brigada de incêndio", -100, 12]], []],
+      ["Fábio Lima", "1006", "Soldador", "Caldeiraria", -800, -390, [["NR-12", "Segurança em máquinas", -500, 24], ["NR-33", "Espaço confinado", -370, 12]], [["Máscara de solda", "11209", -400, 12]]]];
+    SPACES.forEach(function (sp) {
+      PEOPLE.forEach(function (x, i) {
+        const pid = "p" + (i + 1), o = { name: x[0], reg: x[1], role: x[2], sector: x[3], admission: day(x[4]), active: true, created: nowTs, by: cust, exams: { e1: { kind: "admission", date: day(x[4]), months: 0, result: "fit" }, e2: { kind: "periodic", date: day(x[5]), months: 12, result: i === 3 ? "fitr" : "fit", s2220: i % 2 === 0 || null } }, trainings: {}, ppe: {} };
+        x[6].forEach(function (t, j) { o.trainings["t" + j] = { nr: t[0], course: t[1], date: day(t[2]), months: t[3], hours: t[0] === "NR-10" ? 40 : 8 }; });
+        x[7].forEach(function (e, j) { o.ppe["e" + j] = { item: e[0], ca: e[1], qty: 1, date: day(e[2]), months: e[3] }; });
+        if (!o.exams.e2.s2220) delete o.exams.e2.s2220;
+        u["sst/" + sp.id + "/people/" + pid] = o;
+      });
+    });
+    return db.ref().update(u).then(function () { return ["sst licences", "modules", "itsm demo centres removed", "sst records", "employees"]; });
   };
 
   window.CMDemoSeed = function (opt) {

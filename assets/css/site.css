@@ -737,3 +737,8 @@ section.alt { background: rgba(255,255,255,.025); border-block: 1px solid rgba(2
 .mp-game b { font-size: var(--fs-16); } .mp-game p { margin: 6px 0 10px; }
 .mp-steps { margin: 0 0 14px; padding-left: 18px; display: grid; gap: 6px; font-size: var(--fs-13); color: var(--ink-2, #c7d0e3); }
 @media (max-width: 760px) { .mp-head { flex-wrap: wrap; } .mp-head > div { flex: 1 1 calc(100% - 60px); } .mp-head > .btn { width: 100%; justify-content: center; } .mp-game { grid-template-columns: 1fr; } .mp-grid { grid-template-columns: 1fr 1fr; } .mp-item .muted { display: none; } }
+/* Saúde module in "Start something new": the centre comes first and fills the panel */
+.tpl-strip > .mp-pane { grid-column: 1 / -1; }
+.tpl-areas [data-sarea="_centre"] { font-weight: 700; }
+.mp-item.sst-f { grid-template-columns: 20px 1fr; display: grid; align-items: center; gap: 8px; }
+.mp-item.sst-f svg { color: #5fd38d; }
