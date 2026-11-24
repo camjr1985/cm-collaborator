@@ -143,9 +143,10 @@
     if (!document.getElementById("sstView")) {
       app.innerHTML = '<header class="pl-top st-top"><a class="pl-back" href="../workspaces/" title="' + esc(L("My boards", "Meus quadros")) + '">←</a><span class="pl-logo">CM</span>' +
         '<div class="pl-title"><span class="pl-ws">' + (window.CMIcon3D ? window.CMIcon3D("sst", 16, "sst") : "") + " " + esc(L("Health · Work health & safety centre", "Saúde · Central de Saúde e Segurança do Trabalho")) + '</span><h1 id="stTitle"></h1></div>' +
-        '<nav class="pl-tabs" id="stTabs"></nav><div class="pl-actions"><select id="stWs" class="st-ws" aria-label="Workspace"></select><button class="pl-btn primary" id="stNew">' + IC("plus", 16) + " " + esc(L("Register", "Registrar")) + "</button></div></header>" +
+        '<nav class="pl-tabs" id="stTabs"></nav><div class="pl-actions"><button class="pl-btn" id="stJg" title="' + esc(L("Step-by-step guide to structure health and safety", "Passo a passo para estruturar a saúde e segurança")) + '">' + IC("initiative", 16) + ' <span class="st-jgl">' + esc(L("Guided journey", "Jornada guiada")) + '</span> <span class="st-jgn" id="stJgN"></span></button><select id="stWs" class="st-ws" aria-label="Workspace"></select><button class="pl-btn primary" id="stNew">' + IC("plus", 16) + " " + esc(L("Register", "Registrar")) + "</button></div></header>" +
         '<div class="st-note">' + IC("lock", 14) + " " + esc(L("Health data is sensitive (LGPD): record only what the management needs – no diagnosis, ICD code or medical records here.", "Dados de saúde são sensíveis (LGPD): registre só o necessário para a gestão – sem diagnóstico, CID ou prontuário aqui.")) + '</div><main id="sstView" class="pl-view st-view"></main>';
       document.getElementById("stNew").onclick = function () { newDialog(); };
+      document.getElementById("stJg").onclick = function () { const j = journeyTick(); if (j) j.show(); };
       document.getElementById("stWs").onchange = function (e) { closeDrawer(); openWs(e.target.value); };
     }
     document.getElementById("stTitle").textContent = (wss[WS] && wss[WS].info && wss[WS].info.name) || WS;
@@ -154,7 +155,9 @@
     const tabs = document.getElementById("stTabs");
     tabs.innerHTML = Object.keys(T).map(function (k) { return '<button data-v="' + k + '" class="' + (k === view ? "on" : "") + '">' + esc(T[k]) + "</button>"; }).join("");
     tabs.querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { view = b.dataset.v; render(); }; });
+    seenView(view);
     renderView();
+    journeyTick();
     if (openRec && data.records && data.records[openRec]) drawer(openRec);
     if (openPerson && data.people && data.people[openPerson]) personDrawer(openPerson);
     const qr = Q.get("rec"); if (qr && !render._rec && data.records && data.records[qr]) { render._rec = 1; drawer(qr); }
@@ -162,6 +165,68 @@
   function renderView() {
     const v = document.getElementById("sstView"); if (!v) return;
     ({ panel: panel, list: listView, board: boardView, people: peopleView, due: dueView, plans: plansView, kpi: kpiView, cfg: cfgView })[view](v);
+  }
+
+  /* ---------------- guided journey (Jornada guiada) ---------------- */
+  let jg = null, jgWs = "";
+  function seenView(v) { try { const k = "cm:jg:sstv:" + WS, o = JSON.parse(localStorage.getItem(k) || "{}"); if (!o[v]) { o[v] = 1; localStorage.setItem(k, JSON.stringify(o)); } } catch (e) { /* ignore */ } }
+  function seen(v) { try { return !!JSON.parse(localStorage.getItem("cm:jg:sstv:" + WS) || "{}")[v]; } catch (e) { return false; } }
+  function go(v) { return function () { if (view !== v) { view = v; render(); } }; }
+  const tab = function (v) { return "#stTabs [data-v=" + v + "]"; };
+  function journeyItems() {
+    const S0 = S(), P = people(), R = recs();
+    const hasFile = P.some(function (p) { return Object.keys(p.exams || {}).length || Object.keys(p.trainings || {}).length; });
+    return [
+      { id: "base", t: L("Set up the base: sectors and man-hours", "Monte a base: setores e horas-homem"), d: L("List the places/sectors of the company and the man-hours worked per month. They feed the forms and the FR/SR rates.", "Liste os locais/setores da empresa e as horas-homem trabalhadas por mês. Eles alimentam os formulários e as taxas TF e TG."),
+        done: !!((S0.places || []).length && Object.keys(S0.hht || {}).length),
+        steps: [{ el: tab("cfg"), t: L("Open Settings", "Abra Configurações"), d: L("Click here – this is where the module is prepared.", "Clique aqui – é aqui que o módulo é preparado."), click: true },
+          { before: go("cfg"), el: "#cfF textarea[name=places]", t: L("Places / sectors", "Locais / setores"), d: L("Type one per line: e.g. Production line 2, Maintenance, Warehouse.", "Digite um por linha: ex. Produção – linha 2, Manutenção, Almoxarifado.") },
+          { before: go("cfg"), el: "#cfF .st-hht", t: L("Man-hours per month", "Horas-homem por mês"), d: L("Fill in the hours worked each month (from HR/payroll). The panel calculates FR and SR with them.", "Preencha as horas trabalhadas de cada mês (do RH/folha). O painel calcula TF e TG com elas.") },
+          { before: go("cfg"), el: "#cfF .pl-row-end .primary", t: L("Save", "Salve"), d: L("Click Save. Step 1 is done.", "Clique em Salvar. O passo 1 fica concluído."), click: true }] },
+      { id: "people", t: L("Register the employees", "Cadastre os colaboradores"), d: L("Paste the employee list from Excel (name; registration; job; sector; admission) or register one by one.", "Cole a lista de funcionários do Excel (nome; matrícula; função; setor; admissão) ou cadastre um a um."),
+        done: P.length > 0,
+        steps: [{ el: tab("people"), t: L("Open Employees", "Abra Colaboradores"), d: L("Click here.", "Clique aqui."), click: true },
+          { before: go("people"), el: "#pImp", t: L("Paste the list", "Cole a lista"), d: L("Copy the columns from Excel and paste here – the system updates by registration number.", "Copie as colunas do Excel e cole aqui – o sistema atualiza pela matrícula."), click: true }] },
+      { id: "file", t: L("Fill in exams, NR training and PPE", "Lance exames, treinamentos NR e EPI"), d: L("Open each employee's file and record the last ASO, the NR courses and the PPE delivered. The due dates are calculated automatically.", "Abra a ficha de cada colaborador e registre o último ASO, os cursos de NR e os EPIs entregues. Os vencimentos são calculados sozinhos."),
+        done: hasFile,
+        steps: [{ before: go("people"), el: "[data-person]", t: L("Open an employee", "Abra um colaborador"), d: L("Click on the name to open the file.", "Clique no nome para abrir a ficha."), click: true },
+          { el: "#fEx", t: L("Occupational exam (ASO)", "Exame ocupacional (ASO)"), d: L("Choose the type, date and result. Tick S-2220 when sent to eSocial.", "Escolha o tipo, a data e o resultado. Marque S-2220 quando enviar ao eSocial.") },
+          { el: "#fTr", t: L("NR training", "Treinamentos NR"), d: L("Pick the NR – the refresher period is filled in (e.g. NR-35 every 24 months).", "Escolha a NR – a reciclagem já vem preenchida (ex.: NR-35 a cada 24 meses).") },
+          { el: "#fPp", t: "EPI", d: L("Record the PPE with its CA and the replacement period.", "Registre o EPI com o CA e o prazo de troca.") }] },
+      { id: "plan", t: L("Create the annual planning", "Crie o planejamento anual"), d: L("Start with a template – PCMSO, Prevention and CIPA, Emergency and fire brigade, or SHE. It creates phases, tasks and indicators.", "Comece por um template – PCMSO, Prevenção e CIPA, Emergência e brigada, ou SHE. Ele cria fases, tarefas e indicadores."),
+        done: plans.length > 0,
+        steps: [{ el: tab("plans"), t: L("Open Plannings", "Abra Planejamentos"), d: L("Click here.", "Clique aqui."), click: true },
+          { before: go("plans"), el: ".st-tpl", t: L("Choose a template", "Escolha um template"), d: L("Recommended start: Occupational health programme (PCMSO) or Prevention and CIPA. Click to create.", "Comece pelo Programa de saúde ocupacional (PCMSO) ou Prevenção e CIPA. Clique para criar.") }] },
+      { id: "rec", t: L("Register the occurrences", "Registre as ocorrências"), d: L("Accidents, near misses, unsafe acts, exams, PPE requests and inspections – everything goes through Register.", "Acidentes, quase-acidentes, atos inseguros, exames, pedidos de EPI e inspeções – tudo entra por Registrar."),
+        done: R.length > 0,
+        steps: [{ el: "#stNew", t: L("Register", "Registrar"), d: L("Click here and choose what happened. For an accident, fill in the CAT – the legal deadline is the next working day.", "Clique aqui e escolha o que aconteceu. Em acidente, preencha a CAT – o prazo legal é o 1º dia útil seguinte."), click: true }] },
+      { id: "treat", t: L("Investigate and treat", "Investigue e trate"), d: L("In each occurrence, record the root cause and an action plan. Follow it on the Board.", "Em cada ocorrência, registre a causa raiz e o plano de ação. Acompanhe pelo Quadro."),
+        done: R.some(function (r) { return Object.keys(r.actions || {}).length; }),
+        steps: [{ el: tab("list"), t: L("Open Occurrences", "Abra Ocorrências"), d: L("Click here.", "Clique aqui."), click: true },
+          { before: go("list"), el: "[data-open]", t: L("Open an occurrence", "Abra uma ocorrência"), d: L("Fill in the root cause and add actions with owner and deadline. 'Take to a planning' sends the action to the annual plan.", "Preencha a causa raiz e adicione ações com responsável e prazo. 'Levar para um planejamento' manda a ação para o plano anual.") },
+          { el: tab("board"), t: L("Board", "Quadro"), d: L("Drag the cards between the stages: Registered → Investigation → Action plan → Execution → Done.", "Arraste os cards entre as etapas: Registrada → Em investigação → Plano de ação → Em execução → Concluída.") }] },
+      { id: "due", t: L("Call in what is due", "Convoque os vencimentos"), d: L("Every month, check the overdue and next-30-day exams, NR and PPE and export the call list.", "Todo mês, veja os exames, NRs e EPIs vencidos e dos próximos 30 dias e exporte a lista de convocação."),
+        done: seen("due"),
+        steps: [{ el: tab("due"), t: L("Open Due dates", "Abra Vencimentos"), d: L("Click here.", "Clique aqui."), click: true },
+          { before: go("due"), el: "#dK", t: L("Filter", "Filtre"), d: L("Choose exams, training or PPE.", "Escolha exames, treinamentos ou EPI.") },
+          { before: go("due"), el: "#dCsv", t: L("Call list", "Lista de convocação"), d: L("Export the CSV and send it to the leaders/clinic.", "Exporte o CSV e envie para as lideranças/clínica.") }] },
+      { id: "kpi", t: L("Follow the panel and indicators", "Acompanhe o painel e os indicadores"), d: L("Days without accidents, FR/SR, CAT, overdue items and the KPIs of the plannings – the monthly SST meeting starts here.", "Dias sem acidente, TF/TG, CAT, itens vencidos e os KPIs dos planejamentos – a reunião mensal de SST começa aqui."),
+        done: seen("kpi"),
+        steps: [{ before: go("panel"), el: ".st-tiles", t: L("Panel", "Painel"), d: L("The red tiles need attention today.", "Os blocos em vermelho precisam de atenção hoje.") },
+          { el: tab("kpi"), t: L("Indicators", "Indicadores"), d: L("Click here to see the KPIs created in the plannings.", "Clique aqui para ver os KPIs criados nos planejamentos."), click: true }] }
+    ];
+  }
+  function journeyTick() {
+    if (!window.CMTour || !WS) return null;
+    const items = journeyItems(), n = items.filter(function (x) { return x.done; }).length;
+    if (!jg || jgWs !== WS) {
+      if (jg) jg.hide();
+      jgWs = WS;
+      const fresh = !people().length && !recs().length;
+      jg = window.CMTour.journey({ key: "sst:" + WS + ":" + (MEK || ""), title: L("Guided journey · Health", "Jornada guiada · Saúde"), intro: L("Follow the steps to structure health and safety in the platform. Click a step and then 'Show me where'.", "Siga os passos para estruturar a saúde e segurança na plataforma. Clique num passo e depois em 'Mostrar onde'."), items: items, autoOpen: fresh || n < items.length, refresh: journeyItems });
+    } else jg.update(items);
+    const b = document.getElementById("stJgN"); if (b) b.textContent = n + "/" + items.length;
+    return jg;
   }
 
   /* ---------------- panel ---------------- */

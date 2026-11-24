@@ -124,3 +124,7 @@
 @media (min-width: 1200px) { .st-tiles:not(.st-t3) { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .st-add4 { grid-template-columns: 1fr 1fr; } .st-add4 > :first-child { grid-column: 1 / -1; } .st-t3 { grid-template-columns: 1fr !important; } }
 @media (max-width: 720px) { .st-prow2 { grid-template-columns: 34px 1fr; } .st-prow2 .st-meta { display: none; } }
+#stJg { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.25); color: #fff; }
+#stJg .st-jgn { font-size: var(--fs-11); background: #1baf7a; color: #fff; border-radius: 10px; padding: 1px 7px; }
+@media (max-width: 720px) { #stJg .st-jgl { display: none; } #stJg { padding: 7px 9px; } }
+@media (max-width: 760px) { .st-top .pl-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; } .st-top .pl-actions .st-ws { flex: 1; max-width: none; min-width: 0; } }
