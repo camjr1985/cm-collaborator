@@ -163,7 +163,7 @@
   function actions() {
     return (A.canEdit() ? '<button class="pl-btn sm" data-act="import">' + IC("upload", 14) + " " + L("Import GLPI export", "Importar exportação do GLPI") + "</button>" : "") +
       '<button class="pl-btn sm" data-act="csv">' + IC("export", 14) + " CSV</button>" +
-      '<button class="pl-btn sm primary" data-act="pdf">' + IC("export", 14) + " " + L("One page (PDF)", "One page (PDF)") + "</button>";
+      '<button class="pl-btn sm primary" data-act="pdf">' + IC("export", 14) + " " + L("Executive PDF (A4)", "PDF executivo (A4)") + "</button>";
   }
   function macro(all) {
     const org = S().org || "";
@@ -275,7 +275,7 @@
     });
     const cl = v.querySelector("[data-clear]"); if (cl) cl.onclick = function () { st.f = {}; rerender(); };
     const bl = v.querySelector("#pfBl"); if (bl) bl.onchange = function () { st.withBacklog = bl.checked; rerender(); };
-    v.querySelectorAll("[data-act]").forEach(function (b) { b.onclick = function () { const a = b.dataset.act; if (a === "import") importDialog(); else if (a === "csv") csv(); else if (a === "pdf") printOnePage(); else if (a === "drawer") A.openDrawer(st.item); }; });
+    v.querySelectorAll("[data-act]").forEach(function (b) { b.onclick = function () { const a = b.dataset.act; if (a === "import") importDialog(); else if (a === "csv") csv(); else if (a === "pdf") pdfDialog(); else if (a === "drawer") A.openDrawer(st.item); }; });
     v.querySelectorAll("[data-svc]").forEach(function (b) { b.onclick = function () { const val = b.dataset.svc || null; A.patch(st.item, { pfSvc: val }).then(function () { A.toast(val ? L("Classified as ", "Classificado como ") + SVC[val].n() : L("Back to project only", "Voltou a ser só projeto")); }); }; });
     const ns = v.querySelector("#pfNoteSave"); if (ns) ns.onclick = function () { A.patch(st.item, { pfNote: (document.getElementById("pfNote").value || "").trim() || null }).then(function () { A.toast(L("Next step saved", "Encaminhamento salvo")); }); };
     /* hover tooltip for bars */
@@ -297,11 +297,104 @@
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "portfolio-" + (S().org || "projetos").replace(/[^\w-]+/g, "-") + "-" + today() + ".csv"; a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   }
-  function printOnePage() {
-    document.body.classList.add("pf-printing");
-    const off = function () { document.body.classList.remove("pf-printing"); window.removeEventListener("afterprint", off); };
-    window.addEventListener("afterprint", off);
-    setTimeout(function () { window.print(); setTimeout(off, 1500); }, 50);
+  /* ---------- A4 PDF (executive one page + one page per island) with optional watermark ---------- */
+  function pdfDialog() {
+    const s = S(), w = s.wm || {}, isl = islands(projects());
+    A.modal("<h2>" + IC("export", 18) + " " + L("Executive PDF (A4)", "PDF executivo (A4)") + '</h2><p class="muted small">' + L("The PDF is laid out on A4 pages. In the print window choose “Save as PDF”.", "O PDF é montado em páginas A4. Na janela de impressão, escolha “Salvar como PDF”.") + "</p>" +
+      '<form class="pl-form" id="pfPdf"><div class="g2"><label>' + L("Orientation", "Orientação") + '<select name="orient"><option value="landscape"' + (s.orient !== "portrait" ? " selected" : "") + ">" + L("A4 landscape", "A4 paisagem") + '</option><option value="portrait"' + (s.orient === "portrait" ? " selected" : "") + ">" + L("A4 portrait", "A4 retrato") + "</option></select></label>" +
+      "<label>" + L("Pages", "Páginas") + '<select name="pages"><option value="all">' + L("Executive one page + each island", "One page executivo + cada ilha") + '</option><option value="macro">' + L("Executive one page only", "Só o one page executivo") + "</option>" + isl.map(function (n) { return '<option value="i:' + esc(n) + '">' + L("Only ", "Só ") + esc(n) + "</option>"; }).join("") + "</select></label></div>" +
+      '<label class="chk"><input type="checkbox" name="filt"' + (Object.keys(st.f).some(function (k) { return st.f[k]; }) ? " checked" : "") + "> " + L("Apply the filters in use", "Aplicar os filtros em uso") + "</label>" +
+      "<h3>" + L("Watermark", "Marca d'água") + '</h3><div class="g2"><label>' + L("Text (optional)", "Texto (opcional)") + '<input name="wmText" maxlength="60" value="' + esc(w.text || "") + '" placeholder="' + L("CONFIDENTIAL", "CONFIDENCIAL") + '"></label>' +
+      "<label>" + L("Image / logo (optional, PNG or JPG)", "Imagem / logo (opcional, PNG ou JPG)") + '<input type="file" name="wmImg" accept="image/png,image/jpeg,image/svg+xml"></label></div>' +
+      '<div id="wmPrev" class="pf-wmprev">' + (w.img ? '<img src="' + esc(w.img) + '" alt=""><button type="button" class="pl-btn sm" id="wmRm">' + L("Remove image", "Remover imagem") + "</button>" : "") + "</div>" +
+      '<div class="g2"><label>' + L("Transparency", "Transparência") + ' <span id="opV">' + Math.round((w.op == null ? 0.12 : w.op) * 100) + '%</span><input type="range" name="op" min="4" max="40" value="' + Math.round((w.op == null ? 0.12 : w.op) * 100) + '"></label>' +
+      "<label>" + L("Position", "Posição") + '<select name="pos"><option value="diag"' + (w.pos !== "center" && w.pos !== "tile" ? " selected" : "") + ">" + L("Diagonal, centred", "Diagonal, no centro") + '</option><option value="center"' + (w.pos === "center" ? " selected" : "") + ">" + L("Centred, straight", "No centro, reta") + '</option><option value="tile"' + (w.pos === "tile" ? " selected" : "") + ">" + L("Repeated over the page", "Repetida na página") + "</option></select></label></div>" +
+      (A.canEdit() ? '<label class="chk"><input type="checkbox" name="keep" checked> ' + L("Save these choices for the next PDFs of this planning", "Salvar estas escolhas para os próximos PDFs deste planejamento") + "</label>" : "") +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="pdfGo">' + IC("export", 14) + " " + L("Generate PDF", "Gerar PDF") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#pfPdf"); let img = w.img || "";
+      f.op.oninput = function () { box.querySelector("#opV").textContent = f.op.value + "%"; };
+      const rmB = function () { const b = box.querySelector("#wmRm"); if (b) b.onclick = function () { img = ""; box.querySelector("#wmPrev").innerHTML = ""; }; }; rmB();
+      f.wmImg.onchange = function () {
+        const fl = f.wmImg.files[0]; if (!fl) return;
+        if (fl.size > 600 * 1024) { A.toast(L("Image too large (max. 600 KB).", "Imagem grande demais (máx. 600 KB).")); f.wmImg.value = ""; return; }
+        const r = new FileReader(); r.onload = function () { img = r.result; box.querySelector("#wmPrev").innerHTML = '<img src="' + esc(img) + '" alt=""><button type="button" class="pl-btn sm" id="wmRm">' + L("Remove image", "Remover imagem") + "</button>"; rmB(); }; r.readAsDataURL(fl);
+      };
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        const o = { orient: f.orient.value, pages: f.pages.value, filt: f.filt.checked, wm: { text: f.wmText.value.trim(), img: img, op: Number(f.op.value) / 100, pos: f.pos.value } };
+        if (f.keep && f.keep.checked) { const u = {}; u["settings/portfolio/orient"] = o.orient; u["settings/portfolio/wm"] = { text: o.wm.text || null, img: img && img.length < 450000 ? img : null, op: o.wm.op, pos: o.wm.pos }; A.db.ref("planning/" + A.ID + "/data").update(u).catch(function () { /* the PDF still works */ }); }
+        close(); printPdf(o);
+      };
+    });
+  }
+  function pdfHtml(o) {
+    const org = S().org || "", all = projects(), keepF = o.filt, saveI = st.island;
+    st.island = null;
+    const base = all.filter(function (p) { return !keepF || pass(p); });
+    st.island = saveI;
+    const isl = islands(base), L4 = o.orient === "portrait";
+    const kp = function (list) {
+      const cells = [["Total", list.length, "#172036"]].concat(SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }).map(function (k) { return [SIT[k].n(), count(list, "sit", k), k === "backlog" ? "#b26f00" : SIT[k].c]; }), LEVEL_ORDER.map(function (k) { return [LEVEL[k].n(), count(list, "level", k), k === "Operacional" ? "#5d6b85" : LEVEL[k].c]; }));
+      return '<div class="kp">' + cells.map(function (c) { return '<div><span style="color:' + c[2] + '">' + esc(c[0]) + '</span><b style="color:' + c[2] + '">' + c[1] + "</b></div>"; }).join("") + "</div>";
+    };
+    const bar = function (parts, tot) { return '<div class="bar">' + (tot ? parts.filter(function (x) { return x.n; }).map(function (x) { const wd = x.n / tot * 100; return '<span style="width:' + wd + "%;background:" + x.c + ";color:" + x.ink + '">' + (wd >= 5 ? x.n : "") + "</span>"; }).join("") : "") + "</div>"; };
+    const leg = function (order, MAP) { return '<div class="leg">' + order.map(function (k) { return '<span><i style="background:' + MAP[k].c + '"></i>' + esc(MAP[k].n()) + "</span>"; }).join("") + "</div>"; };
+    const sitsOf = function (list) { return SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }); };
+    const hd = function (t) { return '<header><h1>' + esc(t) + "</h1><p>" + subline().replace(/<[^>]+>/g, "") + "</p></header>"; };
+    const pages = [];
+    if (o.pages === "all" || o.pages === "macro") {
+      const maxI = Math.max.apply(null, isl.map(function (n) { return base.filter(function (p) { return p.island === n; }).length; }).concat([1]));
+      pages.push(hd((org ? org + " / " : "") + L("Executive portfolio", "Portfólio executivo")) + kp(base) +
+        '<div class="two"><section><h2>' + L("By island and situation", "Distribuição por ilha e situação") + "</h2>" + isl.map(function (n) { const sub = base.filter(function (p) { return p.island === n; }); return '<div class="ir"><span>' + esc(n) + '</span><div style="width:' + Math.max(6, sub.length / maxI * 100) + '%">' + bar(sitParts(sub), sub.length) + "</div><b>" + sub.length + "</b></div>"; }).join("") + leg(sitsOf(base), SIT) + "</section>" +
+        "<section><h2>" + L("By level", "Distribuição por nível") + "</h2>" + bar(lvlParts(base), base.length) + leg(LEVEL_ORDER, LEVEL) + "</section></div>" +
+        "<h2>" + L("Portfolio by island", "Carteira por ilha") + '</h2><table><thead><tr><th>' + L("Island", "Ilha") + "</th><th>Total</th><th>" + SIT.doing.n() + "</th><th>" + L("Blocked", "Bloqueados") + "</th><th>Backlog</th><th>" + L("Strategic", "Estratégicos") + "</th><th>" + L("Tactical", "Táticos") + "</th><th>" + L("Operational", "Operacionais") + "</th><th>" + L("Overdue", "Prazo vencido") + "</th></tr></thead><tbody>" +
+        isl.map(function (n) { const x = base.filter(function (p) { return p.island === n; }); return "<tr><td>" + esc(n) + "</td>" + [x.length, count(x, "sit", "doing"), count(x, "sit", "blocked"), count(x, "sit", "backlog"), count(x, "level", "Estratégico"), count(x, "level", "Tático"), count(x, "level", "Operacional"), count(x, "att", "late")].map(function (v) { return '<td class="n">' + v + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table>" +
+        '<p class="ft"><b>' + L("Executive agenda: blockers, deadlines, capacity and decisions.", "Pauta executiva: bloqueios, prazos, capacidade e decisões.") + "</b><br>" + L("Backlog is counted in the indicators; detailed discussion on the following pages.", "Backlog contabilizado nos indicadores; discussão detalhada nas páginas seguintes.") + "</p>");
+    }
+    const wantI = o.pages === "all" ? isl : o.pages.indexOf("i:") === 0 ? [o.pages.slice(2)] : [];
+    wantI.forEach(function (n) {
+      const list = base.filter(function (p) { return p.island === n; }), disc = list.filter(function (p) { return p.sit !== "backlog"; });
+      const lo = { "Estratégico": 0, "Tático": 1, "Operacional": 2 }, so = { doing: 0, blocked: 1, backlog: 2, done: 3 };
+      disc.sort(function (a, b) { return (lo[a.level] - lo[b.level]) || (so[a.sit] - so[b.sit]) || a.title.localeCompare(b.title); });
+      const dense = disc.length > (L4 ? 30 : 18);
+      pages.push(hd((org ? org + " / " : "") + n) + kp(list) +
+        '<div class="two"><section><h2>' + L("Situation", "Situação da carteira") + "</h2>" + bar(sitParts(list), list.length) + leg(sitsOf(list), SIT) + "</section><section><h2>" + L("By level", "Distribuição por nível") + "</h2>" + bar(lvlParts(list), list.length) + leg(LEVEL_ORDER, LEVEL) + "</section></div>" +
+        "<h2>" + L("Under discussion: ", "Carteira em discussão: ") + disc.length + " | " + L("Overdue: ", "Prazo vencido: ") + count(list, "att", "late") + " | " + L("In progress without a due date: ", "Em execução sem prazo: ") + count(list, "att", "nodate") + "</h2>" +
+        '<table class="' + (dense ? "dense" : "") + '"><thead><tr><th>' + L("Project", "Projeto") + " (GLPI)</th><th>" + L("Level", "Nível") + "</th><th>" + L("Situation", "Estado") + "</th><th>" + L("Progress", "Avanço") + "</th><th>" + L("Due", "Prazo") + "</th><th>" + L("Attention", "Atenção") + "</th><th>" + L("Next step", "Encaminhamento") + "</th></tr></thead><tbody>" +
+        disc.map(function (p) { return "<tr><td>" + esc(p.title) + "</td><td>" + esc((LEVEL[p.level] || { n: function () { return p.level; } }).n()) + '</td><td style="color:' + (p.sit === "backlog" ? "#9a6400" : SIT[p.sit].c) + ';font-weight:700">' + esc(SIT[p.sit].n()) + '</td><td class="n">' + p.progress + '%</td><td class="n">' + fmtD(p.end) + '</td><td class="' + (p.att ? ATT[p.att].cls : "") + '">' + (p.att ? esc(ATT[p.att].n()) : "") + '</td><td class="nt">' + esc(p.it.pfNote || "") + "</td></tr>"; }).join("") + "</tbody></table>" +
+        '<p class="ft">' + L("Next step: record the decision, owner and date. The GLPI state is not the project's health.", "Encaminhamento: registrar decisão, responsável e prazo. Estado cadastrado não equivale à saúde do projeto.") + "</p>");
+    });
+    const W = o.wm || {}, op = W.op == null ? 0.12 : W.op;
+    let wm = "";
+    if (W.text || W.img) {
+      const one = (W.img ? '<img src="' + esc(W.img) + '" alt="">' : "") + (W.text ? "<span>" + esc(W.text) + "</span>" : "");
+      wm = W.pos === "tile" ? '<div class="wm tile" style="opacity:' + op + '">' + new Array(L4 ? 13 : 10).join('<div class="t">' + one + "</div>") + "</div>" : '<div class="wm ' + (W.pos === "center" ? "c" : "d") + '" style="opacity:' + op + '">' + one + "</div>";
+    }
+    const pw = L4 ? 210 : 297, ph = L4 ? 297 : 210;
+    const css = "@page{size:A4 " + (L4 ? "portrait" : "landscape") + ";margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0;background:#fff;font-family:Inter,Arial,Helvetica,sans-serif;color:#172036}" +
+      ".pg{position:relative;width:" + pw + "mm;height:" + ph + "mm;padding:11mm 12mm;overflow:hidden;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}" +
+      ".ct{position:relative;z-index:1}header h1{margin:0;font-size:20pt;color:#16335c}header p{margin:1mm 0 4mm;font-size:7.5pt;color:#626a80}h2{font-size:10pt;font-weight:600;color:#16335c;margin:4mm 0 2mm}" +
+      ".kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(20mm,1fr));background:#eef3fa;padding:2.5mm 3mm;gap:2mm}.kp span{display:block;font-size:7pt;font-weight:700}.kp b{font-size:" + (L4 ? "15" : "18") + "pt}" +
+      ".two{display:grid;grid-template-columns:" + (L4 ? "1fr" : "1.1fr 1fr") + ";gap:" + (L4 ? "0" : "8mm") + "}.bar{display:flex;gap:.5mm;height:5mm}.bar span{display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:600}" +
+      ".ir{display:grid;grid-template-columns:30mm 1fr 8mm;align-items:center;gap:2mm;margin:1.2mm 0;font-size:7.5pt}.ir>div{min-width:0}.ir b{text-align:right}.leg{display:flex;flex-wrap:wrap;gap:1mm 5mm;font-size:7pt;color:#4a5468;margin-top:2mm}.leg i{display:inline-block;width:2.5mm;height:2.5mm;margin-right:1.2mm;vertical-align:-.3mm}" +
+      "table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#16335c;color:#fff;text-align:left;padding:1.4mm 2mm;font-weight:600}td{padding:1.2mm 2mm;border-bottom:.2mm solid #e3e7ef;vertical-align:top}tbody tr:nth-child(even) td{background:#f3f6fa}td.n{white-space:nowrap}td.nt{max-width:55mm;color:#4a5468}td.bad{color:#b42318}td.warn{color:#8a6400}" +
+      "table.dense{font-size:6.3pt}table.dense td,table.dense th{padding:.8mm 1.5mm}.ft{font-size:7pt;color:#626a80;margin-top:3mm}.ft b{color:#16335c;font-size:8pt}" +
+      ".wm{position:absolute;inset:0;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center}.wm img{max-width:55%;max-height:45%;object-fit:contain}.wm span{font-size:" + (L4 ? "46" : "60") + "pt;font-weight:800;color:#16335c;letter-spacing:2mm;white-space:nowrap;text-transform:uppercase}" +
+      ".wm.d,.wm.c{flex-direction:column;gap:6mm}.wm.d{transform:rotate(-30deg)}.wm.tile{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(" + (L4 ? 4 : 3) + ",1fr);transform:rotate(-24deg) scale(1.3)}.wm.tile .t{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm}.wm.tile img{max-width:30mm;max-height:18mm}.wm.tile span{font-size:16pt;letter-spacing:.6mm}" +
+      ".pn{position:absolute;right:12mm;bottom:6mm;font-size:6.5pt;color:#8a94a6;z-index:1}@media screen{body{background:#e9edf4}.pg{margin:8mm auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15)}}";
+    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>' + esc((org ? org + " – " : "") + L("Executive portfolio", "Portfólio executivo") + " – " + fmtLong(S().ref || today())) + "</title><style>" + css + "</style></head><body>" +
+      pages.map(function (h, i) { return '<div class="pg"><div class="ct">' + h + "</div>" + wm + '<div class="pn">' + (i + 1) + " / " + pages.length + "</div></div>"; }).join("") + "</body></html>";
+  }
+  function printPdf(o) {
+    const html = pdfHtml(o);
+    let fr = document.getElementById("pfPrintFrame"); if (fr) fr.remove();
+    fr = document.createElement("iframe"); fr.id = "pfPrintFrame"; fr.setAttribute("aria-hidden", "true");
+    fr.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    document.body.appendChild(fr);
+    const d = fr.contentWindow.document; d.open(); d.write(html); d.close();
+    const go = function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { A.fail(e); } };
+    const imgs = Array.prototype.slice.call(d.images || []);
+    Promise.all(imgs.map(function (im) { return im.complete ? 1 : new Promise(function (r) { im.onload = im.onerror = r; }); })).then(function () { setTimeout(go, 150); });
   }
 
   /* ---------- GLPI import ---------- */
@@ -435,5 +528,5 @@
     meta = meta || {}; const map = Object.assign({}, DEFAULT_MAP, (S().map || {}), meta.map || {});
     return apply(parse(rows, map), { org: meta.org, ref: meta.ref, map: map, file: meta.file });
   }
-  window.CMPortfolio = { render: render, importDialog: function (api) { A = api || A; importDialog(); }, importRows: function (rows, meta, api) { A = api || A; return importRows(rows, meta); }, _parse: parse, _sitFromState: sitFromState, reset: function () { st.island = null; st.item = null; st.f = {}; } };
+  window.CMPortfolio = { render: render, importDialog: function (api) { A = api || A; importDialog(); }, importRows: function (rows, meta, api) { A = api || A; return importRows(rows, meta); }, _parse: parse, _sitFromState: sitFromState, pdfHtml: function (o, api) { A = api || A; return pdfHtml(o); }, reset: function () { st.island = null; st.item = null; st.f = {}; } };
 })();

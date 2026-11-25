@@ -84,6 +84,28 @@ check(/INC-0001/.test(await a.textContent(".pf")) && /REQ-0001/.test(await a.tex
 // drawer block
 await a.click('[data-act="drawer"]'); await a.waitForSelector("#drawer [name=pfSvc]");
 check(await a.inputValue("#drawer [name=pfSvc]") === "service", "painel do item mostra a classificação");
+// A4 PDF with watermark
+await a.keyboard.press("Escape"); await a.waitForTimeout(150);
+await a.click('[data-go="root"]'); await a.waitForTimeout(150);
+await a.click('[data-act="pdf"]'); await a.waitForSelector("#pfPdf");
+await a.fill("#pfPdf [name=wmText]", "Confidencial"); await a.evaluate(() => { window.print = () => { window.__printed = 1; }; });
+await a.setInputFiles("#pfPdf [name=wmImg]", { name: "logo.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64") });
+await a.waitForSelector(".pf-wmprev img");
+await a.click("#pdfGo"); await a.waitForTimeout(800);
+const fr = await a.evaluate(() => { const f = document.getElementById("pfPrintFrame"); return f ? f.contentDocument.querySelectorAll(".pg").length + "|" + f.contentDocument.querySelectorAll(".wm").length : ""; });
+check(fr === "7|7", "PDF montado: 7 páginas A4 (one page + 6 ilhas), cada uma com marca d'água (" + fr + ")");
+db = await dbOf(a);
+check(db.planning.p1.data.settings.portfolio.wm && db.planning.p1.data.settings.portfolio.wm.text === "Confidencial", "marca d'água salva para os próximos PDFs");
+for (const [orient, pos] of [["landscape", "diag"], ["portrait", "tile"]]) {
+  const html = await a.evaluate(([o, p]) => window.CMPortfolio.pdfHtml({ orient: o, pages: "all", wm: { text: "Confidencial", op: 0.12, pos: p } }), [orient, pos]);
+  const pp = await a.context().newPage(); await pp.setContent(html); await pp.emulateMedia({ media: "print" });
+  const pdf = await pp.pdf({ preferCSSPageSize: true, printBackground: true }); fs.writeFileSync(SHOTS + "/exec-" + orient + ".pdf", pdf);
+  const n = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
+  const box = (pdf.toString("latin1").match(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)/) || []).slice(1).map(Number);
+  const a4 = orient === "landscape" ? [841.92, 595.92] : [595.92, 841.92];
+  check(n === 7 && Math.abs(box[0] - a4[0]) < 2 && Math.abs(box[1] - a4[1]) < 2, "PDF " + orient + ": 7 páginas A4 (" + n + " pág., " + box.join("×") + " pt)");
+  await pp.close();
+}
 await a.close();
 
 console.log("Daniel (editor) e leitor");
