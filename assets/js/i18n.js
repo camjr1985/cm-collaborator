@@ -196,6 +196,7 @@
     "Demo": "Demo",
     "Boards & access": "Quadros e acessos",
     "Create private boards and decide who can open them. Only you can grant access.": "Crie quadros privados e decida quem pode abri-los. Só você concede acesso.",
+    "Manage people, licences, workspaces and modules of the platform.": "Gerencie pessoas, licenças, workspaces e módulos da plataforma.",
     "Setup required": "Configuração necessária",
     "Private access needs Firebase. Follow these steps once:": "O acesso privado precisa do Firebase. Siga estes passos uma vez:",
     "Administrator": "Administrador",

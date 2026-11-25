@@ -745,3 +745,8 @@ a.pl-itsm:hover { background: #cdeee9; }
 .rp-t td.late { color: #a3262b; font-weight: 600; }
 .pl-tabs button { white-space: nowrap; }
 .blk-form .req { color: #a3262b; } .bk-supplier[hidden], .bk-party[hidden] { display: none !important; }
+/* drag & drop: the whole column accepts the card (not only its top) */
+.kb:not(.lanes) { align-items: stretch; }
+.kb:not(.lanes) > .kb-col { min-height: min(560px, calc(100vh - 190px)); }
+.kb-col > .kb-list { flex: 1 1 auto; min-height: 60px; }
+.kb-col.drop { background: #e6effc; }

@@ -1344,8 +1344,9 @@
         document.addEventListener("touchmove", tm, { passive: false });
       });
     });
+    if (!root._autoscroll) { root._autoscroll = 1; root.addEventListener("dragover", function (e) { if (!dragging) return; const sc = e.target.closest && e.target.closest(".kb"); if (!sc) return; const rr = sc.getBoundingClientRect(); if (e.clientX > rr.right - 60) sc.scrollLeft += 18; else if (e.clientX < rr.left + 60) sc.scrollLeft -= 18; const ls = e.target.closest(".kb-list"); if (ls) { const lr = ls.getBoundingClientRect(); if (e.clientY > lr.bottom - 40) ls.scrollTop += 14; else if (e.clientY < lr.top + 40) ls.scrollTop -= 14; } }); }
     root.querySelectorAll(zoneSel).forEach(function (z) {
-      z.addEventListener("dragover", function (e) { e.preventDefault(); z.classList.add("drop"); });
+      z.addEventListener("dragover", function (e) { e.preventDefault(); e.dataTransfer && (e.dataTransfer.dropEffect = "move"); z.classList.add("drop"); });
       z.addEventListener("dragleave", function (e) { if (!z.contains(e.relatedTarget)) z.classList.remove("drop"); });
       z.addEventListener("drop", function (e) {
         e.preventDefault(); z.classList.remove("drop"); if (!dragId) return;

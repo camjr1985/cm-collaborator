@@ -1,5 +1,6 @@
 /* CM Collaborator – Spanish (es) strings, keyed by the English source text (i18n.js dictionary + inline L()/LL() pairs). */
 window.MB_ES = {
+  "Manage people, licences, workspaces and modules of the platform.": "Gestione personas, licencias, espacios de trabajo y módulos de la plataforma.",
   "Guided journey": "Jornada guiada",
   "Guided journey · Health": "Jornada guiada · Salud",
   "Step-by-step guide to structure health and safety": "Paso a paso para estructurar la salud y seguridad",
