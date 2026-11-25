@@ -56,6 +56,16 @@
   function fail(e) { console.warn(e); toast((e && e.message) || L("Something went wrong", "Algo deu errado")); }
   function d2n(s) { return s ? Date.parse(s + "T00:00:00Z") : NaN; }
   function n2d(n) { return new Date(n).toISOString().slice(0, 10); }
+  /* business days: sprint of 1/2/3/4 weeks = 5/10/15/20 working days, counting the start day */
+  function bizEnd(start, n) { let t = d2n(start); if (isNaN(t)) return ""; let c = 0; for (let g = 0; g < 400; g++) { const w = new Date(t).getUTCDay(); if (w !== 0 && w !== 6) { c++; if (c >= n) return n2d(t); } t += DAY; } return n2d(t); }
+  function nextBiz(d) { let t = d2n(d); do { t += DAY; } while ([0, 6].indexOf(new Date(t).getUTCDay()) >= 0); return n2d(t); }
+  function bizCount(a, b) { let t = d2n(a), e = d2n(b), c = 0; for (let g = 0; t <= e && g < 800; g++, t += DAY) { const w = new Date(t).getUTCDay(); if (w !== 0 && w !== 6) c++; } return c; }
+  /* team roles in this planning: pm, sm, po, dev (dev does not start/edit sprints) */
+  const ROLES = { pm: L("Project Manager", "Gerente de Projeto"), sm: "Scrum Master", po: L("Product Owner", "Product Owner (PO)"), dev: L("Developer / team", "Desenvolvedor / time") };
+  function roleOf(email) { const r = (data.settings && data.settings.roles) || {}; return email ? r[A.key(email)] || "" : ""; }
+  function myRole() { return me ? roleOf(me.email) : ""; }
+  function canSprint() { return canEdit && (isAdm || wsInfo.owner === A.key(me.email) || myRole() !== "dev"); }
+  function canRoles() { return canEdit && (isAdm || wsInfo.owner === A.key(me.email) || myRole() === "pm" || !Object.keys((data.settings && data.settings.roles) || {}).some(function (k) { return data.settings.roles[k] === "pm"; })); }
   function today() { const d = new Date(); return n2d(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
   function fmt(s) { if (!s) return ""; const d = new Date(d2n(s)); return d.toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short", timeZone: "UTC" }); }
   function method() { return (window.PLAN_METHODS || {})[info.method] || window.PLAN_METHODS.hybrid; }
@@ -1234,7 +1244,7 @@
      story points only when the planning estimates in SP (Scrum, or Roadmap + Scrum); lead time and cycle time for every method;
      CFD for Roadmap, Scrum, Kanban and hybrid; burndown/burnup when there are sprints; planned × actual (S-curve) for schedules;
      big numbers are parametrisable (settings/rpHide) and the report exports to CSV, PDF and a one-page summary. */
-  function spOn() { const s = data.settings || {}; if (s.useSP === true || s.useSP === false) return s.useSP; return info.method === "scrum" || (info.method === "hybrid" && boardsList().some(function (b) { return b.kind === "scrum"; })); }
+  function spOn() { const s = data.settings || {}; if (s.useSP === true || s.useSP === false) return s.useSP; return info.method === "scrum" || (info.method === "hybrid" && boardsList().some(function (b) { return b.kind === "scrum"; })) || items().some(function (i) { return Number(i.points) > 0; }); }
   function budgetOn() { const s = data.settings || {}; if (s.useBudget === true || s.useBudget === false) return s.useBudget; return info.method === "waterfall" || items().some(function (i) { return Number(i.budget) || Number(i.actual); }); }
   function cfdOn() { return info.method !== "waterfall"; }
   function scheduleOn() { return info.method === "waterfall" || info.method === "hybrid"; }
@@ -1475,16 +1485,18 @@
   function planSettingsDialog() {
     const s = data.settings || {};
     const tri = function (name, val, auto) { return '<select name="' + name + '"><option value="auto"' + (val !== true && val !== false ? " selected" : "") + ">" + L("Automatic", "Automático") + " (" + (auto ? L("on", "ligado") : L("off", "desligado")) + ')</option><option value="on"' + (val === true ? " selected" : "") + ">" + L("On", "Ligado") + '</option><option value="off"' + (val === false ? " selected" : "") + ">" + L("Off", "Desligado") + "</option></select>"; };
-    const autoSP = info.method === "scrum" || (info.method === "hybrid" && boardsList().some(function (b) { return b.kind === "scrum"; })), autoB = info.method === "waterfall" || items().some(function (i) { return Number(i.budget) || Number(i.actual); });
+    const autoSP = info.method === "scrum" || (info.method === "hybrid" && boardsList().some(function (b) { return b.kind === "scrum"; })) || items().some(function (i) { return Number(i.points) > 0; }), autoB = info.method === "waterfall" || items().some(function (i) { return Number(i.budget) || Number(i.actual); });
     modal("<h2>" + IC("settings", 18) + " " + L("Planning settings", "Configurações do planejamento") + '</h2><p class="muted small">' + esc(method().name) + " · " + L("the reports follow these choices.", "os relatórios seguem estas escolhas.") + '</p><form class="pl-form" id="psF">' +
       "<label>" + L("Story points (Scrum estimation)", "Story points (estimativa Scrum)") + tri("sp", s.useSP, autoSP) + '<small class="muted">' + L("Roadmap and Waterfall measure in items, % done and lead/cycle time. Turn on for a Roadmap + Scrum (hybrid) planning.", "Roadmap e Cascata medem em itens, % concluído e lead/cycle time. Ligue para um planejamento Roadmap + Scrum (híbrido).") + "</small></label>" +
       "<label>" + L("Budget", "Orçamento") + tri("bg", s.useBudget, autoB) + '<small class="muted">' + L("Off hides the Budget tab and the costs in the reports.", "Desligado esconde a aba Orçamento e os custos nos relatórios.") + "</small></label>" +
       "<label>" + L("Projects + Service (ITSM)", "Projetos + Serviço (ITSM)") + '<select name="svc"><option value="">' + L("Projects only", "Só projetos") + "</option>" + Object.keys(wsItsm).map(function (k) { return '<option value="' + esc(k) + '"' + (s.itsm === k ? " selected" : "") + ">" + esc(wsItsm[k].title || k) + "</option>"; }).join("") + (s.itsm && !wsItsm[s.itsm] ? '<option value="' + esc(s.itsm) + '" selected>' + esc(s.itsm) + "</option>" : "") + '</select><small class="muted">' + (Object.keys(wsItsm).length ? L("Link an ITSM centre of this workspace: the Service tab shows incidents, SLA, problems and changes, and brings them into the planning.", "Ligue uma central ITSM deste workspace: a aba Serviço mostra incidentes, SLA, problemas e mudanças e traz os itens para o planejamento.") : L("This workspace has no ITSM centre yet – create one in Modules → ITSM (ITSM licence).", "Este workspace ainda não tem central ITSM – crie uma em Módulos → ITSM (licença ITSM).")) + "</small></label>" +
       '<label class="chk"><input type="checkbox" name="pf"' + (pfOn() ? " checked" : "") + "> " + L("Show the Portfolio tab (one page by island, BI-style, with drill-down)", "Mostrar a aba Portfólio (one page por ilhas, estilo BI, com drill-down)") + "</label>" +
+      '<fieldset class="ps-roles"><legend>' + L("Team roles", "Papéis da equipe") + '</legend><p class="muted small">' + L("Project Manager, Scrum Master and PO start and edit sprints and choose the sprint length; developers work on the items but do not change sprints.", "Gerente de Projeto, Scrum Master e PO iniciam e editam sprints e escolhem a duração; desenvolvedores trabalham nos itens, mas não alteram sprints.") + "</p>" +
+        Object.keys(members).sort(function (a, b) { return (members[a].name || members[a].email).localeCompare(members[b].name || members[b].email); }).map(function (k) { const m = members[k], r = ((s.roles || {})[k]) || ""; return '<label class="ps-role"><span>' + esc(m.name || m.email) + ' <small class="muted">' + esc(m.email) + "</small></span><select data-prole=\"" + esc(k) + '"' + (canRoles() ? "" : " disabled") + '><option value="">—</option>' + Object.keys(ROLES).map(function (x) { return '<option value="' + x + '"' + (x === r ? " selected" : "") + ">" + esc(ROLES[x]) + "</option>"; }).join("") + "</select></label>"; }).join("") + "</fieldset>" +
       '<label class="chk"><input type="checkbox" name="kpi"' + (kpiOn() ? " checked" : "") + "> " + L("Show the Indicators tab (own KPIs)", "Mostrar a aba Indicadores (KPIs próprios)") + "</label>" +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#psF"), tv = function (x) { return x === "on" ? true : x === "off" ? false : null; };
-      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["settings/useSP"] = tv(f.sp.value); u["settings/useBudget"] = tv(f.bg.value); u["settings/kpiTab"] = f.kpi.checked; u["settings/itsm"] = f.svc.value || null; u["settings/portfolio/on"] = f.pf.checked; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Settings saved", "Configurações salvas")); }, function (er) { toast(er.message); }); };
+      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["settings/useSP"] = tv(f.sp.value); u["settings/useBudget"] = tv(f.bg.value); u["settings/kpiTab"] = f.kpi.checked; u["settings/itsm"] = f.svc.value || null; if (canRoles()) f.querySelectorAll("[data-prole]").forEach(function (x) { u["settings/roles/" + x.dataset.prole] = x.value || null; }); u["settings/portfolio/on"] = f.pf.checked; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Settings saved", "Configurações salvas")); }, function (er) { toast(er.message); }); };
     });
   }
   /* ---------------- Portfolio (assets/js/planning-portfolio.js) ---------------- */
@@ -1656,10 +1668,10 @@
     let h = "";
     open.forEach(function (k) {
       const S = ss[k], act = S.state === "active";
-      const actions = canEdit ? '<span class="sp"></span>' + (act ? '<span class="tag on">' + L("Active", "Ativa") + '</span><button class="pl-btn sm" data-complete="' + k + '">' + L("Complete sprint", "Concluir sprint") + "</button>" : (!activeSprint() ? '<button class="pl-btn sm primary" data-startsp="' + k + '">' + L("Start sprint", "Iniciar sprint") + "</button>" : "")) + '<button class="pl-btn sm ghost" data-editsp="' + k + '">' + L("Edit", "Editar") + "</button>" : "";
+      const actions = canSprint() ? '<span class="sp"></span>' + (act ? '<span class="tag on">' + L("Active", "Ativa") + '</span><button class="pl-btn sm" data-complete="' + k + '">' + L("Complete sprint", "Concluir sprint") + "</button>" : (!activeSprint() ? '<button class="pl-btn sm primary" data-startsp="' + k + '">' + L("Start sprint", "Iniciar sprint") + "</button>" : "")) + '<button class="pl-btn sm ghost" data-editsp="' + k + '">' + L("Edit", "Editar") + "</button>" : "";
       h += zone(k, esc(S.name), fmt(S.start) + " → " + fmt(S.end) + (S.goal ? " · " + esc(S.goal) : ""), work.filter(function (i) { return i.sprint === k; }), actions);
     });
-    h += zone("_backlog", "Backlog", L("not planned yet", "ainda não planeado"), work.filter(function (i) { return !i.sprint || !ss[i.sprint] || ss[i.sprint].state === "closed"; }).filter(function (i) { return cat(i) !== "done" || !i.sprint; }), canEdit ? '<span class="sp"></span><button class="pl-btn sm" id="newSp">+ ' + L("Create sprint", "Criar sprint") + "</button>" : "");
+    h += zone("_backlog", "Backlog", L("not planned yet", "ainda não planeado"), work.filter(function (i) { return !i.sprint || !ss[i.sprint] || ss[i.sprint].state === "closed"; }).filter(function (i) { return cat(i) !== "done" || !i.sprint; }), canSprint() ? '<span class="sp"></span><button class="pl-btn sm" id="newSp">+ ' + L("Create sprint", "Criar sprint") + "</button>" : "");
     v.innerHTML = '<div class="bl">' + h + "</div>";
     v.querySelectorAll(".bl-row").forEach(function (r) { r.onclick = function (e) { if (e.target.closest("select")) return; openDrawer(r.dataset.id); }; });
     v.querySelectorAll(".bl-row select").forEach(function (s) { s.onchange = function () { patch(s.closest(".bl-row").dataset.id, { status: s.value }); }; s.onclick = function (e) { e.stopPropagation(); }; });
@@ -1683,18 +1695,24 @@
   function newSprint() {
     const ss = data.sprints || {}, ks = Object.keys(ss);
     const last = ks.map(function (k) { return ss[k]; }).sort(function (a, b) { return (b.order || 0) - (a.order || 0); })[0];
-    const start = last && last.end ? n2d(d2n(last.end) + 3 * DAY) : today();
+    const wk = Number((data.settings || {}).sprintWeeks) || 2, start = last && last.end ? nextBiz(last.end) : today();
     const id = db.ref().push().key, n = ks.length + 1;
-    save("sprints/" + id, { name: "Sprint " + n, start: start, end: n2d(d2n(start) + 11 * DAY), state: "planned", goal: "", order: n });
+    save("sprints/" + id, { name: "Sprint " + n, start: start, end: bizEnd(start, wk * 5), weeks: wk, state: "planned", goal: "", order: n });
   }
   function sprintDialog(id, starting) {
-    const S = data.sprints[id];
+    if (!canSprint()) return toast(L("Only the owner, Project Manager, Scrum Master or PO start and edit sprints", "Só o dono, o Gerente de Projeto, o Scrum Master ou o PO iniciam e editam sprints"));
+    const S = data.sprints[id], dflt = Number((data.settings || {}).sprintWeeks) || 2;
+    const wk0 = S.weeks === 0 ? 0 : (S.weeks || dflt), st0 = starting ? today() : (S.start || today());
     modal("<h2>" + (starting ? L("Start sprint", "Iniciar sprint") : L("Edit sprint", "Editar sprint")) + "</h2>" +
-      '<form id="spF" class="pl-form"><label>' + L("Name", "Nome") + '<input name="name" required value="' + esc(S.name) + '"></label><div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start" required value="' + esc(S.start || today()) + '"></label><label>' + L("End", "Fim") + '<input type="date" name="end" required value="' + esc(S.end || "") + '"></label></div>' +
+      '<form id="spF" class="pl-form"><label>' + L("Name", "Nome") + '<input name="name" required value="' + esc(S.name) + '"></label>' +
+      '<label>' + L("Duration", "Duração") + '<select name="wk">' + [1, 2, 3, 4].map(function (w) { return '<option value="' + w + '"' + (w === wk0 ? " selected" : "") + ">" + w + " " + (w === 1 ? L("week", "semana") : L("weeks", "semanas")) + " · " + w * 5 + " " + L("working days", "dias úteis") + "</option>"; }).join("") + '<option value="0"' + (!wk0 ? " selected" : "") + ">" + L("Custom", "Personalizada") + '</option></select><small class="muted" id="spInfo"></small></label>' +
+      '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start" required value="' + esc(st0) + '"></label><label>' + L("End", "Fim") + '<input type="date" name="end" required value="' + esc(S.end || "") + '"></label></div>' +
       '<label>' + L("Sprint goal", "Objetivo da sprint") + '<textarea name="goal" rows="2">' + esc(S.goal || "") + "</textarea></label>" +
       '<div class="pl-row-end">' + (!starting ? '<button type="button" class="pl-btn ghost danger" id="spDel">' + L("Delete sprint", "Excluir sprint") + "</button><span class=\"sp\"></span>" : "") + '<button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + (starting ? L("Start", "Iniciar") : L("Save", "Salvar")) + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#spF");
-      f.onsubmit = function (e) { e.preventDefault(); const o = Object.assign({}, S, { name: f.name.value.trim(), start: f.start.value, end: f.end.value, goal: f.goal.value.trim() }); if (starting) o.state = "active"; save("sprints/" + id, o).then(close); };
+      const calc = function () { const w = Number(f.wk.value); f.end.readOnly = !!w; if (w && f.start.value) f.end.value = bizEnd(f.start.value, w * 5); const n = f.start.value && f.end.value ? bizCount(f.start.value, f.end.value) : 0; box.querySelector("#spInfo").textContent = n ? n + " " + L("working days", "dias úteis") + (w ? "" : " · " + L("set the end date", "defina a data de fim")) : ""; };
+      f.wk.onchange = f.start.onchange = f.end.onchange = calc; calc();
+      f.onsubmit = function (e) { e.preventDefault(); if (f.end.value < f.start.value) return toast(L("The end must be after the start", "O fim deve ser depois do início")); const w = Number(f.wk.value); const o = Object.assign({}, S, { name: f.name.value.trim(), start: f.start.value, end: f.end.value, weeks: w, goal: f.goal.value.trim() }); if (starting) o.state = "active"; const u = {}; u["sprints/" + id] = o; u["settings/sprintWeeks"] = w; db.ref("planning/" + ID + "/data").update(u).then(close, fail); };
       const del = box.querySelector("#spDel");
       if (del) del.onclick = function () {
         const u = {}; u["sprints/" + id] = null;
@@ -1704,6 +1722,7 @@
     });
   }
   function completeSprint(id) {
+    if (!canSprint()) return toast(L("Only the owner, Project Manager, Scrum Master or PO complete sprints", "Só o dono, o Gerente de Projeto, o Scrum Master ou o PO concluem sprints"));
     const S = data.sprints[id], open = items().filter(function (i) { return i.sprint === id && cat(i) !== "done"; });
     const next = Object.keys(data.sprints || {}).filter(function (k) { return k !== id && data.sprints[k].state === "planned"; }).sort(function (a, b) { return (data.sprints[a].order || 0) - (data.sprints[b].order || 0); })[0];
     modal("<h2>" + L("Complete ", "Concluir ") + esc(S.name) + "</h2><p>" + (items().filter(function (i) { return i.sprint === id; }).length - open.length) + " " + L("items done", "itens concluídos") + " · " + open.length + " " + L("open", "em aberto") + ".</p>" +

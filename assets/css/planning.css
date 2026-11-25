@@ -874,3 +874,8 @@ body.no-sp .kb-card .pts, body.no-sp .bl-row .pts, body.no-sp .sp-f, body.no-sp 
   body.pf-printing .rp-card, body.pf-printing .pf-tiles { break-inside: avoid; }
   body.pf-printing * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.ps-roles { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 4px 0 10px; }
+.ps-roles legend { font-weight: 700; padding: 0 4px; }
+.ps-role { display: grid; grid-template-columns: 1fr 190px; gap: 8px; align-items: center; margin: 4px 0; }
+.ps-role span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) { .ps-role { grid-template-columns: 1fr; } }
