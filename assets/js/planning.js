@@ -39,9 +39,9 @@
     if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
     return { b: b, a: a };
   }
-  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs", kpi: L("Indicators", "Indicadores"), budget: L("Budget", "Orçamento") };
+  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs", kpi: L("Indicators", "Indicadores"), budget: L("Budget", "Orçamento"), service: L("Service (ITSM)", "Serviço (ITSM)") };
 
-  let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, canEdit = false, isAdm = false;
+  let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, wsItsm = {}, canEdit = false, isAdm = false;
   const pushT = {};
   let view = null, scale = "month", collapsed = {}, filter = { q: "", who: "" }, dragging = false, pending = false, openItem = null, drawerDirty = false;
 
@@ -159,6 +159,7 @@
     views = ["okr"].concat(views, ["reports"]); /* OKR → initiative → epic → story: objectives come first */
     if (budgetOn()) views.push("budget");
     if (kpiOn()) views.push("kpi");
+    if ((data.settings || {}).itsm) views.push("service");
     if (!view) { try { view = localStorage.getItem("cmcollab:plview:" + ID); } catch (e) { /* ignore */ } }
     if (views.indexOf(view) < 0) view = okrs().length ? "okr" : views[1];
     document.body.classList.toggle("no-sp", !spOn());
@@ -199,7 +200,7 @@
     let mb = 0, ma = 0; all.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
     document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "") + (mb || ma ? ' · <span class="money" title="' + L("Budget vs actual", "Orçado x realizado") + '">' + L("Budget ", "Orçado ") + money(mb) + " · " + L("Actual ", "Realizado ") + '<b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></span>" : "");
     if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
-    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else if (view === "budget") budgetView(v); else list(v);
+    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else if (view === "budget") budgetView(v); else if (view === "service") serviceView(v); else list(v);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
@@ -1477,11 +1478,63 @@
     modal("<h2>" + IC("settings", 18) + " " + L("Planning settings", "Configurações do planejamento") + '</h2><p class="muted small">' + esc(method().name) + " · " + L("the reports follow these choices.", "os relatórios seguem estas escolhas.") + '</p><form class="pl-form" id="psF">' +
       "<label>" + L("Story points (Scrum estimation)", "Story points (estimativa Scrum)") + tri("sp", s.useSP, autoSP) + '<small class="muted">' + L("Roadmap and Waterfall measure in items, % done and lead/cycle time. Turn on for a Roadmap + Scrum (hybrid) planning.", "Roadmap e Cascata medem em itens, % concluído e lead/cycle time. Ligue para um planejamento Roadmap + Scrum (híbrido).") + "</small></label>" +
       "<label>" + L("Budget", "Orçamento") + tri("bg", s.useBudget, autoB) + '<small class="muted">' + L("Off hides the Budget tab and the costs in the reports.", "Desligado esconde a aba Orçamento e os custos nos relatórios.") + "</small></label>" +
+      "<label>" + L("Projects + Service (ITSM)", "Projetos + Serviço (ITSM)") + '<select name="svc"><option value="">' + L("Projects only", "Só projetos") + "</option>" + Object.keys(wsItsm).map(function (k) { return '<option value="' + esc(k) + '"' + (s.itsm === k ? " selected" : "") + ">" + esc(wsItsm[k].title || k) + "</option>"; }).join("") + (s.itsm && !wsItsm[s.itsm] ? '<option value="' + esc(s.itsm) + '" selected>' + esc(s.itsm) + "</option>" : "") + '</select><small class="muted">' + (Object.keys(wsItsm).length ? L("Link an ITSM centre of this workspace: the Service tab shows incidents, SLA, problems and changes, and brings them into the planning.", "Ligue uma central ITSM deste workspace: a aba Serviço mostra incidentes, SLA, problemas e mudanças e traz os itens para o planejamento.") : L("This workspace has no ITSM centre yet – create one in Modules → ITSM (ITSM licence).", "Este workspace ainda não tem central ITSM – crie uma em Módulos → ITSM (licença ITSM).")) + "</small></label>" +
       '<label class="chk"><input type="checkbox" name="kpi"' + (kpiOn() ? " checked" : "") + "> " + L("Show the Indicators tab (own KPIs)", "Mostrar a aba Indicadores (KPIs próprios)") + "</label>" +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#psF"), tv = function (x) { return x === "on" ? true : x === "off" ? false : null; };
-      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["settings/useSP"] = tv(f.sp.value); u["settings/useBudget"] = tv(f.bg.value); u["settings/kpiTab"] = f.kpi.checked; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Settings saved", "Configurações salvas")); }, function (er) { toast(er.message); }); };
+      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["settings/useSP"] = tv(f.sp.value); u["settings/useBudget"] = tv(f.bg.value); u["settings/kpiTab"] = f.kpi.checked; u["settings/itsm"] = f.svc.value || null; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Settings saved", "Configurações salvas")); }, function (er) { toast(er.message); }); };
     });
+  }
+  /* ---------------- Projects + Service: the linked ITSM centre ---------------- */
+  let svc = { id: null, info: null, recs: null, err: null };
+  function svcLoad(id) {
+    if (svc.id === id) return;
+    if (svc.id) { db.ref("itsm/" + svc.id + "/data/records").off(); }
+    svc = { id: id, info: null, recs: null, err: null };
+    db.ref("itsm/" + id + "/info/title").once("value").then(function (x) { svc.info = { title: x.val() }; if (view === "service") renderView(); }, function () { /* ignore */ });
+    db.ref("itsm/" + id + "/data/records").on("value", function (x) { svc.recs = x.val() || {}; if (view === "service") renderView(); }, function (e) { svc.err = e && e.message || "denied"; if (view === "service") renderView(); });
+  }
+  function serviceView(v) {
+    const sid = (data.settings || {}).itsm, I = window.ITSM;
+    if (!sid) { v.innerHTML = ""; return; }
+    svcLoad(sid);
+    const title = (svc.info && svc.info.title) || (wsItsm[sid] || {}).title || sid, link = "../itsm/?id=" + encodeURIComponent(sid);
+    const head = '<div class="rp-head"><div><h2>' + IC("itsm", 20) + " " + L("Service", "Serviço") + " · " + esc(title) + '</h2><p class="muted small">' + L("Projects + Service: the team delivers this planning and also runs the service. Problems, changes and improvements can become planning items.", "Projetos + Serviço: a equipe entrega este planejamento e também gere o serviço. Problemas, mudanças e melhorias podem virar itens do planejamento.") + '</p></div><a class="pl-btn" href="' + link + '">' + IC("itsm", 15) + " " + L("Open the centre", "Abrir a central") + "</a></div>";
+    if (svc.err) { v.innerHTML = '<div class="rp">' + head + '<div class="pl-empty"><p>' + L("You don't have access to this ITSM centre (ITSM licence and centre membership are needed).", "Você não tem acesso a esta central ITSM (é preciso a licença ITSM e ser membro da central).") + "</p></div></div>"; return; }
+    if (!svc.recs || !I) { v.innerHTML = '<div class="rp">' + head + '<p class="muted">' + L("Loading…", "Carregando…") + "</p></div>"; return; }
+    const all = Object.keys(svc.recs).map(function (k) { return Object.assign({ id: k }, svc.recs[k]); });
+    const open = function (k) { return all.filter(function (r) { return r.kind === k && !I.isDone(r); }); };
+    const M = I.metrics(svc.recs, Date.now(), null) || {};
+    const pct = function (x) { return x == null ? "–" : Math.round(x * 100) + "%"; };
+    const hrs = function (ms) { return ms ? (ms / 3600000 < 48 ? Math.round(ms / 3600000) + " h" : Math.round(ms / 86400000) + " " + L("d", "d")) : "–"; };
+    const tile = function (ic, val, lbl, cls) { return '<div class="rp-tile' + (cls ? " " + cls : "") + '"><span class="ic">' + IC(ic, 18) + "</span><b>" + val + "</b><span>" + lbl + "</span></div>"; };
+    const inc = open("incident"), req = open("request"), prb = open("problem"), chg = open("change"), imp = open("improvement");
+    const linked = function (r) { return (r.planLinks && r.planLinks[ID]) || items().find(function (i) { return i.src && i.src.itsm === sid && i.src.rec === r.id; }); };
+    const row = function (r) {
+      const K = I.KINDS[r.kind] || {}, l = linked(r), li = l && (typeof l === "string" ? data.items[l] : l), st = I.status(r.kind, r.status);
+      return '<tr><td><span style="color:' + (K.color || "#626a80") + '">' + IC(K.icon || "task", 14) + "</span> " + esc(r.key || "") + '</td><td><a href="' + link + "&rec=" + encodeURIComponent(r.id) + '">' + esc(r.title || "") + "</a></td><td>" + esc(st ? st.name : r.status || "") + "</td><td>" +
+        (li ? '<button class="pl-btn sm" data-svcopen="' + esc(li.id || l) + '">' + IC("link", 13) + " " + esc(li.key || L("In the planning", "No planejamento")) + "</button>" : canEdit ? '<button class="pl-btn sm primary" data-svcbring="' + esc(r.id) + '">' + L("Bring to the planning", "Trazer para o planejamento") + "</button>" : "") + "</td></tr>";
+    };
+    const lst = prb.concat(chg, imp).sort(function (a, b) { return (b.created || 0) - (a.created || 0); });
+    v.innerHTML = '<div class="rp">' + head + '<div class="rp-tiles">' +
+      tile("incident", inc.length, L("open incidents", "incidentes abertos"), inc.length ? "warn" : "") + tile("request", req.length, L("open requests", "requisições abertas")) +
+      tile("trend", pct(M.sla), L("resolution SLA met", "SLA de solução cumprido"), M.sla != null && M.sla < 0.9 ? "warn" : "") + tile("clock", hrs(M.mttr), "MTTR") +
+      tile("problem", prb.length, L("open problems", "problemas abertos")) + tile("change", chg.length, L("changes in progress", "mudanças em andamento")) + tile("improvement", imp.length, L("improvements", "melhorias")) + "</div>" +
+      '<section class="rp-card"><h3>' + L("Problems, changes and improvements", "Problemas, mudanças e melhorias") + "</h3>" + (lst.length ? '<div class="rp-tw"><table class="rp-t"><thead><tr><th>' + L("Record", "Registro") + "</th><th>" + L("Title", "Título") + "</th><th>Status</th><th></th></tr></thead><tbody>" + lst.map(row).join("") + "</tbody></table></div>" : '<p class="muted small">' + L("Nothing open in the centre.", "Nada em aberto na central.") + "</p>") + "</section></div>";
+    v.querySelectorAll("[data-svcopen]").forEach(function (b) { b.onclick = function () { openDrawer(b.dataset.svcopen); }; });
+    v.querySelectorAll("[data-svcbring]").forEach(function (b) { b.onclick = function () {
+      const r = all.find(function (x) { return x.id === b.dataset.svcbring; }); if (!r) return; b.disabled = true;
+      const T = method().types, type = r.kind === "change" ? "milestone" : T.indexOf("story") >= 0 ? "story" : "task", iid = db.ref().push().key, day = today();
+      db.ref("planning/" + ID + "/data/settings/seq").transaction(function (n) { return (n || 0) + 1; }).then(function (res) {
+        const it = { type: type, title: "[" + (r.key || "") + "] " + (r.title || ""), status: statuses()[0].id, order: Date.now(), created: TS(), by: me.email, key: ((data.settings && data.settings.prefix) || "PLN") + "-" + res.snapshot.val(),
+          desc: String(r.desc || "").slice(0, 3000), src: { itsm: sid, rec: r.id, key: r.key || "", kind: r.kind, status: (I.status(r.kind, r.status) || {}).name || "", title: title } };
+        if (type === "milestone") { const d0 = r.window && r.window.start ? new Date(r.window.start).toISOString().slice(0, 10) : day; it.start = d0; it.end = d0; }
+        return db.ref("planning/" + ID + "/data/items/" + iid).set(it);
+      }).then(function () {
+        db.ref("itsm/" + sid + "/data/records/" + r.id + "/planLinks/" + ID).set(iid).catch(function () { /* the centre keeps working without the back-link */ });
+        toast(L("Brought to the planning", "Trazido para o planejamento")); openDrawer(iid);
+      }, function (e) { b.disabled = false; fail(e); });
+    }; });
   }
   /* board options per planning (kept in this browser) */
   function kbOpt() { try { return JSON.parse(localStorage.getItem("cmcollab:kb:" + ID) || "{}"); } catch (e) { return {}; } }
@@ -2191,7 +2244,7 @@
       ks.map(function (k) {
         const p = krProgress(o, k), li = linkedItems(o.id, k.id);
         return '<div class="kr-row" data-kr="' + o.id + "|" + k.id + '"><span class="ti" style="color:#0f766e">' + IC("kr", 16) + '</span><div class="kr-t"><span>' + esc(k.title) + '</span><span class="muted small">' +
-          (k.auto ? (function () { const lv = krLeaves(o.id, k.id); return L("measured by linked work: ", "medido pelo trabalho ligado: ") + lv.filter(function (i) { return cat(i) === "done"; }).length + "/" + lv.length + L(" items done", " itens concluídos"); })() : esc(String(k.current == null ? (k.start || 0) : k.current)) + " / " + esc(String(k.target)) + " " + esc(k.unit || "") + L(" (from ", " (de ") + esc(String(k.start || 0)) + ")") + "</span>" +
+          (k.auto ? (function () { const lv = krLeaves(o.id, k.id); return L("measured by linked work: ", "medido pelo trabalho ligado: ") + lv.filter(function (i) { return cat(i) === "done"; }).length + "/" + lv.length + L(" items done", " itens concluídos"); })() : (k.target == null || k.target === "" ? L("no target yet – edit to set one", "sem meta ainda – edite para definir") : esc(String(k.current == null ? (k.start || 0) : k.current)) + " / " + esc(String(k.target)) + " " + esc(k.unit || "") + L(" (from ", " (de ") + esc(String(k.start || 0)) + ")")) + "</span>" +
           (li.length ? '<span class="kr-tree">' + li.slice(0, 8).map(function (i) { return krNode(i, 0); }).join("") + (li.length > 8 ? '<span class="muted small">+' + (li.length - 8) + "</span>" : "") + "</span>" : "") + "</div>" +
           '<div class="okr-pr sm"><span class="pbar"><i style="width:' + p + "%;background:" + pcol(p) + '"></i></span><b>' + p + "%</b></div></div>";
       }).join("") + (canEdit ? '<button class="kb-add" data-addkr="' + o.id + '">' + IC("plus", 14) + " " + L("Key result", "Resultado-chave") + "</button>" : "") + "</section>";
@@ -2340,16 +2393,18 @@
     title: ["summary", "title", "título", "titulo", "name", "nome", "card title"],
     type: ["issue type", "work item type", "type", "tipo", "card type"],
     status: ["status", "state", "estado", "column", "coluna", "workflow"],
-    assignee: ["assignee", "assigned to", "responsável", "responsavel", "owner", "owner email"],
+    assignee: ["assignee", "assigned to", "responsável", "responsavel", "responsável (e-mail)", "owner", "owner email"],
     start: ["start date", "start", "início", "inicio", "data de início", "microsoft.vsts.scheduling.startdate", "start date (wd)"],
     end: ["due date", "due", "target date", "end date", "finish date", "end", "fim", "prazo", "deadline", "microsoft.vsts.scheduling.targetdate"],
-    key: ["issue key", "key", "id", "card id"],
-    parent: ["parent", "parent summary", "epic link", "epic name", "parent id", "épico", "epico", "fase", "phase"],
+    key: ["issue key", "key", "id", "card id", "chave"],
+    parent: ["parent", "parent summary", "epic link", "epic name", "parent id", "pai", "pai (id ou título)", "épico", "epico", "fase", "phase"],
+    kr: ["okr", "kr", "okr / kr", "key result", "resultado-chave", "resultado chave", "okr / kr (resultado-chave)"],
+    budget: ["budget", "orçado", "orcado", "orçamento", "orcamento"],
     points: ["story points", "story point estimate", "effort", "points", "pontos", "size"],
     desc: ["description", "descrição", "descricao"]
   };
   function importDialog() {
-    modal("<h2>" + L("Import CSV", "Importar CSV") + '</h2><p class="muted small">' + L("Works with CSV exports from Jira, Azure DevOps, Kanbanize/Businessmap or any spreadsheet. Recognised columns: Summary/Title, Issue Type, Status, Assignee, Start date, Due date, Story Points, Parent/Epic Link, Description.", "Funciona com CSV exportado do Jira, Azure DevOps, Kanbanize/Businessmap ou de qualquer folha de cálculo. Colunas reconhecidas: Summary/Título, Issue Type/Tipo, Status/Estado, Assignee/Responsável, Start date/Início, Due date/Prazo, Story Points, Parent/Epic Link, Description.") + '</p><input type="file" id="csvF" accept=".csv,text/csv"><div id="csvPv"></div><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="csvGo" disabled>' + L("Import", "Importar") + "</button></div>", function (box, close) {
+    modal("<h2>" + L("Import CSV", "Importar CSV") + '</h2><p class="muted small">' + L("Works with CSV exports from Jira, Azure DevOps, Kanbanize/Businessmap or any spreadsheet. Recognised columns: Summary/Title, Issue Type, Status, Assignee, Start date, Due date, Story Points, Parent/Epic Link, Description.", "Funciona com CSV exportado do Jira, Azure DevOps, Kanbanize/Businessmap ou de qualquer folha de cálculo. Colunas reconhecidas: Summary/Título, Issue Type/Tipo, Status/Estado, Assignee/Responsável, Start date/Início, Due date/Prazo, Story Points, Parent/Epic Link, Description.") + '</p><div class="csv-tpl"><button type="button" class="pl-btn sm" id="csvTpl">' + IC("export", 14) + ' ' + L("Download the template", "Baixar o modelo") + '</button><span class="muted small">' + L("Initiative → epic → story → task, linked by the Parent column; the OKR column links to a key result.", "Iniciativa → épico → história → tarefa, ligados pela coluna Pai; a coluna OKR liga a um resultado-chave.") + '</span></div><input type="file" id="csvF" accept=".csv,text/csv"><div id="csvPv"></div><div class="pl-row-end"><button class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary" id="csvGo" disabled>' + L("Import", "Importar") + "</button></div>", function (box, close) {
       let parsed = null;
       box.querySelector("#csvF").onchange = function (e) {
         const file = e.target.files[0]; if (!file) return;
@@ -2359,18 +2414,39 @@
           Object.keys(COLS).forEach(function (f) { const i = hdr.findIndex(function (h) { return COLS[f].indexOf(h) >= 0; }); if (i >= 0) map[f] = i; });
           if (map.title === undefined) return toast(L("No Summary/Title column found", "Não encontrei a coluna Summary/Título"));
           parsed = { rows: rowsA.slice(1), map: map };
-          box.querySelector("#csvPv").innerHTML = '<p class="small"><b>' + parsed.rows.length + " " + L("rows", "linhas") + "</b> · " + L("columns found: ", "colunas encontradas: ") + Object.keys(map).join(", ") + "</p>";
+          const g = function (r, f) { return map[f] === undefined ? "" : (r[map[f]] || "").trim(); }, byT = {};
+          parsed.rows.forEach(function (r) { const t = mapType(g(r, "type")); byT[t] = (byT[t] || 0) + 1; });
+          box.querySelector("#csvPv").innerHTML = '<p class="small"><b>' + parsed.rows.length + " " + L("rows", "linhas") + "</b> · " + Object.keys(byT).map(function (t) { return byT[t] + " " + (TYPES[t] || TYPES.task).name; }).join(" · ") + '</p><p class="muted small">' + L("Columns found: ", "Colunas encontradas: ") + Object.keys(map).join(", ") + '</p><div class="csv-pv"><table class="rp-t"><thead><tr><th>' + L("Type", "Tipo") + "</th><th>" + L("Title", "Título") + "</th><th>" + L("Parent", "Pai") + "</th><th>Status</th>" + (map.kr !== undefined ? "<th>OKR</th>" : "") + "</tr></thead><tbody>" +
+            parsed.rows.slice(0, 8).map(function (r) { const t = mapType(g(r, "type")); return "<tr><td>" + esc((TYPES[t] || TYPES.task).name) + "</td><td>" + esc(g(r, "title")) + "</td><td>" + esc(g(r, "parent")) + "</td><td>" + esc((statuses().find(function (x) { return x.id === mapStatus(g(r, "status")); }) || {}).name || "") + "</td>" + (map.kr !== undefined ? "<td>" + esc(g(r, "kr")) + "</td>" : "") + "</tr>"; }).join("") + "</tbody></table>" + (parsed.rows.length > 8 ? '<p class="muted small">+ ' + (parsed.rows.length - 8) + " " + L("more", "mais") + "</p>" : "") + "</div>";
           box.querySelector("#csvGo").disabled = false;
         });
       };
+      box.querySelector("#csvTpl").onclick = csvTemplate;
       box.querySelector("#csvGo").onclick = function () {
         if (!parsed) return; this.disabled = true;
         importRows(parsed).then(function (n) { close(); toast(n + " " + L("items imported", "itens importados")); });
       };
     });
   }
+  function csvTemplate() {
+    const T = method().types, has = function (t) { return T.indexOf(t) >= 0; }, kr = allKrs()[0], kl = kr ? kr.label.split(" › ")[1] : "";
+    const H = ["ID", L("Type", "Tipo"), L("Title", "Título"), L("Parent (ID or title)", "Pai (ID ou título)"), "OKR / KR", "Story points", L("Start", "Início"), L("End", "Fim"), L("Assignee (e-mail)", "Responsável (e-mail)"), "Status", L("Description", "Descrição"), L("Budget", "Orçado")];
+    const d = function (n) { return fmtCsvDate(n2d(d2n(today()) + n * DAY)); }, sp = spOn();
+    const R = [];
+    if (has("initiative")) R.push(["I-1", L("Initiative", "Iniciativa"), L("Grow digital sales", "Crescer as vendas digitais"), "", kl, "", d(0), d(90), "", L("To do", "A fazer"), "", "50000"]);
+    if (has("phase")) R.push(["F-1", L("Phase", "Fase"), L("Planning", "Planejamento"), has("initiative") ? "I-1" : "", "", "", d(0), d(20), "", L("To do", "A fazer"), "", "10000"]);
+    if (has("epic")) R.push(["E-1", L("Epic", "Épico"), L("Online checkout", "Checkout online"), has("initiative") ? "I-1" : "", "", "", d(0), d(45), "", L("To do", "A fazer"), "", ""]);
+    const par = has("epic") ? "E-1" : has("phase") ? "F-1" : "";
+    if (has("story")) R.push(["S-1", L("Story", "História"), L("As a customer I want to pay by card", "Como cliente quero pagar com cartão"), par, "", sp ? "5" : "", d(1), d(14), "", L("To do", "A fazer"), L("Acceptance criteria: …", "Critérios de aceite: …"), ""]);
+    R.push(["T-1", L("Task", "Tarefa"), L("Configure the payment gateway", "Configurar o gateway de pagamento"), has("story") ? "S-1" : par, "", sp ? "2" : "", d(1), d(5), me.email, L("To do", "A fazer"), "", ""]);
+    if (has("milestone")) R.push(["M-1", L("Milestone", "Marco"), "Go-live", par, "", "", d(45), d(45), "", L("To do", "A fazer"), "", ""]);
+    const q = function (x) { x = x == null ? "" : String(x); return /[";\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + [H].concat(R).map(function (r) { return r.map(q).join(";"); }).join("\n")], { type: "text/csv" })); a.download = L("planning-template", "modelo-planejamento") + ".csv"; a.click();
+  }
+  function fmtCsvDate(iso) { const p = String(iso).split("-"); return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : iso; }
   function mapType(v) {
     v = (v || "").toLowerCase();
+    if (/initiative|iniciativa|programa|program/.test(v) && method().types.indexOf("initiative") >= 0) return "initiative";
     if (/epic|épico|epico|feature/.test(v)) return method().types.indexOf("epic") >= 0 ? "epic" : "phase";
     if (/phase|fase/.test(v)) return "phase";
     if (/bug|defect|defeito/.test(v)) return "bug";
@@ -2406,6 +2482,8 @@
         if (emails[a]) o.assignee = emails[a];
         const pts = parseFloat(get(row, "points")); if (!isNaN(pts)) o.points = pts;
         const ds = get(row, "desc"); if (ds) o.desc = ds.slice(0, 4000);
+        const bg = parseFloat(get(row, "budget").replace(/[^0-9,.-]/g, "").replace(/\.(?=\d{3})/g, "").replace(",", ".")); if (!isNaN(bg)) o.budget = bg;
+        const krv = get(row, "kr").toLowerCase(); if (krv) { const k = allKrs().find(function (x) { const t = x.label.toLowerCase(); return t === krv || t.split(" › ")[1] === krv || t.indexOf(krv) >= 0; }); if (k) { o.krs = {}; o.krs[k.ref] = true; } }
         if (ek) o.ext = { source: "csv", key: ek };
         if (ek) byKey[ek] = id;
         if (isContainer(o)) byTitle[title.toLowerCase()] = id;
@@ -2445,7 +2523,7 @@
         isAdm = r[0]; info = r[1].val();
         if (!info) return gate(L("Planning not found", "Planejamento não encontrado"), L("It may have been deleted, or you don't have access.", "Pode ter sido excluído, ou não tem acesso."));
         return db.ref("workspaces/" + info.ws).once("value").then(function (s) {
-          const w = s.val() || {}; wsInfo = w.info || {}; members = w.members || {}; wsInteg = w.integrations || {};
+          const w = s.val() || {}; wsInfo = w.info || {}; members = w.members || {}; wsInteg = w.integrations || {}; wsItsm = w.itsm || {};
           const mk = A.key(user.email), m = members[mk];
           if (!members[mk] && (isAdm || wsInfo.owner === mk)) members[mk] = { email: user.email, name: user.displayName || user.email.split("@")[0], role: "editor" };
           canEdit = isAdm || wsInfo.owner === mk || !!(m && m.role === "editor" && (!m.expires || m.expires > Date.now()));
@@ -2455,7 +2533,7 @@
           db.ref("planning/" + ID + "/data").on("value", function (snap) {
             data = snap.val() || { settings: {}, items: {}, sprints: {} };
             if (!data.items) data.items = {}; if (!data.settings) data.settings = {};
-            const linked = Object.keys(PROV).filter(function (k) { return data.settings[k]; }).join(",");
+            const linked = Object.keys(PROV).filter(function (k) { return data.settings[k]; }).join(",") + "|" + (data.settings.itsm || "") + "|" + budgetOn() + "|" + kpiOn() + "|" + spOn();
             if (!document.getElementById("view") || (canEdit && linked !== shell._linked)) { shell._linked = linked; shell(); } else renderView();
             const want = new URLSearchParams(location.search).get("item");
             if (want && !start._opened && data.items[want]) { start._opened = 1; setTimeout(function () { openDrawer(want); }, 60); }

@@ -241,6 +241,7 @@
       '<div class="pm-grid pm-list">' + order.map(function (k, i) { const m = M[k]; return '<label class="pm-opt"><input type="radio" name="start" value="m:' + k + '"' + ((presetMethod ? k === presetMethod : i === 0) ? " checked" : "") + '><span class="pm-ic">' + (window.CMIcon3D ? window.CMIcon3D(m.icon, 26, k) : ic(m.icon)) + '</span><b class="no-i18n">' + esc(m.name) + '</b><span class="muted small no-i18n">' + esc(m.desc) + "</span></label>"; }).join("") + "</div></div></div>" +
       '<div class="pl-2"><label class="lbl-f">' + esc(LL("Name", "Nome")) + '<input name="title" required autocomplete="off" placeholder="' + esc(LL("e.g. Product roadmap 2027", "ex.: Roadmap do produto 2027")) + '"></label>' +
       '<label class="lbl-f">Workspace<select name="ws">' + wsIds.map(function (id) { return '<option value="' + id + '"' + (id === presetWs ? " selected" : "") + ">" + esc(wss[id].info.name) + "</option>"; }).join("") + "</select></label></div>" +
+      '<label class="lbl-f" id="pnSvc" hidden>' + esc(LL("Projects + Service: link to an ITSM centre (optional)", "Projetos + Serviço: ligar a uma central ITSM (opcional)")) + '<select name="svc"></select><small class="muted">' + esc(LL("For teams that deliver projects and also run the service: the planning shows the centre's incidents, SLA, problems and changes.", "Para equipes que entregam projetos e também gerem o serviço: o planejamento mostra incidentes, SLA, problemas e mudanças da central.")) + "</small></label>" +
       '<label class="lbl-f">' + esc(LL("Kanban board workflow", "Fluxo do quadro Kanban")) + '<select name="wf"><option value="">' + esc(LL("Model default", "Padrão do modelo")) + "</option>" + Object.keys(W).map(function (k) { return '<option value="' + k + '">' + esc(W[k].name) + "</option>"; }).join("") + "</select></label>" +
       '<div class="row-end"><button type="button" class="btn" id="planX">' + esc(LL("Cancel", "Cancelar")) + '</button><button class="btn primary">' + esc(LL("Create planning", "Criar planejamento")) + "</button></div></form></div></div>");
     const d = document.getElementById("planDlg"), f = document.getElementById("planForm");
@@ -254,8 +255,13 @@
       if (!f.querySelector('[name=start]:checked')) { const fst = f.querySelector('[name=start]'); if (fst) fst.checked = true; }
     }
     d.querySelectorAll("[data-area]").forEach(function (b) { b.onclick = function () { area = b.dataset.area; drawArea(); const t = d.querySelector('#paTpl input'); if (t) t.checked = true; }; });
-    f.ws.onchange = function () { area = wsArea(f.ws.value); drawArea(); };
-    drawArea();
+    function drawSvc() {
+      const its = (wss[f.ws.value] || {}).itsm || {}, ks = Object.keys(its), box = d.querySelector("#pnSvc");
+      box.hidden = !ks.length || sstMode;
+      f.svc.innerHTML = '<option value="">' + esc(LL("Projects only", "Só projetos")) + "</option>" + ks.map(function (k) { return '<option value="' + esc(k) + '">' + esc(LL("Projects + Service · ", "Projetos + Serviço · ") + (its[k].title || k)) + "</option>"; }).join("");
+    }
+    f.ws.onchange = function () { area = wsArea(f.ws.value); drawArea(); drawSvc(); };
+    drawArea(); drawSvc();
     if (!presetMethod) { const t = d.querySelector("#paTpl input"); if (t && area !== "general") t.checked = true; }
     const ptp = presetTpl && AP.find(function (p) { return p.id === presetTpl; });
     if (ptp) { area = ptp.area; drawArea(); const r = f.querySelector('[name=start][value="t:' + ptp.id + '"]'); if (r) r.checked = true; }
@@ -272,6 +278,7 @@
       if (tpl) inf.tpl = tpl.id;
       u["planning/" + id + "/info"] = inf;
       u["planning/" + id + "/data"] = window.PLAN_INITIAL(method, title, { tpl: tpl && tpl.id, workflow: f.wf.value || undefined });
+      if (f.svc.value) { u["planning/" + id + "/data"].settings = Object.assign({}, u["planning/" + id + "/data"].settings, { itsm: f.svc.value }); inf.service = true; }
       u["workspaces/" + ws + "/plannings/" + id] = { title: title, method: method, created: TS };
       f.querySelector(".btn.primary").disabled = true;
       A.db().ref().update(u).then(function () { location.href = "../planning/?id=" + encodeURIComponent(id); }, function (err) { f.querySelector(".btn.primary").disabled = false; toast(err.message); });
