@@ -39,7 +39,7 @@
     if (isContainer(it)) descendants(it.id).forEach(function (k) { b += Number(k.budget) || 0; a += Number(k.actual) || 0; });
     return { b: b, a: a };
   }
-  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs", kpi: L("Indicators", "Indicadores"), budget: L("Budget", "Orçamento"), service: L("Service (ITSM)", "Serviço (ITSM)") };
+  const VIEWN = { timeline: L("Timeline", "Linha do tempo"), board: L("Boards", "Quadros"), backlog: "Backlog", list: L("List", "Lista"), reports: L("Reports", "Relatórios"), okr: "OKRs", kpi: L("Indicators", "Indicadores"), budget: L("Budget", "Orçamento"), service: L("Service (ITSM)", "Serviço (ITSM)"), portfolio: L("Portfolio", "Portfólio") };
 
   let db, me, info, data = { settings: {}, items: {}, sprints: {} }, members = {}, wsInfo = {}, wsInteg = {}, wsItsm = {}, canEdit = false, isAdm = false;
   const pushT = {};
@@ -160,8 +160,9 @@
     if (budgetOn()) views.push("budget");
     if (kpiOn()) views.push("kpi");
     if ((data.settings || {}).itsm) views.push("service");
+    if (pfOn() && window.CMPortfolio) views.unshift("portfolio");
     if (!view) { try { view = localStorage.getItem("cmcollab:plview:" + ID); } catch (e) { /* ignore */ } }
-    if (views.indexOf(view) < 0) view = okrs().length ? "okr" : views[1];
+    if (views.indexOf(view) < 0) view = views[0] === "portfolio" ? "portfolio" : okrs().length ? "okr" : views[1];
     document.body.classList.toggle("no-sp", !spOn());
     const who = {}; items().forEach(function (i) { if (i.assignee) who[i.assignee] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = 1; });
     app.innerHTML =
@@ -200,7 +201,7 @@
     let mb = 0, ma = 0; all.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
     document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "") + (mb || ma ? ' · <span class="money" title="' + L("Budget vs actual", "Orçado x realizado") + '">' + L("Budget ", "Orçado ") + money(mb) + " · " + L("Actual ", "Realizado ") + '<b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></span>" : "");
     if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
-    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else if (view === "budget") budgetView(v); else if (view === "service") serviceView(v); else list(v);
+    if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else if (view === "budget") budgetView(v); else if (view === "service") serviceView(v); else if (view === "portfolio") window.CMPortfolio.render(v, pfApi()); else list(v);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
@@ -1479,11 +1480,27 @@
       "<label>" + L("Story points (Scrum estimation)", "Story points (estimativa Scrum)") + tri("sp", s.useSP, autoSP) + '<small class="muted">' + L("Roadmap and Waterfall measure in items, % done and lead/cycle time. Turn on for a Roadmap + Scrum (hybrid) planning.", "Roadmap e Cascata medem em itens, % concluído e lead/cycle time. Ligue para um planejamento Roadmap + Scrum (híbrido).") + "</small></label>" +
       "<label>" + L("Budget", "Orçamento") + tri("bg", s.useBudget, autoB) + '<small class="muted">' + L("Off hides the Budget tab and the costs in the reports.", "Desligado esconde a aba Orçamento e os custos nos relatórios.") + "</small></label>" +
       "<label>" + L("Projects + Service (ITSM)", "Projetos + Serviço (ITSM)") + '<select name="svc"><option value="">' + L("Projects only", "Só projetos") + "</option>" + Object.keys(wsItsm).map(function (k) { return '<option value="' + esc(k) + '"' + (s.itsm === k ? " selected" : "") + ">" + esc(wsItsm[k].title || k) + "</option>"; }).join("") + (s.itsm && !wsItsm[s.itsm] ? '<option value="' + esc(s.itsm) + '" selected>' + esc(s.itsm) + "</option>" : "") + '</select><small class="muted">' + (Object.keys(wsItsm).length ? L("Link an ITSM centre of this workspace: the Service tab shows incidents, SLA, problems and changes, and brings them into the planning.", "Ligue uma central ITSM deste workspace: a aba Serviço mostra incidentes, SLA, problemas e mudanças e traz os itens para o planejamento.") : L("This workspace has no ITSM centre yet – create one in Modules → ITSM (ITSM licence).", "Este workspace ainda não tem central ITSM – crie uma em Módulos → ITSM (licença ITSM).")) + "</small></label>" +
+      '<label class="chk"><input type="checkbox" name="pf"' + (pfOn() ? " checked" : "") + "> " + L("Show the Portfolio tab (one page by island, BI-style, with drill-down)", "Mostrar a aba Portfólio (one page por ilhas, estilo BI, com drill-down)") + "</label>" +
       '<label class="chk"><input type="checkbox" name="kpi"' + (kpiOn() ? " checked" : "") + "> " + L("Show the Indicators tab (own KPIs)", "Mostrar a aba Indicadores (KPIs próprios)") + "</label>" +
       '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
       const f = box.querySelector("#psF"), tv = function (x) { return x === "on" ? true : x === "off" ? false : null; };
-      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["settings/useSP"] = tv(f.sp.value); u["settings/useBudget"] = tv(f.bg.value); u["settings/kpiTab"] = f.kpi.checked; u["settings/itsm"] = f.svc.value || null; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Settings saved", "Configurações salvas")); }, function (er) { toast(er.message); }); };
+      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["settings/useSP"] = tv(f.sp.value); u["settings/useBudget"] = tv(f.bg.value); u["settings/kpiTab"] = f.kpi.checked; u["settings/itsm"] = f.svc.value || null; u["settings/portfolio/on"] = f.pf.checked; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Settings saved", "Configurações salvas")); }, function (er) { toast(er.message); }); };
     });
+  }
+  /* ---------------- Portfolio (assets/js/planning-portfolio.js) ---------------- */
+  function pfOn() { const p = (data.settings || {}).portfolio; return !!(p && p.on !== false); }
+  function pfApi() {
+    return { db: db, ID: ID, me: me, data: function () { return data; }, items: items, statusOf: statusOf, canEdit: function () { return canEdit; }, openDrawer: openDrawer, patch: patch, toast: toast, fail: fail, modal: modal, renderView: renderView,
+      svc: function () { return svc; }, svcLoad: svcLoad };
+  }
+  function pfBlock(it, dis) {
+    if (!it.pf && !it.pfSvc && !pfOn()) return "";
+    if (isContainer(it) || it.type === "milestone") return "";
+    const p = it.pf || {}, bits = [p.id ? "GLPI " + p.id : "", p.unit, p.level, p.prio, p.gtype, p.approach].filter(Boolean);
+    return '<div class="pf-dblock">' + (bits.length ? '<p class="muted small">' + IC("dashboard", 13) + " " + bits.map(esc).join(" · ") + "</p>" : "") +
+      '<div class="g2"><label>' + L("Classification", "Classificação") + '<select name="pfSvc"' + dis + '><option value="">' + L("Project only", "Só projeto") + "</option>" +
+      [["operation", L("Operation", "Operação")], ["maintenance", L("Maintenance", "Manutenção")], ["service", L("Service", "Serviço")]].map(function (o) { return '<option value="' + o[0] + '"' + (it.pfSvc === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></label>" +
+      '<label>' + L("Next step (decision, owner, date)", "Encaminhamento (decisão, responsável, prazo)") + '<textarea name="pfNote" rows="2"' + dis + ">" + esc(it.pfNote || "") + "</textarea></label></div></div>";
   }
   /* ---------------- Projects + Service: the linked ITSM centre ---------------- */
   let svc = { id: null, info: null, recs: null, err: null };
@@ -1492,7 +1509,7 @@
     if (svc.id) { db.ref("itsm/" + svc.id + "/data/records").off(); }
     svc = { id: id, info: null, recs: null, err: null };
     db.ref("itsm/" + id + "/info/title").once("value").then(function (x) { svc.info = { title: x.val() }; if (view === "service") renderView(); }, function () { /* ignore */ });
-    db.ref("itsm/" + id + "/data/records").on("value", function (x) { svc.recs = x.val() || {}; if (view === "service") renderView(); }, function (e) { svc.err = e && e.message || "denied"; if (view === "service") renderView(); });
+    db.ref("itsm/" + id + "/data/records").on("value", function (x) { svc.recs = x.val() || {}; if (view === "service" || view === "portfolio") renderView(); }, function (e) { svc.err = e && e.message || "denied"; if (view === "service" || view === "portfolio") renderView(); });
   }
   function serviceView(v) {
     const sid = (data.settings || {}).itsm, I = window.ITSM;
@@ -1803,7 +1820,7 @@
       watchBlock(it) + blockBlock(it) +
       (canEdit && (it.type === "epic" || it.type === "initiative") ? '<button type="button" class="pl-btn sm ai-btn" id="dAi">' + IC("spark", 14) + " " + (it.type === "epic" ? L("Generate stories with AI", "Gerar histórias com IA") : L("Generate epic with AI", "Gerar épico com IA")) + "</button>" : "") +
       (allKrs().length ? "<label>" + L("Contributes to (OKR)", "Contribui para (OKR)") + '<select name="krs" multiple size="' + Math.min(5, allKrs().length) + '"' + dis + ">" + allKrs().map(function (k) { return '<option value="' + k.ref + '"' + ((it.krs || {})[k.ref] ? " selected" : "") + ">" + esc(k.label) + "</option>"; }).join("") + "</select></label>" : "") +
-      itsmBadge(it, true) +
+      itsmBadge(it, true) + pfBlock(it, dis) +
       (it.src && it.src.board ? '<a class="pl-src" href="../board/?id=' + encodeURIComponent(it.src.board) + '">' + IC("board", 15) + " " + L("Open the source board (process step)", "Abrir o quadro de origem (passo do processo)") + "</a>" : "") +
       (it.src && it.src.game ? '<a class="pl-src" href="../game/?id=' + encodeURIComponent(it.src.game) + '">' + IC("game", 15) + " Business Game" + (it.src.round ? " · " + L("round ", "rodada ") + esc(it.src.round) : "") + " – " + L("open the game", "abrir a partida") + "</a>" : "") +
       "<label>" + L("Description", "Descrição") + '<textarea name="desc" rows="5"' + dis + ">" + esc(it.desc || "") + "</textarea></label>" +
@@ -2533,7 +2550,7 @@
           db.ref("planning/" + ID + "/data").on("value", function (snap) {
             data = snap.val() || { settings: {}, items: {}, sprints: {} };
             if (!data.items) data.items = {}; if (!data.settings) data.settings = {};
-            const linked = Object.keys(PROV).filter(function (k) { return data.settings[k]; }).join(",") + "|" + (data.settings.itsm || "") + "|" + budgetOn() + "|" + kpiOn() + "|" + spOn();
+            const linked = Object.keys(PROV).filter(function (k) { return data.settings[k]; }).join(",") + "|" + (data.settings.itsm || "") + "|" + budgetOn() + "|" + kpiOn() + "|" + spOn() + "|" + pfOn();
             if (!document.getElementById("view") || (canEdit && linked !== shell._linked)) { shell._linked = linked; shell(); } else renderView();
             const want = new URLSearchParams(location.search).get("item");
             if (want && !start._opened && data.items[want]) { start._opened = 1; setTimeout(function () { openDrawer(want); }, 60); }
