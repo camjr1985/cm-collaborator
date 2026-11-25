@@ -90,19 +90,19 @@
         <span class="pr-tag">Most popular</span>
         <h2>Pro</h2>
         <div class="pr-price" data-m="5.90" data-y="4.70">$4.70<small> / month</small></div><div class="pr-note" data-note-y="Billed $56.40 per year" data-note-m="Billed monthly">Billed $56.40 per year</div>
-        <ul><li>10 workspaces</li><li>100 boards per workspace</li><li>Invite 5 people</li><li>Mentoring & persona templates</li><li>Export, print to PDF</li></ul>
+        <ul><li>1 admin + up to 5 people collaborating</li><li>1 admin workspace + up to 10 child workspaces</li><li>Collaboration and Planning</li><li>100 boards per workspace</li><li>Mentoring & persona templates</li><li>Export, print to PDF</li></ul>
         <a class="btn primary" data-buy="pro" href="#">Choose Pro</a>
       </div>
       <div class="card pr-card">
         <h2>Team</h2>
-        <div class="pr-price" data-m="9" data-y="7.20">$7.20<small> / user / month</small></div><div class="pr-note" data-note-y="Per user, billed yearly · 3 to 10 users" data-note-m="Per user, billed monthly · 3 to 10 users">Per user, billed yearly · 3 to 10 users</div>
-        <ul><li>Up to 10 users</li><li>Up to 50 workspaces</li><li>Unlimited boards</li><li>Licence per user (seats)</li><li>Executive & architecture templates</li><li>Priority support</li></ul>
+        <div class="pr-price" data-m="9" data-y="7.20">$7.20<small> / user / month</small></div><div class="pr-note" data-note-y="Per user, billed yearly · 3 to 199 users" data-note-m="Per user, billed monthly · 3 to 199 users">Per user, billed yearly · 3 to 199 users</div>
+        <ul><li>1 custom admin workspace for the company</li><li>Up to 50 workspaces per user</li><li>Collaboration and Planning included</li><li>Unlimited boards</li><li>Executive & architecture templates</li><li>Priority support</li></ul>
         <a class="btn" data-buy="team" href="#">Choose Team</a>
       </div>
       <div class="card pr-card">
         <h2>Enterprise</h2>
-        <div class="pr-price" style="font-size:30px">Custom</div><div class="pr-note">Price agreed with you</div>
-        <ul><li>More than 10 users</li><li>Unlimited workspaces</li><li>Onboarding & training</li><li>Invoice & purchase order</li><li>Dedicated support</li><li>Custom templates</li></ul>
+        <div class="pr-price" style="font-size:30px">Custom</div><div class="pr-note">From 200 users · 10% to 20% off</div>
+        <ul><li>200+ users, annual contract</li><li>10% to 20% off the per-user price, by negotiation</li><li>Unlimited workspaces</li><li>Onboarding & training</li><li>Invoice & purchase order</li><li>Dedicated support</li><li>Custom templates</li></ul>
         <a class="btn" data-buy="enterprise" href="#">Talk to us</a>
       </div>
     </div>
@@ -122,9 +122,9 @@
         <div>
           <span class="eyebrow">Team sizing</span>
           <h2>How many people will use it?</h2>
-          <p class="muted">Choose the size of your team – Team covers 3 to 10 users; above 10 users we agree the price with you.</p>
-          <div class="sz-row"><input type="range" id="szRange" min="1" max="50" value="10" aria-label="Users"><input type="number" id="szNum" min="1" max="1000" value="10" aria-label="Users"><span class="muted">users</span></div>
-          <div class="sz-tiers" id="szTiers"><span data-t="0">1–2 users · Pro</span><span data-t="1">3–10 · $7.20</span><span data-t="4">11+ · Custom</span></div>
+          <p class="muted">Choose the size of your team – Team covers 3 to 199 users; from 200 users, Enterprise with 10% to 20% off by negotiation.</p>
+          <div class="sz-row"><input type="range" id="szRange" min="1" max="250" value="10" aria-label="Users"><input type="number" id="szNum" min="1" max="1000" value="10" aria-label="Users"><span class="muted">users</span></div>
+          <div class="sz-tiers" id="szTiers"><span data-t="0">1–2 users · Pro</span><span data-t="1">3–199 · $7.20</span><span data-t="4">200+ · Enterprise</span></div>
         </div>
         <div class="sz-out">
           <div class="muted" id="szPlan">Team</div>
@@ -166,15 +166,15 @@
         };
       });
       /* ---- team sizing calculator ---- */
-      var TEAM_Y = 7.2, TEAM_M = 9; /* Team: 3 to 10 users; 11+ is a custom contract */
+      var TEAM_Y = 7.2, TEAM_M = 9; /* Team: 3 to 199 users; 200+ is Enterprise (10–20% off, negotiated) */
       function money(v) { return fmt(v); }
       var R = document.getElementById("szRange"), N = document.getElementById("szNum"), sizeN = 10, szPlan = "team";
       function size() {
         var n = Math.max(1, Math.min(1000, parseInt(sizeN, 10) || 1)), y = period === "y";
-        var tier = n < 3 ? 0 : n <= 10 ? 1 : 4;
+        var tier = n < 3 ? 0 : n < 200 ? 1 : 4;
         document.querySelectorAll("#szTiers span").forEach(function (s) { s.classList.toggle("on", Number(s.dataset.t) === tier); });
         var T = document.getElementById("szTotal"), P = document.getElementById("szPer"), S = document.getElementById("szSave"), PL = document.getElementById("szPlan"), B = document.getElementById("szBuy");
-        if (tier === 4) { szPlan = "enterprise"; PL.textContent = "Enterprise"; T.textContent = t("Custom"); P.textContent = t("More than 10 users: we agree the price and contract with you"); S.textContent = ""; B.textContent = t("Talk to us"); return; }
+        if (tier === 4) { szPlan = "enterprise"; PL.textContent = "Enterprise"; T.textContent = t("Custom"); P.textContent = t("200+ users: 10% to 20% off the per-user price, by negotiation"); S.textContent = ""; B.textContent = t("Talk to us"); return; }
         if (tier === 0) {
           szPlan = "pro"; var pp = y ? 4.7 : 5.9;
           PL.textContent = "Pro"; T.textContent = money(y ? pp * 12 : pp) + (y ? t(" / year") : t(" / month"));
@@ -190,7 +190,7 @@
         B.textContent = t("Choose this plan");
       }
       R.oninput = function () { sizeN = R.value; N.value = R.value; size(); };
-      N.oninput = function () { sizeN = N.value; R.value = Math.min(50, N.value || 1); size(); };
+      N.oninput = function () { sizeN = N.value; R.value = Math.min(250, N.value || 1); size(); };
       document.querySelectorAll("[data-period]").forEach(function (b) { b.addEventListener("click", size); });
       document.getElementById("szBuy").onclick = function (e) {
         e.preventDefault(); document.getElementById("buyNote").hidden = false;
