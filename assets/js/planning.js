@@ -1339,7 +1339,14 @@
      filters: period (all/month/quarter/year/custom), sprint, type, status, assignee, epic/initiative – shown as active chips;
      clicking a slice/bar cross-filters the page; initiatives → epics → items drill-down with a breadcrumb.
      branding per planning: settings/brand = { logo (small data URL), theme: dark|light, accent } */
-  function brand() { const b = (data.settings && data.settings.brand) || {}; return { logo: b.logo || "", theme: b.theme === "light" ? "light" : "dark", accent: /^#[0-9a-f]{6}$/i.test(b.accent || "") ? b.accent : "#1baf7a" }; }
+  /* appearance comes from the shared planning appearance (assets/js/planning-brand.js, settings/brand); without one the reports use the dark navy look */
+  function brand() {
+    const B = window.CMBrand ? window.CMBrand.get(data.settings || {}) : null;
+    if (!B || !B.set) return { logo: "", theme: "dark", accent: "#1baf7a", style: "" };
+    const c = B.c, lg = B.logos || {}, logo = (lg.company && lg.company.img) || (lg.project && lg.project.img) || (lg.client && lg.client.img) || "";
+    const acc = c.dark ? "#1baf7a" : (c.head || "#1f4fa3");
+    return { logo: logo, theme: c.dark ? "dark" : "light", accent: acc, eyebrow: B.eyebrow, style: "--bi-bg:" + c.bg + ";--bi-side:" + (c.dark ? c.head : c.card) + ";--bi-card:" + c.card + ";--bi-ink:" + c.ink + ";--bi-mut:" + c.ink2 + ";--bi-line:" + c.line + ";" };
+  }
   function rpPageGet() { try { return localStorage.getItem("cmcollab:rppage:" + ID) || "exec"; } catch (e) { return "exec"; } }
   function rpPageSet(p) { try { localStorage.setItem("cmcollab:rppage:" + ID, p); } catch (e) { /* ignore */ } }
   function ymd(t) { return n2d(t); }
@@ -1353,34 +1360,6 @@
   }
   function inRange(i, R) { if (!R) return true; const cr = Number(i.created) || d2n(i.start) || 0, dn = Number(i.doneAt) || 0; return (!cr || cr <= R.to + DAY) && (!dn || dn >= R.from); }
   function doneIn(i, R) { return cat(i) === "done" && (!R || (i.doneAt && i.doneAt >= R.from && i.doneAt <= R.to + DAY)); }
-  function brandDialog() {
-    const B = brand();
-    modal("<h2>" + IC("dashboard", 18) + " " + L("Dashboard look", "Aparência dos dashboards") + '</h2><p class="muted small">' + L("Company logo and colours of the dashboards, reports, one page and PDF of this planning.", "Logo da empresa e cores dos dashboards, relatórios, one page e PDF deste planejamento.") + '</p><form class="pl-form" id="brF">' +
-      '<label>' + L("Company logo (PNG, JPG or SVG)", "Logo da empresa (PNG, JPG ou SVG)") + '<input type="file" name="logo" accept="image/*"></label><div class="br-pv" id="brPv">' + (B.logo ? '<img src="' + esc(B.logo) + '" alt="logo">' : '<span class="muted small">' + L("No logo yet", "Sem logo ainda") + "</span>") + "</div>" +
-      (B.logo ? '<label class="chk"><input type="checkbox" name="rm"> ' + L("Remove the logo", "Remover o logo") + "</label>" : "") +
-      '<label>' + L("Palette", "Paleta") + '<div class="br-th"><label class="br-opt"><input type="radio" name="th" value="dark"' + (B.theme === "dark" ? " checked" : "") + '><span class="sw dark"></span>' + L("Dark (navy)", "Escura (azul-marinho)") + '</label><label class="br-opt"><input type="radio" name="th" value="light"' + (B.theme === "light" ? " checked" : "") + '><span class="sw light"></span>' + L("Light (white)", "Clara (branca)") + "</label></div></label>" +
-      '<label>' + L("Accent colour", "Cor de destaque") + '<input type="color" name="acc" value="' + esc(B.accent) + '"></label>' +
-      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
-      const f = box.querySelector("#brF"); let logo = null;
-      f.logo.onchange = function () {
-        const file = f.logo.files[0]; if (!file) return;
-        const rd = new FileReader(); rd.onload = function () {
-          const img = new Image(); img.onload = function () {
-            const sc = Math.min(1, 360 / img.width, 140 / img.height), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
-            c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); logo = c.toDataURL("image/png");
-            if (logo.length > 150000) { logo = c.toDataURL("image/jpeg", 0.85); }
-            box.querySelector("#brPv").innerHTML = '<img src="' + logo + '" alt="logo">';
-          }; img.src = rd.result;
-        }; rd.readAsDataURL(file);
-      };
-      f.onsubmit = function (e) {
-        e.preventDefault(); const u = {};
-        u["settings/brand/theme"] = (f.querySelector("[name=th]:checked") || {}).value || "dark"; u["settings/brand/accent"] = f.acc.value;
-        if (logo) u["settings/brand/logo"] = logo; else if (f.rm && f.rm.checked) u["settings/brand/logo"] = null;
-        db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Saved", "Salvo")); }, fail);
-      };
-    });
-  }
   function reportsView(v) {
     const SP = spOn(), BG = budgetOn(), BR = brand(), R = rpRange();
     const sps = Object.keys(data.sprints || {}).map(function (k) { return Object.assign({ id: k }, data.sprints[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
@@ -1550,11 +1529,11 @@
     const chips = chipsA.length ? '<div class="bi-chips">' + chipsA.map(function (c) { return '<button class="bi-chip" data-clr="' + c[0] + '">' + esc(c[1]) + " ✕</button>"; }).join("") + '<button class="bi-chip clr" data-clr="_all">' + L("Clear all", "Limpar tudo") + "</button></div>" : "";
     const body = page === "exec" ? execHtml() : page === "delivery" ? deliveryHtml() : page === "sprints" ? sprintsHtml() : page === "flow" ? flowHtml() : page === "budget" ? budgetHtml() : detailHtml();
     const sub = { exec: L("Executive view · health, initiatives, epics and risks", "Visão executiva · saúde, iniciativas, épicos e riscos"), delivery: L("What was delivered, by epic, initiative and year", "O que foi entregue, por épico, iniciativa e ano"), sprints: L("Sprint history, velocity, burndown and burnup", "Histórico das sprints, velocidade, burndown e burnup"), flow: L("CFD, throughput, lead time and cycle time", "CFD, vazão, lead time e cycle time"), budget: L("Budget × actual", "Orçado × realizado"), detail: L("Items with the columns you choose", "Itens com as colunas que você escolher") }[page];
-    v.innerHTML = '<div class="bi ' + BR.theme + '" style="--bi-acc:' + BR.accent + '">' +
+    v.innerHTML = '<div class="bi ' + BR.theme + '" style="' + BR.style + "--bi-acc:" + BR.accent + '">' +
       '<aside class="bi-side">' + (BR.logo ? '<img class="bi-logo" src="' + esc(BR.logo) + '" alt="logo">' : '<span class="bi-mark">' + esc((wsInfo.name || info.title || "CM").slice(0, 2).toUpperCase()) + "</span>") + '<b class="bi-pn">' + esc(info.title) + "</b>" +
       '<nav class="bi-nav">' + PAGES.map(function (p) { return '<button data-pg="' + p[0] + '" class="' + (p[0] === page ? "on" : "") + '">' + IC(p[1], 16) + " <span>" + esc(p[2]) + "</span></button>"; }).join("") + "</nav>" +
       '<p class="bi-meta">' + esc(wsInfo.name || "") + " · " + esc(method().name) + "</p></aside>" +
-      '<div class="bi-main"><header class="bi-head"><div><span class="bi-kick">' + esc((wsInfo.name || "") + " · " + info.title) + "</span><h2>" + esc(PG[2]) + '</h2><span class="bi-sub">' + sub + " · " + (SP ? L("story points", "story points") : L("measured in items", "medido em itens")) + '</span></div><span class="rp-acts">' +
+      '<div class="bi-main"><header class="bi-head"><div><span class="bi-kick">' + esc(BR.eyebrow || ((wsInfo.name || "") + " · " + info.title)) + "</span><h2>" + esc(PG[2]) + '</h2><span class="bi-sub">' + sub + " · " + (SP ? L("story points", "story points") : L("measured in items", "medido em itens")) + '</span></div><span class="rp-acts">' +
       (canEdit ? '<button class="pl-btn sm ghost" id="rpBrand">' + IC("pencil", 14) + " " + L("Logo & colours", "Logo e cores") + '</button><button class="pl-btn sm ghost" id="rpTiles">' + IC("settings", 14) + " " + L("Indicators", "Indicadores") + '</button><a href="#" id="rpCfg" class="pl-btn sm ghost">' + IC("settings", 14) + " " + L("Method", "Metodologia") + "</a>" : "") +
       '<button class="pl-btn sm ghost" id="rpCsv">' + IC("export", 14) + ' CSV</button><button class="pl-btn sm ghost" id="rpPdf">' + IC("print", 14) + ' PDF</button><button class="pl-btn sm" id="rpOne">' + IC("dashboard", 14) + " One page</button></span></header>" +
       filters + chips +
@@ -1569,7 +1548,7 @@
     v.querySelectorAll("[data-sort]").forEach(function (th) { th.onclick = function () { const k = th.dataset.sort; if (rpt.sort === k) rpt.dir = rpt.dir === "desc" ? "asc" : "desc"; else { rpt.sort = k; rpt.dir = "asc"; } redraw(); }; });
     v.querySelectorAll("[data-col]").forEach(function (c) { c.onchange = function () { const on = Array.prototype.map.call(v.querySelectorAll("[data-col]:checked"), function (x) { return x.dataset.col; }); try { localStorage.setItem("cmcollab:rpcols:" + ID, JSON.stringify(on)); } catch (e) { /* ignore */ } redraw(); const d = v.querySelector(".bi-cols"); if (d) d.open = true; }; });
     const tb = document.getElementById("rpTiles"); if (tb) tb.onclick = function () { tilesDialog(allT); };
-    const bb = document.getElementById("rpBrand"); if (bb) bb.onclick = brandDialog;
+    const bb = document.getElementById("rpBrand"); if (bb) bb.onclick = function () { if (window.CMBrand) window.CMBrand.dialog(pfApi()); };
     const cf = document.getElementById("rpCfg"); if (cf) cf.onclick = function (e) { e.preventDefault(); planSettingsDialog(); };
     document.getElementById("rpPdf").onclick = function () { document.body.classList.add("print-rp"); setTimeout(function () { window.print(); document.body.classList.remove("print-rp"); }, 50); };
     document.getElementById("rpOne").onclick = function () { onePage(W, X, showT); };
