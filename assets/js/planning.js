@@ -156,10 +156,12 @@
     const m = method();
     let views = m.views.slice();
     if (views.indexOf("backlog") < 0 && boardsList().some(function (b) { return b.kind === "scrum"; })) views.splice(views.indexOf("board") + 1, 0, "backlog");
-    views = views.concat(["reports", "okr", "budget"]);
+    views = ["okr"].concat(views, ["reports"]); /* OKR → initiative → epic → story: objectives come first */
+    if (budgetOn()) views.push("budget");
     if (kpiOn()) views.push("kpi");
     if (!view) { try { view = localStorage.getItem("cmcollab:plview:" + ID); } catch (e) { /* ignore */ } }
-    if (views.indexOf(view) < 0) view = views[0];
+    if (views.indexOf(view) < 0) view = okrs().length ? "okr" : views[1];
+    document.body.classList.toggle("no-sp", !spOn());
     const who = {}; items().forEach(function (i) { if (i.assignee) who[i.assignee] = 1; }); Object.keys(members).forEach(function (k) { who[members[k].email] = 1; });
     app.innerHTML =
       '<header class="pl-top"><a class="pl-back" href="' + (info.board ? "../board/?id=" + encodeURIComponent(info.board) : "../workspaces/") + '" title="' + (info.board ? L("Back to the board", "Voltar ao quadro") : L("My boards", "Meus quadros")) + '">←</a><span class="pl-logo">CM</span>' +
@@ -496,7 +498,8 @@
     flow: { icon: "kanban", name: L("Workflow board", "Quadro do fluxo"), tag: L("All workflow columns", "Todas as colunas do fluxo") },
     up: { icon: "objective", name: L("Upstream board", "Quadro upstream"), tag: L("Discovery · hands over to delivery", "Descoberta · entrega para o downstream") },
     down: { icon: "send", name: L("Downstream board", "Quadro downstream"), tag: L("Delivery · pulls what is ready upstream", "Entrega · puxa o que está pronto no upstream") },
-    scrum: { icon: "sprint", name: L("Sprint board (Scrum)", "Quadro da sprint (Scrum)"), tag: L("Active sprint · delivery columns", "Sprint ativa · colunas de entrega") }
+    scrum: { icon: "sprint", name: L("Sprint board (Scrum)", "Quadro da sprint (Scrum)"), tag: L("Active sprint · delivery columns", "Sprint ativa · colunas de entrega") },
+    custom: { icon: "settings", name: L("Custom flow", "Fluxo personalizado"), tag: L("Your own columns and WIP limits", "Suas colunas e limites de WIP") }
   };
   function staged() { return statuses().some(function (s) { return s.stage === "up"; }) && statuses().some(function (s) { return s.stage !== "up"; }); }
   function boardsList() {
@@ -517,8 +520,13 @@
   function upSS() { return statuses().filter(function (x) { return x.stage === "up"; }); }
   function downSS() { const st = staged(); return statuses().filter(function (x) { return !st || x.stage !== "up"; }); }
   function firstOfCat(c) { const d = downSS(); return (d.find(function (x) { return x.cat === c; }) || d[0] || statuses()[0]).id; }
-  function colSpecs(kind) {
+  function colSpecs(kind, B) {
     const spec = function (x) { return { key: x.id, name: x.name, color: stColor(x), wip: x.wip, stage: x.stage, target: x.id, match: function (i) { return statusOf(i).id === x.id; } }; };
+    if (kind === "custom") {
+      const SS = {}; statuses().forEach(function (x) { SS[x.id] = x; });
+      const cols = ((B && B.cols) || []).filter(function (c) { return SS[c.st]; });
+      return cols.length ? cols.map(function (c) { const o = spec(SS[c.st]); o.key = "c_" + c.st; if (c.name) o.name = c.name; o.wip = Number(c.wip) || null; return o; }) : null;
+    }
     if (kind === "basic") {
       const up = {}; upSS().forEach(function (x) { up[x.id] = 1; });
       return [["todo", L("To do", "A fazer")], ["doing", L("In progress", "Em andamento")], ["done", L("Done", "Concluído")]].map(function (c) {
@@ -537,19 +545,53 @@
     }
     return statuses().map(spec);
   }
+  /* custom flow: the team chooses the columns (existing workflow statuses or new ones) and the WIP limit of each */
+  function colEditor(host, cols) {
+    let rows = (cols && cols.length ? cols : downSS().map(function (x) { return { st: x.id, wip: x.wip || "" }; })).map(function (c) { return Object.assign({}, c); });
+    const CATS = [["todo", L("To do", "A fazer")], ["doing", L("In progress", "Em andamento")], ["done", L("Done", "Concluído")]];
+    function draw() {
+      host.innerHTML = '<div class="ce-head"><span>' + L("Column", "Coluna") + "</span><span>" + L("Status / type", "Status / tipo") + "</span><span>WIP</span><span></span></div>" + rows.map(function (r, i) {
+        const SS = statuses();
+        return '<div class="ce-row" data-i="' + i + '"><input data-k="name" maxlength="40" placeholder="' + esc((SS.find(function (x) { return x.id === r.st; }) || {}).name || L("New column", "Nova coluna")) + '" value="' + esc(r.name || "") + '">' +
+          '<select data-k="st">' + SS.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === r.st ? " selected" : "") + ">" + esc(x.name) + "</option>"; }).join("") + CATS.map(function (c) { return '<option value="new:' + c[0] + '"' + (r.st === "new:" + c[0] ? " selected" : "") + ">＋ " + L("new · ", "nova · ") + esc(c[1]) + "</option>"; }).join("") + "</select>" +
+          '<input data-k="wip" type="number" min="0" placeholder="–" value="' + esc(r.wip || "") + '"><span class="ce-b"><button type="button" data-mv="-1" title="' + L("Move up", "Subir") + '">↑</button><button type="button" data-mv="1" title="' + L("Move down", "Descer") + '">↓</button><button type="button" data-rm title="' + L("Remove", "Remover") + '">✕</button></span></div>';
+      }).join("") + '<button type="button" class="pl-btn sm" data-addc>＋ ' + L("Add column", "Adicionar coluna") + "</button>";
+      host.querySelectorAll(".ce-row").forEach(function (row) {
+        const i = Number(row.dataset.i);
+        row.querySelectorAll("[data-k]").forEach(function (inp) { inp.oninput = inp.onchange = function () { rows[i][inp.dataset.k] = inp.value; }; });
+        row.querySelector("[data-rm]").onclick = function () { rows.splice(i, 1); draw(); };
+        row.querySelectorAll("[data-mv]").forEach(function (b) { b.onclick = function () { const j = i + Number(b.dataset.mv); if (j < 0 || j >= rows.length) return; const t = rows[i]; rows[i] = rows[j]; rows[j] = t; draw(); }; });
+      });
+      host.querySelector("[data-addc]").onclick = function () { rows.push({ st: "new:doing", name: "", wip: "" }); draw(); };
+    }
+    draw();
+    return function () { /* → { cols, newStatuses } */
+      const ns = [], cols = [];
+      rows.forEach(function (r) {
+        let st = r.st;
+        if (/^new:/.test(st)) { const nm = (r.name || "").trim() || L("New column", "Nova coluna"); st = nm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 20) + "-" + Math.random().toString(36).slice(2, 5); ns.push({ id: st, name: nm, cat: r.st.slice(4) }); }
+        const c = { st: st }; if ((r.name || "").trim()) c.name = r.name.trim(); if (Number(r.wip) > 0) c.wip = Number(r.wip); cols.push(c);
+      });
+      return { cols: cols, newStatuses: ns };
+    };
+  }
+  function packBoards(list) { return list.map(function (x) { const o = { id: x.id, kind: x.kind }; if (x.name) o.name = x.name; if (x.cols) o.cols = x.cols; return o; }); }
   function addBoardDialog() {
-    const kinds = ["basic", "flow", "up", "down", "scrum"];
+    const kinds = ["down", "up", "flow", "custom", "scrum", "basic"];
     modal("<h2>" + L("Add board", "Adicionar quadro") + '</h2><p class="muted small">' + L("All boards show the same items and stay connected to the roadmap – each one is a different view of the workflow.", "Todos os quadros mostram os mesmos itens e ficam conectados ao roadmap – cada um é uma visão diferente do fluxo.") + '</p><form class="pl-form" id="abF"><div class="ab-kinds">' + kinds.map(function (k, n) { return '<label class="ab-k"><input type="radio" name="kind" value="' + k + '"' + (n === 0 ? " checked" : "") + "><span>" + (window.CMIcon3D ? window.CMIcon3D(BK[k].icon, 24, ["teal", "blue", "violet", "coral", "gold"][n % 5]) : IC(BK[k].icon, 18)) + "</span><b>" + esc(BK[k].name) + "</b><small>" + esc(BK[k].tag) + "</small></label>"; }).join("") + "</div>" +
+      '<div class="ce" id="abCols" hidden></div>' +
       "<label>" + L("Name (optional)", "Nome (opcional)") + '<input name="name" maxlength="60" autocomplete="off"></label><p class="muted small" id="abNote"></p><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Add board", "Adicionar quadro") + "</button></div></form>", function (box, close) {
-      const f = box.querySelector("#abF"), note = box.querySelector("#abNote");
-      function upd() { const k = f.kind.value; note.textContent = (k === "up" || k === "down") && !staged() ? L("Your workflow has no upstream/downstream stages yet: the upstream columns (Ideas, Analysis, Ready to commit) will be added before your current columns.", "Seu fluxo ainda não tem etapas upstream/downstream: as colunas de upstream (Ideias, Análise, Pronto para compromisso) serão incluídas antes das colunas atuais.") : ""; }
+      const f = box.querySelector("#abF"), note = box.querySelector("#abNote"), ceHost = box.querySelector("#abCols"); let ceGet = null;
+      function upd() { const k = f.kind.value; ceHost.hidden = k !== "custom"; if (k === "custom" && !ceGet) ceGet = colEditor(ceHost); note.textContent = (k === "up" || k === "down") && !staged() ? L("Your workflow has no upstream/downstream stages yet: the upstream columns (Ideas, Analysis, Ready to commit) will be added before your current columns.", "Seu fluxo ainda não tem etapas upstream/downstream: as colunas de upstream (Ideias, Análise, Pronto para compromisso) serão incluídas antes das colunas atuais.") : ""; }
       f.querySelectorAll("[name=kind]").forEach(function (r) { r.onchange = upd; }); upd();
       f.onsubmit = function (e) {
         e.preventDefault();
         const k = f.kind.value, list = boardsList().slice(), b = { id: k + "-" + Date.now().toString(36), kind: k };
         if (f.name.value.trim()) b.name = f.name.value.trim();
+        const u = {};
+        if (k === "custom") { const r = ceGet(); if (!r.cols.length) { toast(L("Add at least one column.", "Adicione ao menos uma coluna.")); return; } b.cols = r.cols; if (r.newStatuses.length) u["settings/statuses"] = statuses().concat(r.newStatuses); }
         list.push(b);
-        const u = { "settings/boards": list };
+        u["settings/boards"] = packBoards(list);
         if ((k === "up" || k === "down") && !staged()) {
           const W = window.PLAN_WORKFLOWS ? window.PLAN_WORKFLOWS() : {}, ups = ((W.updown || {}).ss || []).filter(function (x) { return x.stage === "up"; });
           const ids = {}; statuses().forEach(function (x) { ids[x.id] = 1; });
@@ -560,10 +602,17 @@
     });
   }
   function boardMenu(b) {
-    modal("<h2>" + esc(boardName(b)) + '</h2><form class="pl-form" id="bmF"><label>' + L("Name", "Nome") + '<input name="name" maxlength="60" value="' + esc(b.name || "") + '" placeholder="' + esc(boardName(Object.assign({}, b, { name: "" }))) + '"></label><div class="pl-row-end">' + (boardsList().length > 1 ? '<button type="button" class="pl-btn danger" id="bmDel">' + L("Remove board", "Remover quadro") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
-      const f = box.querySelector("#bmF");
-      f.onsubmit = function (e) { e.preventDefault(); const list = boardsList().map(function (x) { return x.id === b.id ? Object.assign({}, x, { name: f.name.value.trim() || null }) : x; }).map(function (x) { const o = { id: x.id, kind: x.kind }; if (x.name) o.name = x.name; return o; }); db.ref("planning/" + ID + "/data/settings/boards").set(list).then(close, fail); };
-      const del = box.querySelector("#bmDel"); if (del) del.onclick = function () { const list = boardsList().filter(function (x) { return x.id !== b.id; }).map(function (x) { const o = { id: x.id, kind: x.kind }; if (x.name) o.name = x.name; return o; }); db.ref("planning/" + ID + "/data/settings/boards").set(list).then(function () { close(); setTimeout(shell, 50); }, fail); };
+    modal("<h2>" + esc(boardName(b)) + '</h2><form class="pl-form" id="bmF"><label>' + L("Name", "Nome") + '<input name="name" maxlength="60" value="' + esc(b.name || "") + '" placeholder="' + esc(boardName(Object.assign({}, b, { name: "" }))) + '"></label>' + (b.kind === "custom" ? "<b>" + L("Columns and WIP", "Colunas e WIP") + '</b><div class="ce" id="bmCols"></div>' : "") + '<div class="pl-row-end">' + (boardsList().length > 1 ? '<button type="button" class="pl-btn danger" id="bmDel">' + L("Remove board", "Remover quadro") + "</button>" : "") + '<span class="sp"></span><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#bmF"), ch = box.querySelector("#bmCols"), ceGet = ch ? colEditor(ch, b.cols) : null;
+      f.onsubmit = function (e) {
+        e.preventDefault(); const u = {}, r = ceGet ? ceGet() : null;
+        if (r && !r.cols.length) { toast(L("Add at least one column.", "Adicione ao menos uma coluna.")); return; }
+        const list = boardsList().map(function (x) { return x.id === b.id ? Object.assign({}, x, { name: f.name.value.trim() || null }, r ? { cols: r.cols } : {}) : x; });
+        if (r && r.newStatuses.length) u["settings/statuses"] = statuses().concat(r.newStatuses);
+        u["settings/boards"] = packBoards(list);
+        db.ref("planning/" + ID + "/data").update(u).then(function () { close(); setTimeout(shell, 50); }, fail);
+      };
+      const del = box.querySelector("#bmDel"); if (del) del.onclick = function () { const list = boardsList().filter(function (x) { return x.id !== b.id; }); list.splice(0, list.length, ...packBoards(list)); db.ref("planning/" + ID + "/data/settings/boards").set(list).then(function () { close(); setTimeout(shell, 50); }, fail); };
     });
   }
   function board(v) {
@@ -584,7 +633,7 @@
         headNote = '<div class="sp-head"><b>' + esc(S.name) + "</b> · " + fmt(S.start) + " → " + fmt(S.end) + (S.goal ? " · " + esc(S.goal) : "") + (canEdit ? ' <button class="pl-btn sm" id="endSp">' + L("Complete sprint", "Concluir sprint") + "</button>" : "") + "</div>";
       }
     }
-    const specs = colSpecs(B.kind);
+    const specs = colSpecs(B.kind, B);
     if (!specs) inner = '<div class="pl-empty big"><h2>' + L("No upstream columns", "Sem colunas de upstream") + "</h2><p>" + L("Choose an upstream workflow in “Workflow”.", "Escolha um fluxo com upstream em “Fluxo”.") + "</p></div>";
     if (specs && !inner) {
       const inBoard = function (i) { return specs.some(function (c) { return c.match(i); }); };
@@ -988,10 +1037,10 @@
     const open = W.map(function (i) { return { i: i, b: openBlock(i) }; }).filter(function (x) { return x.b; }).sort(function (a, b) { return a.b.since - b.b.since; });
     const gAvg = avg("gross"), nAvg = avg("net");
     const rows = Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; }), mx = Math.max(1, Math.max.apply(null, rows.map(function (k) { return byType[k]; }).concat([1])));
-    return '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Flow · lead time without impediments", "Fluxo · lead time sem impedimentos") + '</h3><div class="flow-m big">' +
+    return '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Flow · lead time and cycle time (without impediments)", "Fluxo · lead time e cycle time (sem impedimentos)") + '</h3><div class="flow-m big">' +
       "<div><span>" + L("Lead time (avg)", "Lead time (média)") + "</span><b>" + dur(nAvg) + "</b><small>" + done.length + " " + L("delivered items", "itens entregues") + "</small></div>" +
       "<div><span>Upstream</span><b>" + dur(avg("upNet")) + "</b><small>" + L("created → started", "criado → iniciado") + "</small></div>" +
-      "<div><span>Downstream</span><b>" + dur(avg("downNet")) + "</b><small>" + L("started → done", "iniciado → concluído") + "</small></div>" +
+      "<div><span>Cycle time</span><b>" + dur(avg("downNet")) + "</b><small>" + L("started → done (downstream)", "iniciado → concluído (downstream)") + "</small></div>" +
       '<div class="bl"><span>' + L("Blocked (avg)", "Bloqueado (média)") + "</span><b>" + dur(avg("blocked")) + "</b><small>" + (gAvg ? nf((gAvg - nAvg) / gAvg * 100, 0) + "% " + L("of the gross lead time", "do lead time bruto") : "–") + "</small></div></div>" +
       '<p class="muted small">' + L("Blocked time is not counted in the lead time: it is shown apart, by type of impediment.", "O tempo bloqueado não entra no lead time: ele aparece à parte, por tipo de impedimento.") + "</p></section>" +
       '<section class="rp-card"><h3>' + L("Blocked time by type", "Tempo bloqueado por tipo") + "</h3>" + (rows.length ? '<div class="blk-bars">' + rows.map(function (k) { const T = BT[k] || BT.other; return '<div title="' + esc(T.name + ": " + dur(byType[k])) + '"><span>' + esc(T.name) + '</span><i style="width:' + Math.max(2, byType[k] / mx * 100) + '%"></i><b>' + dur(byType[k]) + "</b></div>"; }).join("") + "</div>" : '<p class="muted small">' + L("No impediments registered yet.", "Nenhum impedimento registrado ainda.") + "</p>") +
@@ -1179,7 +1228,101 @@
       const del = box.querySelector("#blDel"); if (del) del.onclick = function () { save("budget/lines/" + lid, null).then(close); };
     });
   }
+  /* ---------------- Reports – behave according to the methodology ----------------
+     story points only when the planning estimates in SP (Scrum, or Roadmap + Scrum); lead time and cycle time for every method;
+     CFD for Roadmap, Scrum, Kanban and hybrid; burndown/burnup when there are sprints; planned × actual (S-curve) for schedules;
+     big numbers are parametrisable (settings/rpHide) and the report exports to CSV, PDF and a one-page summary. */
+  function spOn() { const s = data.settings || {}; if (s.useSP === true || s.useSP === false) return s.useSP; return info.method === "scrum" || (info.method === "hybrid" && boardsList().some(function (b) { return b.kind === "scrum"; })); }
+  function budgetOn() { const s = data.settings || {}; if (s.useBudget === true || s.useBudget === false) return s.useBudget; return info.method === "waterfall" || items().some(function (i) { return Number(i.budget) || Number(i.actual); }); }
+  function cfdOn() { return info.method !== "waterfall"; }
+  function scheduleOn() { return info.method === "waterfall" || info.method === "hybrid"; }
+  function rpStats(W) {
+    const now = Date.now(), D7 = 7 * DAY, td = today(), in7 = n2d(d2n(td) + 7 * DAY);
+    const sp = function (l) { return l.reduce(function (n, i) { return n + (Number(i.points) || 0); }, 0); };
+    const done = W.filter(function (i) { return cat(i) === "done"; }), fl = W.map(flowOf).filter(function (f) { return f && f.done; });
+    const avg = function (k) { return fl.length ? fl.reduce(function (s, f) { return s + f[k]; }, 0) / fl.length : null; };
+    let mb = 0, ma = 0; W.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
+    const planned = W.filter(function (i) { return i.end && i.end <= td; }).length;
+    return {
+      sp: sp, done: done, spPl: sp(W), spDn: sp(done), noSp: W.filter(function (i) { return !i.points; }).length,
+      lead: avg("net"), cycle: avg("downNet"), thr30: W.filter(function (i) { return i.doneAt && now - i.doneAt <= 30 * DAY; }).length,
+      wip: W.filter(function (i) { return cat(i) === "doing"; }).length, blocked: W.filter(function (i) { return openBlock(i); }).length,
+      done7: W.filter(function (i) { return i.doneAt && now - i.doneAt <= D7; }).length, upd7: W.filter(function (i) { return i.updated && now - i.updated <= D7; }).length,
+      new7: W.filter(function (i) { return i.created && now - i.created <= D7; }).length, due7: W.filter(function (i) { return i.end && i.end >= td && i.end <= in7 && cat(i) !== "done"; }).length,
+      overdue: W.filter(overdue).length, mb: mb, ma: ma, plannedPct: W.length ? planned / W.length * 100 : 0, donePct: W.length ? done.length / W.length * 100 : 0
+    };
+  }
+  function rpTiles(W, X) { /* catalogue of big numbers: id, icon, value, label, class, when it applies */
+    const S = spOn(), B = budgetOn();
+    return [
+      { id: "items", ic: "list", v: nf(W.length), l: L("Items", "Itens") },
+      { id: "pct", ic: "kr", v: pct(X.done.length, W.length), l: L("% done (items)", "% concluído (itens)"), c: "good" },
+      { id: "spPl", ic: "objective", v: nf(X.spPl), l: L("SP planned", "SP planejados"), on: S },
+      { id: "spDn", ic: "task", v: nf(X.spDn), l: L("SP delivered", "SP entregues"), c: "good", on: S },
+      { id: "spRm", ic: "calendar", v: nf(X.spPl - X.spDn), l: L("SP remaining", "SP restantes"), on: S },
+      { id: "spPct", ic: "kr", v: pct(X.spDn, X.spPl), l: L("% delivered (SP)", "% entregue (SP)"), on: S },
+      { id: "noSp", ic: "bell", v: nf(X.noSp), l: L("Items without SP", "Itens sem SP"), c: X.noSp ? "warn" : "", on: S },
+      { id: "lead", ic: "clock", v: dur(X.lead), l: L("Lead time (avg)", "Lead time (média)") },
+      { id: "cycle", ic: "sprint", v: dur(X.cycle), l: L("Cycle time (avg)", "Cycle time (média)") },
+      { id: "thr", ic: "trend", v: nf(X.thr30), l: L("Throughput · 30 days", "Vazão · 30 dias") },
+      { id: "wip", ic: "kanban", v: nf(X.wip), l: L("Work in progress", "Em andamento (WIP)") },
+      { id: "blocked", ic: "lock", v: nf(X.blocked), l: L("Blocked now", "Bloqueados agora"), c: X.blocked ? "bad" : "" },
+      { id: "sched", ic: "gantt", v: nf(X.donePct, 0) + "% / " + nf(X.plannedPct, 0) + "%", l: L("Done / planned until today", "Concluído / planejado até hoje"), c: X.donePct + 5 < X.plannedPct ? "warn" : "good", on: scheduleOn() },
+      { id: "budget", ic: "kr", v: pct(X.ma, X.mb), l: L("Budget used", "Orçamento consumido"), c: X.ma > X.mb && X.mb ? "bad" : "", on: B },
+      { id: "done7", ic: "task", v: nf(X.done7), l: L("completed in the last 7 days", "concluídos nos últimos 7 dias"), sm: 1 },
+      { id: "upd7", ic: "pencil", v: nf(X.upd7), l: L("updated in the last 7 days", "atualizados nos últimos 7 dias"), sm: 1 },
+      { id: "new7", ic: "plus", v: nf(X.new7), l: L("created in the last 7 days", "criados nos últimos 7 dias"), sm: 1 },
+      { id: "due7", ic: "calendar", v: nf(X.due7), l: L("due in the next 7 days", "vencem nos próximos 7 dias"), sm: 1 },
+      { id: "overdue", ic: "bell", v: nf(X.overdue), l: L("overdue", "em atraso"), c: X.overdue ? "bad" : "", sm: 1 }
+    ].filter(function (t) { return t.on !== false; });
+  }
+  function rpHidden() { return (data.settings && data.settings.rpHide) || {}; }
+  function tilesDialog(all) {
+    const hid = rpHidden();
+    modal("<h2>" + IC("settings", 18) + " " + L("Big numbers of the report", "Números do relatório") + '</h2><p class="muted small">' + L("Untick what your team does not use. It applies to everyone in this planning.", "Desmarque o que sua equipe não usa. Vale para todos neste planejamento.") + '</p><form class="pl-form" id="tlF"><div class="rp-chk">' +
+      all.map(function (t) { return '<label class="chk"><input type="checkbox" name="' + t.id + '"' + (hid[t.id] ? "" : " checked") + "> " + esc(t.l) + "</label>"; }).join("") +
+      '</div><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#tlF");
+      f.onsubmit = function (e) { e.preventDefault(); const h = {}; all.forEach(function (t) { if (!f[t.id].checked) h[t.id] = true; }); save("settings/rpHide", Object.keys(h).length ? h : null).then(close); };
+    });
+  }
+  function cfdChart(W, from, to) { /* cumulative flow: to do / in progress / done per day */
+    const days = Math.max(1, Math.round((to - from) / DAY)), step = days > 60 ? Math.ceil(days / 60) : 1, pts = [];
+    for (let d = 0; d <= days; d += step) {
+      const t = from + d * DAY + DAY - 1; let a = 0, b = 0, c = 0;
+      W.forEach(function (i) { const cr = Number(i.created) || 0; if (cr > t) return; const dn = Number(i.doneAt) || 0, st = Number(i.startedAt) || 0; if (dn && dn <= t) c++; else if (st && st <= t) b++; else a++; });
+      pts.push({ t: from + d * DAY, a: a, b: b, c: c });
+    }
+    const max = Math.max(1, Math.max.apply(null, pts.map(function (p) { return p.a + p.b + p.c; })));
+    const Wd = 560, Hd = 200, x0 = 40, x1 = Wd - 12, y0 = 12, y1 = Hd - 28;
+    const X = function (k) { return x0 + (pts.length > 1 ? k / (pts.length - 1) : 0) * (x1 - x0); }, Y = function (v) { return y1 - v / max * (y1 - y0); };
+    const band = function (lo, hi, col, name) {
+      const top = pts.map(function (p, k) { return X(k) + "," + Y(hi(p)); }), bot = pts.map(function (p, k) { return X(k) + "," + Y(lo(p)); }).reverse();
+      return '<polygon points="' + top.concat(bot).join(" ") + '" fill="' + col + '" fill-opacity=".85" stroke="#fff" stroke-width="1"><title>' + esc(name) + "</title></polygon>";
+    };
+    const C = { c: "#1baf7a", b: "#2a78d6", a: "#eda100" };
+    let o = '<svg viewBox="0 0 ' + Wd + " " + Hd + '" class="rp-cfd" role="img" aria-label="CFD">';
+    [0, .5, 1].forEach(function (f) { o += '<line x1="' + x0 + '" x2="' + x1 + '" y1="' + Y(max * f) + '" y2="' + Y(max * f) + '" class="rp-grid"/><text x="' + (x0 - 6) + '" y="' + (Y(max * f) + 4) + '" text-anchor="end" class="rp-ax">' + cnum(max * f) + "</text>"; });
+    o += band(function () { return 0; }, function (p) { return p.c; }, C.c, L("Done", "Concluído")) + band(function (p) { return p.c; }, function (p) { return p.c + p.b; }, C.b, L("In progress", "Em andamento")) + band(function (p) { return p.c + p.b; }, function (p) { return p.c + p.b + p.a; }, C.a, L("To do", "A fazer"));
+    pts.forEach(function (p, k) { const w = (x1 - x0) / Math.max(1, pts.length - 1); o += '<rect x="' + (X(k) - w / 2) + '" y="' + y0 + '" width="' + w + '" height="' + (y1 - y0) + '" fill="transparent"><title>' + esc(fmt(n2d(p.t)) + " · " + L("To do", "A fazer") + " " + p.a + " · " + L("In progress", "Em andamento") + " " + p.b + " · " + L("Done", "Concluído") + " " + p.c) + "</title></rect>"; });
+    o += '<text x="' + x0 + '" y="' + (Hd - 8) + '" class="rp-ax">' + fmt(n2d(from)) + '</text><text x="' + x1 + '" y="' + (Hd - 8) + '" text-anchor="end" class="rp-ax">' + fmt(n2d(to)) + "</text></svg>";
+    return o + '<div class="rp-leg row"><span><i style="background:' + C.a + '"></i>' + L("To do", "A fazer") + '</span><span><i style="background:' + C.b + '"></i>' + L("In progress", "Em andamento") + '</span><span><i style="background:' + C.c + '"></i>' + L("Done", "Concluído") + "</span></div>";
+  }
+  function lineChart(series, from, to, maxV, unit, label) { /* simple multi-line chart on one axis */
+    const Wd = 520, Hd = 190, x0 = 40, x1 = Wd - 14, y0 = 12, y1 = Hd - 28, span = Math.max(DAY, to - from), max = Math.max(1, maxV);
+    const X = function (t) { return x0 + (t - from) / span * (x1 - x0); }, Y = function (v) { return y1 - v / max * (y1 - y0); };
+    let o = '<svg viewBox="0 0 ' + Wd + " " + Hd + '" class="rp-burn" role="img" aria-label="' + esc(label) + '">';
+    [0, .5, 1].forEach(function (f) { o += '<line x1="' + x0 + '" x2="' + x1 + '" y1="' + Y(max * f) + '" y2="' + Y(max * f) + '" class="rp-grid"/><text x="' + (x0 - 6) + '" y="' + (Y(max * f) + 4) + '" text-anchor="end" class="rp-ax">' + cnum(max * f) + "</text>"; });
+    series.forEach(function (s) {
+      if (!s.pts.length) return;
+      o += '<polyline fill="none" stroke="' + s.c + '" stroke-width="2"' + (s.dash ? ' stroke-dasharray="5 5"' : "") + ' points="' + s.pts.map(function (p) { return X(p[0]) + "," + Y(p[1]); }).join(" ") + '"/>';
+      if (!s.dash) o += s.pts.map(function (p) { return '<circle cx="' + X(p[0]) + '" cy="' + Y(p[1]) + '" r="3.5" fill="' + s.c + '" stroke="#fff" stroke-width="2"><title>' + esc(s.n + " · " + fmt(n2d(p[0])) + ": " + nf(p[1], 1) + (unit ? " " + unit : "")) + "</title></circle>"; }).join("");
+    });
+    o += '<text x="' + x0 + '" y="' + (Hd - 8) + '" class="rp-ax">' + fmt(n2d(from)) + '</text><text x="' + x1 + '" y="' + (Hd - 8) + '" text-anchor="end" class="rp-ax">' + fmt(n2d(to)) + "</text></svg>";
+    return o + '<div class="rp-leg row">' + series.map(function (s) { return '<span><i' + (s.dash ? ' class="dash"' : ' style="background:' + s.c + '"') + "></i>" + esc(s.n) + "</span>"; }).join("") + "</div>";
+  }
   function reportsView(v) {
+    const SP = spOn(), BG = budgetOn();
     const sps = Object.keys(data.sprints || {}).map(function (k) { return Object.assign({ id: k }, data.sprints[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     const conts = items().filter(isContainer).sort(byOrder);
     const ppl = Object.keys(members).map(function (k) { return members[k]; }).sort(function (a, b) { return (a.name || a.email).localeCompare(b.name || b.email); });
@@ -1193,88 +1336,152 @@
       if (rpt.epic && !underOf(i, rpt.epic)) return false;
       return true;
     });
-    const now = Date.now(), D7 = 7 * DAY, td = today(), in7 = n2d(d2n(td) + 7 * DAY);
-    const sp = function (l) { return l.reduce(function (n, i) { return n + (Number(i.points) || 0); }, 0); };
-    const done = W.filter(function (i) { return cat(i) === "done"; });
-    const spPl = sp(W), spDn = sp(done), noSp = W.filter(function (i) { return !i.points; }).length;
-    const tile = function (ic, val, lbl, cls) { return '<div class="rp-tile' + (cls ? " " + cls : "") + '"><span class="ic">' + IC(ic, 18) + "</span><b>" + val + "</b><span>" + lbl + "</span></div>"; };
+    const X = rpStats(W), sp = X.sp, unitSp = SP && rpt.unit !== "items", td = today();
+    const allT = rpTiles(W, X), hid = rpHidden(), showT = allT.filter(function (t) { return !hid[t.id]; });
+    const tile = function (t) { return '<div class="rp-tile' + (t.c ? " " + t.c : "") + '"><span class="ic">' + IC(t.ic, 18) + "</span><b>" + t.v + "</b><span>" + t.l + "</span></div>"; };
     const statusRows = statuses().map(function (x) { return { n: x.name, c: stColor(x), v: W.filter(function (i) { return statusOf(i).id === x.id; }).length }; });
     const typeRows = Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return { n: TYPES[t].name, c: TYPES[t].color, v: W.filter(function (i) { return i.type === t; }).length }; });
-    const whoAll = ppl.map(function (m) { return m.email; }); /* colour follows the person (fixed order), max 7 + others */
+    const whoAll = ppl.map(function (m) { return m.email; });
     const whoRows = whoAll.slice(0, 7).map(function (e, k) { return { n: memberName(e), c: RPAL[k], v: W.filter(function (i) { return i.assignee === e; }).length }; });
     const others = W.filter(function (i) { return i.assignee && whoAll.slice(0, 7).indexOf(i.assignee) < 0; }).length;
     if (others) whoRows.push({ n: L("Others", "Outros"), c: "#8a94a6", v: others });
     whoRows.push({ n: L("Unassigned", "Sem responsável"), c: "#c9d1e0", v: W.filter(function (i) { return !i.assignee; }).length });
-    /* sprint delivery (closed sprints use the snapshot taken when they were completed) */
+    /* sprints (closed sprints use the snapshot taken when they were completed) */
     const sprRows = sps.map(function (S) {
       const its = W.filter(function (i) { return i.sprint === S.id; }), dn = its.filter(function (i) { return cat(i) === "done"; });
       const live = { items: its.length, done: dn.length, sp: sp(its), spDone: sp(dn), noSp: its.filter(function (i) { return !i.points; }).length };
       const r = S.state === "closed" && S.report && !rpt.type && !rpt.status && !rpt.who && !rpt.epic ? S.report : live;
-      return { n: S.name + (S.state === "active" ? L(" (in progress)", " (em andamento)") : ""), sp: r.sp, dn: r.spDone, rm: Math.max(0, r.sp - r.spDone), noSp: r.noSp, items: r.items, idone: r.done };
+      return { id: S.id, n: S.name + (S.state === "active" ? L(" (in progress)", " (em andamento)") : ""), sp: r.sp, dn: r.spDone, rm: Math.max(0, r.sp - r.spDone), noSp: r.noSp, items: r.items, idone: r.done };
     });
-    const unitSp = rpt.unit !== "items";
     const epRows = conts.filter(function (c) { return c.type !== "initiative" || !conts.some(function (e) { return e.parent === c.id; }); }).map(function (c) {
       const its = W.filter(function (i) { return laneOf(i) === c.id; }), dn = its.filter(function (i) { return cat(i) === "done"; });
       const a = unitSp ? sp(dn) : dn.length, t = unitSp ? sp(its) : its.length;
       return { n: (c.key ? c.key + " " : "") + c.title, a: a, b: Math.max(0, t - a) };
     }).filter(function (r) { return r.a + r.b > 0; }).sort(function (x, y) { return (y.a + y.b) - (x.a + x.b); });
-    /* burndown of the active (or selected) sprint, from the date each item was done */
-    const bs = data.sprints && (data.sprints[rpt.sprint] ? Object.assign({ id: rpt.sprint }, data.sprints[rpt.sprint]) : sps.find(function (S) { return S.state === "active"; }));
-    let burn = "";
+    /* burndown + burnup of the selected (or active) sprint */
+    const bs = data.sprints && (data.sprints[rpt.sprint] ? Object.assign({ id: rpt.sprint }, data.sprints[rpt.sprint]) : sps.find(function (S) { return S.state === "active"; }) || sps.filter(function (S) { return S.state === "closed"; }).slice(-1)[0]);
+    let burn = "", bup = "", sprintRep = "";
     if (bs && bs.start && bs.end) {
-      const its = base.filter(function (i) { return i.sprint === bs.id; }), tot = unitSp ? sp(its) : its.length;
-      const s0 = d2n(bs.start), e0 = d2n(bs.end), days = Math.max(1, Math.round((e0 - s0) / DAY));
-      const Wd = 520, Hd = 180, x = function (d) { return 36 + d / days * (Wd - 50); }, y = function (vv) { return 14 + (1 - (tot ? vv / tot : 0)) * (Hd - 44); };
-      let pts = [];
-      for (let d = 0; d <= days; d++) { const t = s0 + d * DAY; if (t > d2n(td) + DAY) break; const doneBy = its.filter(function (i) { return cat(i) === "done" && i.doneAt && i.doneAt <= t + DAY; }); pts.push([d, tot - (unitSp ? sp(doneBy) : doneBy.length)]); }
-      burn = '<svg viewBox="0 0 ' + Wd + " " + Hd + '" class="rp-burn" role="img" aria-label="Burndown"><line x1="36" x2="' + (Wd - 14) + '" y1="' + y(0) + '" y2="' + y(0) + '" class="rp-grid"/><text x="30" y="' + (y(tot) + 4) + '" text-anchor="end" class="rp-ax">' + nf(tot) + '</text><text x="30" y="' + (y(0) + 4) + '" text-anchor="end" class="rp-ax">0</text>' +
-        '<line x1="' + x(0) + '" y1="' + y(tot) + '" x2="' + x(days) + '" y2="' + y(0) + '" stroke="#8a94a6" stroke-width="2" stroke-dasharray="5 5"><title>' + esc(L("Ideal", "Ideal")) + "</title></line>" +
-        (pts.length ? '<polyline fill="none" stroke="#2a78d6" stroke-width="2" points="' + pts.map(function (p) { return x(p[0]) + "," + y(p[1]); }).join(" ") + '"/>' + pts.map(function (p) { return '<circle cx="' + x(p[0]) + '" cy="' + y(p[1]) + '" r="4" fill="#2a78d6" stroke="#fff" stroke-width="2"><title>' + esc(fmt(n2d(s0 + p[0] * DAY)) + ": " + nf(p[1]) + (unitSp ? " SP" : "")) + "</title></circle>"; }).join("") : "") +
-        '<text x="' + x(0) + '" y="' + (Hd - 8) + '" class="rp-ax">' + fmt(bs.start) + '</text><text x="' + x(days) + '" y="' + (Hd - 8) + '" text-anchor="end" class="rp-ax">' + fmt(bs.end) + "</text></svg>" +
-        '<div class="rp-leg row"><span><i style="background:#2a78d6"></i>' + L("Remaining", "Restante") + '</span><span><i class="dash"></i>' + L("Ideal", "Ideal") + "</span></div>";
+      const its = base.filter(function (i) { return i.sprint === bs.id; }), meas = function (l) { return unitSp ? sp(l) : l.length; }, tot = meas(its);
+      const s0 = d2n(bs.start), e0 = d2n(bs.end), lim = Math.min(e0, d2n(td)), rem = [], up = [];
+      for (let t = s0; t <= lim; t += DAY) { const dn = its.filter(function (i) { return cat(i) === "done" && i.doneAt && i.doneAt <= t + DAY; }); rem.push([t, tot - meas(dn)]); up.push([t, meas(dn)]); }
+      const u = unitSp ? "SP" : L("items", "itens");
+      burn = lineChart([{ n: L("Ideal", "Ideal"), c: "#8a94a6", dash: 1, pts: [[s0, tot], [e0, 0]] }, { n: L("Remaining", "Restante"), c: "#2a78d6", pts: rem }], s0, e0, tot, u, "Burndown");
+      bup = lineChart([{ n: L("Scope", "Escopo"), c: "#8a94a6", dash: 1, pts: [[s0, tot], [e0, tot]] }, { n: L("Done", "Concluído"), c: "#1baf7a", pts: up }], s0, e0, tot, u, "Burnup");
+      const dn = its.filter(function (i) { return cat(i) === "done"; }), left = its.filter(function (i) { return cat(i) !== "done"; });
+      const blk = its.filter(function (i) { return blocksOf(i).some(function (b) { return b.since >= s0 && b.since <= e0 + DAY; }); });
+      sprintRep = '<section class="rp-card rp-sprint"><h3>' + IC("sprint", 16) + " " + L("Sprint report", "Relatório da sprint") + " · " + esc(bs.name) + '</h3><p class="muted small">' + fmt(bs.start) + " – " + fmt(bs.end) + (bs.goal ? " · " + L("Goal: ", "Objetivo: ") + esc(bs.goal) : "") + "</p>" +
+        '<div class="flow-m"><div><span>' + L("Committed", "Comprometido") + "</span><b>" + nf(tot) + "</b><small>" + u + "</small></div><div><span>" + L("Delivered", "Entregue") + "</span><b>" + nf(meas(dn)) + "</b><small>" + pct(meas(dn), tot) + "</small></div><div><span>" + L("Not finished", "Não concluído") + "</span><b>" + nf(meas(left)) + "</b><small>" + left.length + " " + L("items", "itens") + '</small></div><div class="bl"><span>' + L("Impediments", "Impedimentos") + "</span><b>" + blk.length + "</b><small>" + L("in the sprint", "na sprint") + "</small></div></div>" +
+        (left.length ? '<h3 class="bd-h3">' + L("Carried over / still open", "Fica para a próxima / em aberto") + '</h3><table class="rp-t"><tbody>' + left.slice(0, 12).map(function (i) { return '<tr data-open="' + i.id + '"><td><b>' + esc(i.key || "") + "</b> " + esc(i.title) + "</td><td>" + esc(statusOf(i).name) + '</td><td class="n">' + (SP ? nf(Number(i.points) || 0) + " SP" : "") + "</td></tr>"; }).join("") + "</tbody></table>" : "") + "</section>";
+    }
+    /* planned × actual (S-curve) for schedules */
+    let scurve = "";
+    if (scheduleOn()) {
+      const sch = W.filter(function (i) { return i.end; });
+      if (sch.length) {
+        const st0 = Math.min.apply(null, sch.map(function (i) { return d2n(i.start || i.end); })), en0 = Math.max.apply(null, sch.map(function (i) { return d2n(i.end); }));
+        const span = Math.max(DAY, en0 - st0), step = Math.max(DAY, Math.ceil(span / 40 / DAY) * DAY), pl = [], ac = [], nowN = Date.now();
+        for (let t = st0; t <= en0 + step; t += step) { const tt = Math.min(t, en0); pl.push([tt, sch.filter(function (i) { return d2n(i.end) <= tt; }).length / sch.length * 100]); if (tt <= nowN) ac.push([tt, sch.filter(function (i) { return i.doneAt && i.doneAt <= tt + DAY; }).length / sch.length * 100]); if (tt === en0) break; }
+        scurve = '<section class="rp-card"><h3>' + L("Planned × actual (schedule)", "Planejado × realizado (cronograma)") + "</h3>" + lineChart([{ n: L("Planned", "Planejado"), c: "#8a94a6", dash: 1, pts: pl }, { n: L("Actual", "Realizado"), c: "#2a78d6", pts: ac }], st0, en0, 100, "%", L("Planned × actual", "Planejado × realizado")) + "</section>";
+      }
+    }
+    let cfd = "";
+    if (cfdOn() && W.length) {
+      const sp0 = rpt.sprint && bs && bs.start ? d2n(bs.start) : d2n(td) - 30 * DAY, sp1 = rpt.sprint && bs && bs.end ? Math.min(d2n(bs.end), d2n(td)) : d2n(td);
+      cfd = '<section class="rp-card"><h3>CFD · ' + L("cumulative flow", "fluxo cumulativo") + ' <small class="muted">(' + (rpt.sprint ? esc(bs ? bs.name : "") : L("last 30 days", "últimos 30 dias")) + ")</small></h3>" + cfdChart(W, sp0, sp1) + "</section>";
     }
     const tbl = function (head, rows, tot) { return '<div class="rp-tw"><table class="rp-t"><thead><tr>' + head.map(function (h, k) { return "<th" + (k ? ' class="n"' : "") + ">" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows.map(function (r) { return "<tr>" + r.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody>" + (tot ? "<tfoot><tr>" + tot.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr></tfoot>" : "") + "</table></div>"; };
     const sum = function (k) { return sprRows.reduce(function (n, r) { return n + (r[k] || 0); }, 0); };
-    let mb = 0, ma = 0; W.forEach(function (i) { mb += Number(i.budget) || 0; ma += Number(i.actual) || 0; });
+    const MN = method().name;
     v.innerHTML = '<div class="rp">' +
       '<div class="rp-filters">' +
-      "<label>" + L("Sprint / cycle", "Sprint / ciclo") + sel("sprint", rpt.sprint, sps.map(function (S) { return [S.id, S.name]; })) + "</label>" +
+      (sps.length ? "<label>" + L("Sprint / cycle", "Sprint / ciclo") + sel("sprint", rpt.sprint, sps.map(function (S) { return [S.id, S.name]; })) + "</label>" : "") +
       "<label>" + L("Type", "Tipo") + sel("type", rpt.type, Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return [t, TYPES[t].name]; })) + "</label>" +
       "<label>Status" + sel("status", rpt.status, statuses().map(function (x) { return [x.id, x.name]; })) + "</label>" +
       "<label>" + L("Assignee", "Responsável") + sel("who", rpt.who, ppl.map(function (m) { return [m.email, m.name || m.email]; }).concat([["_", L("Unassigned", "Sem responsável")]])) + "</label>" +
       "<label>" + L("Epic / initiative", "Épico / iniciativa") + sel("epic", rpt.epic, conts.map(function (c) { return [c.id, (c.key ? c.key + " " : "") + c.title]; })) + "</label>" +
-      '<label>' + L("Measure", "Medida") + '<select data-rp="unit"><option value="sp"' + (unitSp ? " selected" : "") + '>Story points</option><option value="items"' + (!unitSp ? " selected" : "") + ">" + L("Items", "Itens") + "</option></select></label>" +
-      '<button class="pl-btn sm ghost" id="rpCsv">' + IC("export", 14) + " CSV</button></div>" +
-      '<div class="rp-tiles">' +
-      tile("list", nf(W.length), L("Items", "Itens")) + tile("objective", nf(spPl), L("SP planned", "SP planejados")) + tile("task", nf(spDn), L("SP delivered", "SP entregues"), "good") +
-      tile("calendar", nf(spPl - spDn), L("SP remaining", "SP restantes")) + tile("kr", pct(spDn, spPl), L("% delivered (SP)", "% entregue (SP)")) + tile("bell", nf(noSp), L("Items without SP", "Itens sem SP"), noSp ? "warn" : "") + "</div>" +
-      '<div class="rp-tiles sm">' +
-      tile("task", nf(W.filter(function (i) { return i.doneAt && now - i.doneAt <= D7; }).length), L("completed in the last 7 days", "concluídos nos últimos 7 dias")) +
-      tile("pencil", nf(W.filter(function (i) { return i.updated && now - i.updated <= D7; }).length), L("updated in the last 7 days", "atualizados nos últimos 7 dias")) +
-      tile("plus", nf(W.filter(function (i) { return i.created && now - i.created <= D7; }).length), L("created in the last 7 days", "criados nos últimos 7 dias")) +
-      tile("calendar", nf(W.filter(function (i) { return i.end && i.end >= td && i.end <= in7 && cat(i) !== "done"; }).length), L("due in the next 7 days", "vencem nos próximos 7 dias")) +
-      tile("bell", nf(W.filter(overdue).length), L("overdue", "em atraso"), W.filter(overdue).length ? "bad" : "") + "</div>" +
+      (SP ? '<label>' + L("Measure", "Medida") + '<select data-rp="unit"><option value="sp"' + (unitSp ? " selected" : "") + '>Story points</option><option value="items"' + (!unitSp ? " selected" : "") + ">" + L("Items", "Itens") + "</option></select></label>" : "") +
+      '<span class="rp-acts">' + (canEdit ? '<button class="pl-btn sm ghost" id="rpTiles" title="' + L("Choose the big numbers", "Escolher os números") + '">' + IC("settings", 14) + " " + L("Numbers", "Números") + "</button>" : "") +
+      '<button class="pl-btn sm ghost" id="rpCsv">' + IC("export", 14) + ' CSV</button><button class="pl-btn sm ghost" id="rpPdf">' + IC("print", 14) + ' PDF</button><button class="pl-btn sm" id="rpOne">' + IC("dashboard", 14) + " One page</button></span></div>" +
+      '<p class="rp-mode muted small">' + IC(method().icon, 13) + " " + esc(MN) + " · " + (SP ? L("estimated in story points", "estimado em story points") : L("measured in items (no story points)", "medido em itens (sem story points)")) + (canEdit ? ' · <a href="#" id="rpCfg">' + L("change", "alterar") + "</a>" : "") + "</p>" +
+      (showT.filter(function (t) { return !t.sm; }).length ? '<div class="rp-tiles">' + showT.filter(function (t) { return !t.sm; }).map(tile).join("") + "</div>" : "") +
+      (showT.filter(function (t) { return t.sm; }).length ? '<div class="rp-tiles sm">' + showT.filter(function (t) { return t.sm; }).map(tile).join("") + "</div>" : "") +
       '<div class="rp-grid3">' +
       '<section class="rp-card"><h3>' + L("Items by status", "Itens por status") + "</h3>" + donut(statusRows, W.length, L("Items by status", "Itens por status")) + "</section>" +
       '<section class="rp-card"><h3>' + L("Items by type", "Itens por tipo") + "</h3>" + donut(typeRows, W.length, L("Items by type", "Itens por tipo")) + "</section>" +
       '<section class="rp-card"><h3>' + L("Items by assignee", "Itens por responsável") + "</h3>" + donut(whoRows, W.length, L("Items by assignee", "Itens por responsável")) + "</section></div>" +
+      (cfd || scurve ? '<div class="rp-grid2">' + cfd + scurve + "</div>" : "") +
       flowSection(W) +
-      (sprRows.length ? '<div class="rp-grid2">' +
-        '<section class="rp-card"><h3>' + L("Sprint delivery · story points", "Entrega por sprint · story points") + "</h3>" + tbl(["Sprint", L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes"), L("No SP (items)", "Sem SP (itens)"), L("% delivered", "% entregue")], sprRows.map(function (r) { return [esc(r.n), nf(r.sp), nf(r.dn), nf(r.rm), nf(r.noSp), pct(r.dn, r.sp)]; }), ["Total", nf(sum("sp")), nf(sum("dn")), nf(sum("rm")), nf(sum("noSp")), pct(sum("dn"), sum("sp"))]) + "</section>" +
-        '<section class="rp-card"><h3>' + L("Planned × delivered × remaining (SP)", "Planejado × entregue × restante (SP)") + '</h3><div class="rp-scroll">' + bars(sprRows, [{ k: "sp", n: L("SP planned", "SP planejados"), c: "#2a78d6" }, { k: "dn", n: L("SP delivered", "SP entregues"), c: "#1baf7a" }, { k: "rm", n: L("SP remaining", "SP restantes"), c: "#6250d6" }], "SP") + "</div></section></div>" +
+      (sprRows.length ? (sprintRep ? '<div class="rp-grid2">' + sprintRep + '<section class="rp-card"><h3>Burndown · ' + esc(bs.name) + "</h3>" + burn + '<h3 class="bd-h3">Burnup · ' + esc(bs.name) + "</h3>" + bup + "</section></div>" : "") +
+        (SP ? '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Sprint delivery · story points", "Entrega por sprint · story points") + "</h3>" + tbl(["Sprint", L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes"), L("No SP (items)", "Sem SP (itens)"), L("% delivered", "% entregue")], sprRows.map(function (r) { return [esc(r.n), nf(r.sp), nf(r.dn), nf(r.rm), nf(r.noSp), pct(r.dn, r.sp)]; }), ["Total", nf(sum("sp")), nf(sum("dn")), nf(sum("rm")), nf(sum("noSp")), pct(sum("dn"), sum("sp"))]) + "</section>" +
+          '<section class="rp-card"><h3>' + L("Velocity · planned × delivered (SP)", "Velocidade · planejado × entregue (SP)") + '</h3><div class="rp-scroll">' + bars(sprRows, [{ k: "sp", n: L("SP planned", "SP planejados"), c: "#2a78d6" }, { k: "dn", n: L("SP delivered", "SP entregues"), c: "#1baf7a" }, { k: "rm", n: L("SP remaining", "SP restantes"), c: "#6250d6" }], "SP") + "</div></section></div>" : "") +
         '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Sprint delivery · items", "Entrega por sprint · itens") + "</h3>" + tbl(["Sprint", L("Items", "Itens"), L("Items done", "Itens concluídos"), L("Items remaining", "Itens restantes"), L("% done", "% concluído")], sprRows.map(function (r) { return [esc(r.n), nf(r.items), nf(r.idone), nf(r.items - r.idone), pct(r.idone, r.items)]; }), ["Total", nf(sum("items")), nf(sum("idone")), nf(sum("items") - sum("idone")), pct(sum("idone"), sum("items"))]) + "</section>" +
-        '<section class="rp-card"><h3>Burndown' + (bs ? " · " + esc(bs.name) : "") + "</h3>" + (burn || '<p class="muted small">' + L("Start a sprint (with dates) to see its burndown.", "Inicie uma sprint (com datas) para ver o burndown.") + "</p>") + "</section></div>"
-        : '<section class="rp-card rp-hint"><p class="muted small">' + L("Sprint reports (story points per sprint, planned × delivered, burndown) appear when the planning has sprints – use the Scrum method or add a “Sprint board (Scrum)” in Boards.", "Os relatórios de sprint (story points por sprint, planejado × entregue, burndown) aparecem quando o planejamento tem sprints – use o método Scrum ou adicione um “Quadro da sprint (Scrum)” em Quadros.") + "</p></section>") +
-      '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Epics · delivered and remaining", "Épicos · entregue e restante") + " (" + (unitSp ? "SP" : L("items", "itens")) + ")</h3>" + (epRows.length ? hstack(epRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No items linked to epics yet.", "Ainda não há itens ligados a épicos.") + "</p>") + "</section>" +
-      '<section class="rp-card"><h3>' + L("Budget × actual", "Orçado × realizado") + "</h3>" + (mb || ma ? '<div class="rp-money"><div><span>' + L("Budget", "Orçado") + "</span><b>" + money(mb) + "</b></div><div><span>" + L("Actual", "Realizado") + '</span><b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></div><div><span>" + L("Used", "Consumido") + "</span><b>" + pct(ma, mb) + '</b></div></div><span class="pbar big"><i style="width:' + Math.min(100, mb ? ma / mb * 100 : 0) + "%;background:" + (ma > mb ? "#e5484d" : "#1baf7a") + '"></i></span>' : '<p class="muted small">' + L("Fill in budget and actual on the items to follow the costs.", "Preencha orçado e realizado nos itens para acompanhar os custos.") + "</p>") + "</section></div>" +
+        (SP ? "" : '<section class="rp-card"><h3>' + L("Items per sprint", "Itens por sprint") + '</h3><div class="rp-scroll">' + bars(sprRows, [{ k: "items", n: L("Items", "Itens"), c: "#2a78d6" }, { k: "idone", n: L("Done", "Concluídos"), c: "#1baf7a" }], L("items", "itens")) + "</div></section>") + "</div>"
+        : (info.method === "scrum" || SP ? '<section class="rp-card rp-hint"><p class="muted small">' + L("Sprint reports (sprint report, burndown, burnup and velocity) appear when the planning has sprints.", "Os relatórios de sprint (relatório da sprint, burndown, burnup e velocidade) aparecem quando o planejamento tem sprints.") + "</p></section>" : "")) +
+      '<div class="rp-grid2"><section class="rp-card"><h3>' + (info.method === "waterfall" ? L("Phases · delivered and remaining", "Fases · entregue e restante") : L("Epics · delivered and remaining", "Épicos · entregue e restante")) + " (" + (unitSp ? "SP" : L("items", "itens")) + ")</h3>" + (epRows.length ? hstack(epRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No items linked to epics yet.", "Ainda não há itens ligados a épicos.") + "</p>") + "</section>" +
+      (BG ? '<section class="rp-card"><h3>' + L("Budget × actual", "Orçado × realizado") + "</h3>" + (X.mb || X.ma ? '<div class="rp-money"><div><span>' + L("Budget", "Orçado") + "</span><b>" + money(X.mb) + "</b></div><div><span>" + L("Actual", "Realizado") + '</span><b class="' + (X.ma > X.mb && X.mb ? "late" : "") + '">' + money(X.ma) + "</b></div><div><span>" + L("Used", "Consumido") + "</span><b>" + pct(X.ma, X.mb) + '</b></div></div><span class="pbar big"><i style="width:' + Math.min(100, X.mb ? X.ma / X.mb * 100 : 0) + "%;background:" + (X.ma > X.mb ? "#e5484d" : "#1baf7a") + '"></i></span>' : '<p class="muted small">' + L("Fill in budget and actual on the items to follow the costs.", "Preencha orçado e realizado nos itens para acompanhar os custos.") + "</p>") + "</section>" : "") + "</div>" +
       '<p class="muted small rp-foot">' + L("Updated live from this planning", "Atualizado ao vivo a partir deste planejamento") + " · " + new Date().toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { dateStyle: "short", timeStyle: "short" }) + "</p></div>";
     v.querySelectorAll("[data-rp]").forEach(function (sl) { sl.onchange = function () { rpt[sl.dataset.rp] = sl.value; reportsView(v); }; });
     v.querySelectorAll(".rp-t tr[data-open]").forEach(function (r) { r.onclick = function () { openDrawer(r.dataset.open); }; });
+    const tb = document.getElementById("rpTiles"); if (tb) tb.onclick = function () { tilesDialog(allT); };
+    const cf = document.getElementById("rpCfg"); if (cf) cf.onclick = function (e) { e.preventDefault(); planSettingsDialog(); };
+    document.getElementById("rpPdf").onclick = function () { document.body.classList.add("print-rp"); setTimeout(function () { window.print(); document.body.classList.remove("print-rp"); }, 50); };
+    document.getElementById("rpOne").onclick = function () { onePage(W, X, showT); };
     document.getElementById("rpCsv").onclick = function () {
       const q = function (x) { x = x == null ? "" : String(x); return /[",;\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
-      const lines = [["Sprint", "SP planejados", "SP entregues", "SP restantes", "Sem SP (itens)", "Itens", "Itens concluídos"].join(",")].concat(sprRows.map(function (r) { return [r.n, r.sp, r.dn, r.rm, r.noSp, r.items, r.idone].map(q).join(","); }));
-      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" })); a.download = (info.title || "planning") + "-relatorio-sprints.csv"; a.click();
+      const lines = [[L("Report", "Relatório"), info.title].map(q).join(";"), [L("Method", "Método"), MN].map(q).join(";"), [L("Generated", "Gerado em"), new Date().toLocaleString(window.MB_LOCALE || "pt-BR")].map(q).join(";"), "", [L("Indicator", "Indicador"), L("Value", "Valor")].map(q).join(";")]
+        .concat(showT.map(function (t) { return [t.l, t.v].map(q).join(";"); }));
+      if (sprRows.length) { lines.push("", ["Sprint"].concat(SP ? [L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes")] : []).concat([L("Items", "Itens"), L("Items done", "Itens concluídos")]).map(q).join(";")); sprRows.forEach(function (r) { lines.push([r.n].concat(SP ? [r.sp, r.dn, r.rm] : []).concat([r.items, r.idone]).map(q).join(";")); }); }
+      lines.push("", [L("Key", "Chave"), L("Title", "Título"), L("Type", "Tipo"), "Status", L("Assignee", "Responsável"), L("Start", "Início"), L("End", "Fim")].concat(SP ? ["Story points"] : []).concat(["Lead time (d)", "Cycle time (d)"]).map(q).join(";"));
+      W.forEach(function (i) { const f = flowOf(i) || {}; lines.push([i.key, i.title, (TYPES[i.type] || TYPES.task).name, statusOf(i).name, i.assignee ? memberName(i.assignee) : "", i.start, i.end].concat(SP ? [i.points] : []).concat([f.done ? nf(f.net / DAY, 1) : "", f.done ? nf(f.downNet / DAY, 1) : ""]).map(q).join(";")); });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" })); a.download = (info.title || "planning") + "-relatorio.csv"; a.click();
     };
+  }
+  /* one-page status report (print / save as PDF) */
+  function onePage(W, X, showT) {
+    const td = today(), in14 = n2d(d2n(td) + 14 * DAY), all = items();
+    const ms = all.filter(function (i) { return i.type === "milestone" && i.end; }).sort(function (a, b) { return a.end < b.end ? -1 : 1; });
+    const msLate = ms.filter(function (i) { return cat(i) !== "done" && i.end < td; }), msNext = ms.filter(function (i) { return cat(i) !== "done" && i.end >= td; }).slice(0, 5);
+    const next = W.filter(function (i) { return cat(i) !== "done" && i.end && i.end >= td && i.end <= in14; }).sort(function (a, b) { return a.end < b.end ? -1 : 1; }).slice(0, 8);
+    const risks = W.filter(overdue).slice(0, 6), blk = W.map(function (i) { return { i: i, b: openBlock(i) }; }).filter(function (x) { return x.b; }).slice(0, 6);
+    const os = okrs();
+    const health = X.overdue || blk.length ? (X.overdue > 5 || msLate.length ? ["bad", L("Off track", "Fora do plano")] : ["warn", L("Attention", "Atenção")]) : ["good", L("On track", "No plano")];
+    const li = function (i, extra) { return "<li><b>" + esc(i.key || "") + "</b> " + esc(i.title) + (extra ? ' <span class="m">' + extra + "</span>" : "") + "</li>"; };
+    const box = function (t, body) { return "<section><h2>" + t + "</h2>" + body + "</section>"; };
+    const none = '<p class="m">' + L("Nothing to report.", "Nada a reportar.") + "</p>";
+    const html = '<!doctype html><html lang="' + (PT ? "pt-BR" : "en") + '"><head><meta charset="utf-8"><title>One page · ' + esc(info.title) + "</title><style>" +
+      "@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font:12px/1.45 Inter,Arial,sans-serif;color:#172036;margin:0;padding:18px}header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0e1a33;padding-bottom:10px;margin-bottom:12px}" +
+      "h1{font:700 20px Poppins,Arial,sans-serif;margin:0}h2{font:700 13px Poppins,Arial,sans-serif;margin:0 0 6px;color:#1f4fa3;text-transform:uppercase;letter-spacing:.03em}.m{color:#626a80}" +
+      ".st{padding:6px 12px;border-radius:99px;font-weight:700}.st.good{background:#e3f6ec;color:#1b7f4b}.st.warn{background:#fff5c8;color:#8a6400}.st.bad{background:#fde7e9;color:#b42318}" +
+      ".t{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}.t div{border:1px solid #e3e7ef;border-radius:8px;padding:8px}.t b{display:block;font:700 18px Poppins,Arial,sans-serif}.t span{color:#4a5468;font-size:11px}" +
+      ".g{display:grid;grid-template-columns:1fr 1fr;gap:12px}section{border:1px solid #e3e7ef;border-radius:8px;padding:10px}ul{margin:0;padding-left:16px}li{margin:2px 0}.bar{height:8px;background:#eef1f6;border-radius:6px;overflow:hidden;margin:3px 0 6px}.bar i{display:block;height:100%;background:#1baf7a}" +
+      ".pb{position:fixed;bottom:14px;right:14px;padding:8px 14px;border:0;border-radius:8px;background:#2f80ed;color:#fff;font-weight:700;cursor:pointer}@media print{.pb{display:none}}</style></head><body>" +
+      '<button class="pb" onclick="print()">' + L("Print / save PDF", "Imprimir / salvar PDF") + "</button>" +
+      "<header><div><h1>" + esc(info.title) + '</h1><div class="m">' + esc(wsInfo.name || "") + " · " + esc(method().name) + " · " + new Date().toLocaleDateString(window.MB_LOCALE || "pt-BR") + '</div></div><span class="st ' + health[0] + '">' + health[1] + "</span></header>" +
+      '<div class="t">' + showT.filter(function (t) { return !t.sm; }).slice(0, 8).map(function (t) { return "<div><b>" + t.v + "</b><span>" + t.l + "</span></div>"; }).join("") + "</div>" +
+      '<div class="g">' +
+      box(L("Milestones", "Marcos"), (msLate.length || msNext.length ? "<ul>" + msLate.map(function (i) { return li(i, "⚠ " + fmt(i.end)); }).join("") + msNext.map(function (i) { return li(i, fmt(i.end)); }).join("") + "</ul>" : none)) +
+      box("OKRs", os.length ? os.slice(0, 5).map(function (o) { const p = objProgress(o); return "<div><b>" + esc(o.title) + '</b> <span class="m">' + p + '%</span><div class="bar"><i style="width:' + p + '%"></i></div></div>'; }).join("") : none) +
+      box(L("Risks and impediments", "Riscos e impedimentos"), risks.length || blk.length ? "<ul>" + blk.map(function (x) { return li(x.i, L("blocked: ", "bloqueado: ") + esc(x.b.desc || (BLOCKT()[x.b.type] || {}).name || "")); }).join("") + risks.map(function (i) { return li(i, L("overdue since ", "atrasado desde ") + fmt(i.end)); }).join("") + "</ul>" : none) +
+      box(L("Next steps (14 days)", "Próximos passos (14 dias)"), next.length ? "<ul>" + next.map(function (i) { return li(i, fmt(i.end) + (i.assignee ? " · " + esc(memberName(i.assignee)) : "")); }).join("") + "</ul>" : none) +
+      (budgetOn() && (X.mb || X.ma) ? box(L("Budget", "Orçamento"), "<div>" + L("Budget", "Orçado") + ": <b>" + money(X.mb) + "</b> · " + L("Actual", "Realizado") + ": <b>" + money(X.ma) + "</b> (" + pct(X.ma, X.mb) + ')</div><div class="bar"><i style="width:' + Math.min(100, X.mb ? X.ma / X.mb * 100 : 0) + "%;background:" + (X.ma > X.mb ? "#e5484d" : "#1baf7a") + '"></i></div>') : "") +
+      "</div><p class=\"m\" style=\"margin-top:10px\">CM Collaborator · " + L("generated from the planning", "gerado a partir do planejamento") + "</p></body></html>";
+    const w = window.open("", "_blank"); if (!w) { toast(L("Allow pop-ups to open the one page.", "Permita pop-ups para abrir o one page.")); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  }
+  /* planning settings: estimation, budget, indicators tab */
+  function planSettingsDialog() {
+    const s = data.settings || {};
+    const tri = function (name, val, auto) { return '<select name="' + name + '"><option value="auto"' + (val !== true && val !== false ? " selected" : "") + ">" + L("Automatic", "Automático") + " (" + (auto ? L("on", "ligado") : L("off", "desligado")) + ')</option><option value="on"' + (val === true ? " selected" : "") + ">" + L("On", "Ligado") + '</option><option value="off"' + (val === false ? " selected" : "") + ">" + L("Off", "Desligado") + "</option></select>"; };
+    const autoSP = info.method === "scrum" || (info.method === "hybrid" && boardsList().some(function (b) { return b.kind === "scrum"; })), autoB = info.method === "waterfall" || items().some(function (i) { return Number(i.budget) || Number(i.actual); });
+    modal("<h2>" + IC("settings", 18) + " " + L("Planning settings", "Configurações do planejamento") + '</h2><p class="muted small">' + esc(method().name) + " · " + L("the reports follow these choices.", "os relatórios seguem estas escolhas.") + '</p><form class="pl-form" id="psF">' +
+      "<label>" + L("Story points (Scrum estimation)", "Story points (estimativa Scrum)") + tri("sp", s.useSP, autoSP) + '<small class="muted">' + L("Roadmap and Waterfall measure in items, % done and lead/cycle time. Turn on for a Roadmap + Scrum (hybrid) planning.", "Roadmap e Cascata medem em itens, % concluído e lead/cycle time. Ligue para um planejamento Roadmap + Scrum (híbrido).") + "</small></label>" +
+      "<label>" + L("Budget", "Orçamento") + tri("bg", s.useBudget, autoB) + '<small class="muted">' + L("Off hides the Budget tab and the costs in the reports.", "Desligado esconde a aba Orçamento e os custos nos relatórios.") + "</small></label>" +
+      '<label class="chk"><input type="checkbox" name="kpi"' + (kpiOn() ? " checked" : "") + "> " + L("Show the Indicators tab (own KPIs)", "Mostrar a aba Indicadores (KPIs próprios)") + "</label>" +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#psF"), tv = function (x) { return x === "on" ? true : x === "off" ? false : null; };
+      f.onsubmit = function (e) { e.preventDefault(); const u = {}; u["settings/useSP"] = tv(f.sp.value); u["settings/useBudget"] = tv(f.bg.value); u["settings/kpiTab"] = f.kpi.checked; db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Settings saved", "Configurações salvas")); }, function (er) { toast(er.message); }); };
+    });
   }
   /* board options per planning (kept in this browser) */
   function kbOpt() { try { return JSON.parse(localStorage.getItem("cmcollab:kb:" + ID) || "{}"); } catch (e) { return {}; } }
@@ -1449,13 +1656,13 @@
     const opt = function (arr, val) { return arr.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === (val || "") ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join(""); };
     const ppl = [["", "—"]].concat(Object.keys(members).map(function (k) { return [members[k].email, members[k].name || members[k].email]; }));
     const dis = canEdit ? "" : " disabled";
-    v.innerHTML = '<div class="ls-wrap"><table class="ls"><thead><tr><th>' + L("Key", "Chave") + "</th><th>" + L("Title", "Título") + "</th><th>" + L("Type", "Tipo") + "</th><th>" + L("Status", "Estado") + "</th><th>" + L("Assignee", "Responsável") + "</th><th>" + L("Start", "Início") + "</th><th>" + L("End", "Fim") + "</th><th>%</th><th>" + L("Points", "Pontos") + "</th></tr></thead><tbody>" +
+    v.innerHTML = '<div class="ls-wrap"><table class="ls"><thead><tr><th>' + L("Key", "Chave") + "</th><th>" + L("Title", "Título") + "</th><th>" + L("Type", "Tipo") + "</th><th>" + L("Status", "Estado") + "</th><th>" + L("Assignee", "Responsável") + "</th><th>" + L("Start", "Início") + "</th><th>" + L("End", "Fim") + "</th><th>%</th><th class='sp-c'>" + L("Points", "Pontos") + "</th></tr></thead><tbody>" +
       rs.map(function (r) {
         const it = r.it, T = TYPES[it.type] || TYPES.task;
         return '<tr data-id="' + it.id + '"' + (overdue(it) ? ' class="late"' : "") + '><td class="tk">' + esc(it.key || "") + '</td><td><span style="padding-left:' + r.depth * 16 + 'px"></span><span class="ti" style="color:' + T.color + '">' + T.icon + '</span> <a href="#" data-open="' + it.id + '">' + esc(it.title) + "</a></td>" +
           '<td>' + esc(T.name) + '</td><td><select data-f="status"' + dis + ">" + opt(statuses().map(function (s) { return [s.id, s.name]; }), statusOf(it).id) + '</select></td><td><select data-f="assignee"' + dis + ">" + opt(ppl, it.assignee) + "</select></td>" +
           '<td><input type="date" data-f="start" value="' + esc(it.start || "") + '"' + dis + '></td><td><input type="date" data-f="end" value="' + esc(it.end || "") + '"' + dis + "></td>" +
-          '<td><input type="number" min="0" max="100" step="5" data-f="progress" value="' + esc(it.progress == null ? "" : it.progress) + '"' + dis + '></td><td><input type="number" min="0" step="1" data-f="points" value="' + esc(it.points == null ? "" : it.points) + '"' + dis + "></td></tr>";
+          '<td><input type="number" min="0" max="100" step="5" data-f="progress" value="' + esc(it.progress == null ? "" : it.progress) + '"' + dis + '></td><td class="sp-c"><input type="number" min="0" step="1" data-f="points" value="' + esc(it.points == null ? "" : it.points) + '"' + dis + "></td></tr>";
       }).join("") + "</tbody></table>" + (rs.length ? "" : '<div class="pl-empty">' + L("Nothing here yet.", "Ainda não há nada aqui.") + "</div>") + "</div>";
     v.querySelectorAll("[data-open]").forEach(function (a) { a.onclick = function (e) { e.preventDefault(); openDrawer(a.dataset.open); }; });
     v.querySelectorAll("[data-f]").forEach(function (inp) {
@@ -1533,7 +1740,7 @@
       "<label>" + L("Status", "Status") + '<select name="status"' + dis + ">" + statuses().map(function (s) { return '<option value="' + s.id + '"' + (statusOf(it).id === s.id ? " selected" : "") + ">" + esc(s.name) + "</option>"; }).join("") + "</select></label></div>" +
       "<label>" + L("Assignee", "Responsável") + '<select name="assignee"' + dis + '><option value="">' + L("Unassigned", "Sem responsável") + "</option>" + ppl.map(function (m) { return '<option value="' + esc(m.email) + '"' + (m.email === it.assignee ? " selected" : "") + ">" + esc(m.name || m.email) + " · " + esc(m.email) + "</option>"; }).join("") + "</select></label>" +
       '<div class="g2"><label>' + L("Start", "Início") + '<input type="date" name="start" value="' + esc(it.start || "") + '"' + dis + "></label><label>" + L("Due / end", "Prazo / fim") + '<input type="date" name="end" value="' + esc(it.end || "") + '"' + dis + "></label></div>" +
-      '<div class="g2"><label>' + L("Progress %", "Progresso %") + '<input type="number" min="0" max="100" step="5" name="progress" value="' + esc(it.progress == null ? "" : it.progress) + '"' + dis + "></label><label>" + L("Story points", "Story points") + '<input type="number" min="0" step="1" name="points" value="' + esc(it.points == null ? "" : it.points) + '"' + dis + "></label></div>" +
+      '<div class="g2"><label>' + L("Progress %", "Progresso %") + '<input type="number" min="0" max="100" step="5" name="progress" value="' + esc(it.progress == null ? "" : it.progress) + '"' + dis + "></label><label class='sp-f'>" + L("Story points", "Story points") + '<input type="number" min="0" step="1" name="points" value="' + esc(it.points == null ? "" : it.points) + '"' + dis + "></label></div>" +
       '<div class="g2"><label>' + L("Budget", "Orçado") + " (" + cur() + ')<input type="number" min="0" step="any" name="budget" value="' + esc(it.budget == null ? "" : it.budget) + '"' + dis + "></label><label>" + L("Actual", "Realizado") + " (" + cur() + ')<input type="number" min="0" step="any" name="actual" value="' + esc(it.actual == null ? "" : it.actual) + '"' + dis + "></label></div>" +
       (isContainer(it) ? (function () { const m = moneyOf(it); return m.b || m.a ? '<p class="d-money">' + IC("kr", 14) + " " + L("Total with child items: budget ", "Total com os itens filhos: orçado ") + money(m.b) + " · " + L("actual ", "realizado ") + "<b" + (m.a > m.b && m.b ? ' class="late"' : "") + ">" + money(m.a) + "</b>" + (m.b ? " (" + Math.round(m.a / m.b * 100) + "%)" : "") + "</p>" : ""; })() : "") +
       (it.type === "initiative" ? "" : "<label>" + (lvl(it.type) === 1 ? L("Initiative", "Iniciativa") : L("Parent (initiative / epic / phase)", "Pai (iniciativa / épico / fase)")) + '<select name="parent"' + dis + '><option value="">—</option>' + parents.map(function (p) { return '<option value="' + p.id + '"' + (p.id === it.parent ? " selected" : "") + ">" + esc((p.key ? p.key + " · " : "") + p.title) + "</option>"; }).join("") + "</select></label>") +
@@ -1708,6 +1915,7 @@
   function moreMenu() {
     const owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email));
     modal("<h2>" + L("Planning options", "Opções do planejamento") + '</h2><div class="pl-menu">' +
+      (canEdit ? '<button data-act="psettings">' + IC("settings") + " " + L("Planning settings (story points, budget, indicators)", "Configurações do planejamento (story points, orçamento, indicadores)") + "</button>" : "") +
       (canEdit ? '<button data-act="workflow">' + IC("settings") + " " + L("Workflow and columns", "Fluxo e colunas") + "</button>" : "") +
       (canEdit ? '<button data-act="alerts">' + IC("bell") + " " + L("E-mail alerts (milestones, key activities, delays)", "Alertas por e-mail (marcos, atividades principais, atrasos)") + "</button>" : "") +
       (canEdit ? '<button data-act="remind">' + IC("send") + " " + L("Send deadline reminders now", "Enviar lembretes de prazo agora") + "</button>" : "") +
@@ -1723,7 +1931,7 @@
       box.querySelectorAll("[data-act]").forEach(function (b) {
         b.onclick = function () {
           close();
-          ({ kpitab: function () { save("settings/kpiTab", !kpiOn()).then(function () { if (kpiOn()) view = "kpi"; }); }, workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog, delete: deletePlanning, alerts: alertsDialog, bulk: function () { bulkCreate(b.dataset.p); } })[b.dataset.act]();
+          ({ psettings: planSettingsDialog, kpitab: function () { save("settings/kpiTab", !kpiOn()).then(function () { if (kpiOn()) view = "kpi"; }); }, workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog, delete: deletePlanning, alerts: alertsDialog, bulk: function () { bulkCreate(b.dataset.p); } })[b.dataset.act]();
         };
       });
     });
