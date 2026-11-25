@@ -740,11 +740,11 @@
     const R = 54, C = 2 * Math.PI * R; let off = 0;
     const segs = rows.filter(function (r) { return r.v > 0; }).map(function (r) {
       const len = total ? r.v / total * C : 0, gap = rows.length > 1 ? Math.min(2, len / 3) : 0;
-      const el = '<circle r="' + R + '" cx="70" cy="70" fill="none" stroke="' + r.c + '" stroke-width="18" stroke-dasharray="' + Math.max(0, len - gap) + " " + (C - Math.max(0, len - gap)) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 70 70)"><title>' + esc(r.n) + ": " + r.v + " (" + pct(r.v, total) + ")</title></circle>";
+      const el = '<circle r="' + R + '" cx="70" cy="70" fill="none" stroke="' + r.c + '" stroke-width="18" stroke-dasharray="' + Math.max(0, len - gap) + " " + (C - Math.max(0, len - gap)) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 70 70)"' + (r.f ? ' data-xf="' + esc(r.f) + '"' : "") + '><title>' + esc(r.n) + ": " + r.v + " (" + pct(r.v, total) + ")</title></circle>";
       off += len; return el;
     }).join("");
-    return '<div class="rp-donut"><svg viewBox="0 0 140 140" role="img" aria-label="' + esc(label) + '"><circle r="' + R + '" cx="70" cy="70" fill="none" stroke="#eef1f6" stroke-width="18"/>' + segs + '<text x="70" y="68" text-anchor="middle" class="rp-big">' + total + '</text><text x="70" y="86" text-anchor="middle" class="rp-sm">' + esc(L("items", "itens")) + "</text></svg>" +
-      '<ul class="rp-leg">' + rows.filter(function (r) { return r.v > 0; }).map(function (r) { return '<li><i style="background:' + r.c + '"></i><span>' + esc(r.n) + "</span><b>" + r.v + "</b></li>"; }).join("") + "</ul></div>";
+    return '<div class="rp-donut"><svg viewBox="0 0 140 140" role="img" aria-label="' + esc(label) + '"><circle class="rp-ring" r="' + R + '" cx="70" cy="70" fill="none" stroke="#eef1f6" stroke-width="18"/>' + segs + '<text x="70" y="68" text-anchor="middle" class="rp-big">' + total + '</text><text x="70" y="86" text-anchor="middle" class="rp-sm">' + esc(L("items", "itens")) + "</text></svg>" +
+      '<ul class="rp-leg">' + rows.filter(function (r) { return r.v > 0; }).map(function (r) { return "<li" + (r.f ? ' data-xf="' + esc(r.f) + '"' : "") + '><i style="background:' + r.c + '"></i><span>' + esc(r.n) + "</span><b>" + r.v + "</b><em>" + pct(r.v, total) + "</em></li>"; }).join("") + "</ul></div>";
   }
   function bars(groups, series, unitLbl) { /* grouped vertical bars, one axis */
     const max = Math.max(1, Math.max.apply(null, groups.map(function (g) { return Math.max.apply(null, series.map(function (s) { return g[s.k] || 0; })); })));
@@ -755,7 +755,7 @@
       const gx = 56 + gi * (series.length * 16 + 26);
       series.forEach(function (s, si) {
         const v = g[s.k] || 0, h = (base - top) * v / max, x = gx + si * 16, y = base - h;
-        out += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + Math.max(h, 0) + '" rx="3" fill="' + s.c + '"><title>' + esc(g.n + " · " + s.n + ": " + nf(v, 0)) + "</title></rect>";
+        out += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + Math.max(h, 0) + '" rx="3" fill="' + s.c + '"' + (g.f ? ' data-xf="' + esc(g.f) + '"' : "") + '><title>' + esc(g.n + " · " + s.n + ": " + nf(v, 0)) + "</title></rect>";
         if (h > 14) out += '<text x="' + (x + bw / 2) + '" y="' + (y - 3) + '" text-anchor="middle" class="rp-val">' + cnum(v) + "</text>";
       });
       out += '<text x="' + (gx + series.length * 8) + '" y="' + (H - 12) + '" text-anchor="middle" class="rp-ax">' + esc(g.n.length > 12 ? g.n.slice(0, 11) + "…" : g.n) + "</text>";
@@ -766,7 +766,7 @@
     const max = Math.max(1, Math.max.apply(null, rows.map(function (r) { return r[a] + r[b]; })));
     return '<div class="rp-hs">' + rows.map(function (r) {
       const wa = r[a] / max * 100, wb = r[b] / max * 100;
-      return '<div class="rp-hr"><span class="n" title="' + esc(r.n) + '">' + esc(r.n) + '</span><span class="tr"><i class="a" style="width:' + wa + '%" title="' + esc(la + ": " + nf(r[a])) + '">' + (wa > 8 ? nf(r[a]) : "") + '</i><i class="b" style="width:' + wb + '%" title="' + esc(lb + ": " + nf(r[b])) + '">' + (wb > 8 ? nf(r[b]) : "") + "</i></span></div>";
+      return '<div class="rp-hr"' + (r.f ? ' data-xf="' + esc(r.f) + '"' : "") + '><span class="n" title="' + esc(r.n) + '">' + esc(r.n) + '</span><span class="tr"><i class="a" style="width:' + wa + '%" title="' + esc(la + ": " + nf(r[a])) + '">' + (wa > 8 ? nf(r[a]) : "") + '</i><i class="b" style="width:' + wb + '%" title="' + esc(lb + ": " + nf(r[b])) + '">' + (wb > 8 ? nf(r[b]) : "") + "</i></span></div>";
     }).join("") + '<div class="rp-leg row"><span><i class="a"></i>' + esc(la) + '</span><span><i class="b"></i>' + esc(lb) + "</span></div></div>";
   }
 
@@ -1334,12 +1334,58 @@
     o += '<text x="' + x0 + '" y="' + (Hd - 8) + '" class="rp-ax">' + fmt(n2d(from)) + '</text><text x="' + x1 + '" y="' + (Hd - 8) + '" text-anchor="end" class="rp-ax">' + fmt(n2d(to)) + "</text></svg>";
     return o + '<div class="rp-leg row">' + series.map(function (s) { return '<span><i' + (s.dash ? ' class="dash"' : ' style="background:' + s.c + '"') + "></i>" + esc(s.n) + "</span>"; }).join("") + "</div>";
   }
+  /* ---------------- Dashboards & reports – BI style (Power BI / Fabric-like) ----------------
+     pages: executive · delivery (incl. year comparison) · sprints · flow (CFD, lead/cycle, throughput) · budget · detail (configurable table)
+     filters: period (all/month/quarter/year/custom), sprint, type, status, assignee, epic/initiative – shown as active chips;
+     clicking a slice/bar cross-filters the page; initiatives → epics → items drill-down with a breadcrumb.
+     branding per planning: settings/brand = { logo (small data URL), theme: dark|light, accent } */
+  function brand() { const b = (data.settings && data.settings.brand) || {}; return { logo: b.logo || "", theme: b.theme === "light" ? "light" : "dark", accent: /^#[0-9a-f]{6}$/i.test(b.accent || "") ? b.accent : "#1baf7a" }; }
+  function rpPageGet() { try { return localStorage.getItem("cmcollab:rppage:" + ID) || "exec"; } catch (e) { return "exec"; } }
+  function rpPageSet(p) { try { localStorage.setItem("cmcollab:rppage:" + ID, p); } catch (e) { /* ignore */ } }
+  function ymd(t) { return n2d(t); }
+  function rpRange() { /* → { from, to, label } in ms (inclusive days) or null for "all" */
+    const td = d2n(today()), per = rpt.per || "all", y = Number(rpt.year) || new Date().getUTCFullYear();
+    if (per === "month") { const v = rpt.month || today().slice(0, 7), a = d2n(v + "-01"), dd = new Date(a); const b = Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth() + 1, 1) - DAY; return { from: a, to: b, label: new Date(a).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { month: "long", year: "numeric", timeZone: "UTC" }) }; }
+    if (per === "quarter") { const q = rpt.quarter || (new Date().getUTCFullYear() + "-Q" + (Math.floor(new Date().getUTCMonth() / 3) + 1)), yy = Number(q.slice(0, 4)), qq = Number(q.slice(-1)); return { from: Date.UTC(yy, (qq - 1) * 3, 1), to: Date.UTC(yy, qq * 3, 1) - DAY, label: q.replace("-", " ") }; }
+    if (per === "year") return { from: Date.UTC(y, 0, 1), to: Date.UTC(y, 11, 31), label: String(y) };
+    if (per === "custom" && rpt.from && rpt.to) return { from: d2n(rpt.from), to: d2n(rpt.to), label: fmt(rpt.from) + " – " + fmt(rpt.to) };
+    return null;
+  }
+  function inRange(i, R) { if (!R) return true; const cr = Number(i.created) || d2n(i.start) || 0, dn = Number(i.doneAt) || 0; return (!cr || cr <= R.to + DAY) && (!dn || dn >= R.from); }
+  function doneIn(i, R) { return cat(i) === "done" && (!R || (i.doneAt && i.doneAt >= R.from && i.doneAt <= R.to + DAY)); }
+  function brandDialog() {
+    const B = brand();
+    modal("<h2>" + IC("dashboard", 18) + " " + L("Dashboard look", "Aparência dos dashboards") + '</h2><p class="muted small">' + L("Company logo and colours of the dashboards, reports, one page and PDF of this planning.", "Logo da empresa e cores dos dashboards, relatórios, one page e PDF deste planejamento.") + '</p><form class="pl-form" id="brF">' +
+      '<label>' + L("Company logo (PNG, JPG or SVG)", "Logo da empresa (PNG, JPG ou SVG)") + '<input type="file" name="logo" accept="image/*"></label><div class="br-pv" id="brPv">' + (B.logo ? '<img src="' + esc(B.logo) + '" alt="logo">' : '<span class="muted small">' + L("No logo yet", "Sem logo ainda") + "</span>") + "</div>" +
+      (B.logo ? '<label class="chk"><input type="checkbox" name="rm"> ' + L("Remove the logo", "Remover o logo") + "</label>" : "") +
+      '<label>' + L("Palette", "Paleta") + '<div class="br-th"><label class="br-opt"><input type="radio" name="th" value="dark"' + (B.theme === "dark" ? " checked" : "") + '><span class="sw dark"></span>' + L("Dark (navy)", "Escura (azul-marinho)") + '</label><label class="br-opt"><input type="radio" name="th" value="light"' + (B.theme === "light" ? " checked" : "") + '><span class="sw light"></span>' + L("Light (white)", "Clara (branca)") + "</label></div></label>" +
+      '<label>' + L("Accent colour", "Cor de destaque") + '<input type="color" name="acc" value="' + esc(B.accent) + '"></label>' +
+      '<div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + L("Cancel", "Cancelar") + '</button><button class="pl-btn primary">' + L("Save", "Salvar") + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#brF"); let logo = null;
+      f.logo.onchange = function () {
+        const file = f.logo.files[0]; if (!file) return;
+        const rd = new FileReader(); rd.onload = function () {
+          const img = new Image(); img.onload = function () {
+            const sc = Math.min(1, 360 / img.width, 140 / img.height), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
+            c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); logo = c.toDataURL("image/png");
+            if (logo.length > 150000) { logo = c.toDataURL("image/jpeg", 0.85); }
+            box.querySelector("#brPv").innerHTML = '<img src="' + logo + '" alt="logo">';
+          }; img.src = rd.result;
+        }; rd.readAsDataURL(file);
+      };
+      f.onsubmit = function (e) {
+        e.preventDefault(); const u = {};
+        u["settings/brand/theme"] = (f.querySelector("[name=th]:checked") || {}).value || "dark"; u["settings/brand/accent"] = f.acc.value;
+        if (logo) u["settings/brand/logo"] = logo; else if (f.rm && f.rm.checked) u["settings/brand/logo"] = null;
+        db.ref("planning/" + ID + "/data").update(u).then(function () { close(); toast(L("Saved", "Salvo")); }, fail);
+      };
+    });
+  }
   function reportsView(v) {
-    const SP = spOn(), BG = budgetOn();
+    const SP = spOn(), BG = budgetOn(), BR = brand(), R = rpRange();
     const sps = Object.keys(data.sprints || {}).map(function (k) { return Object.assign({ id: k }, data.sprints[k]); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     const conts = items().filter(isContainer).sort(byOrder);
     const ppl = Object.keys(members).map(function (k) { return members[k]; }).sort(function (a, b) { return (a.name || a.email).localeCompare(b.name || b.email); });
-    const sel = function (id, cur, opts) { return '<select data-rp="' + id + '"><option value="">' + L("All", "Tudo") + "</option>" + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select>"; };
     const base = items().filter(function (i) { return !isContainer(i) && i.type !== "milestone"; });
     const W = base.filter(function (i) {
       if (rpt.sprint && i.sprint !== rpt.sprint) return false;
@@ -1347,110 +1393,197 @@
       if (rpt.status && statusOf(i).id !== rpt.status) return false;
       if (rpt.who && (i.assignee || "_") !== rpt.who) return false;
       if (rpt.epic && !underOf(i, rpt.epic)) return false;
-      return true;
+      return inRange(i, R);
     });
-    const X = rpStats(W), sp = X.sp, unitSp = SP && rpt.unit !== "items", td = today();
+    const X = rpStats(W), sp = X.sp, unitSp = SP && rpt.unit !== "items", td = today(), meas = function (l) { return unitSp ? sp(l) : l.length; }, U = unitSp ? "SP" : L("items", "itens");
     const allT = rpTiles(W, X), hid = rpHidden(), showT = allT.filter(function (t) { return !hid[t.id]; });
-    const tile = function (t) { return '<div class="rp-tile' + (t.c ? " " + t.c : "") + '"><span class="ic">' + IC(t.ic, 18) + "</span><b>" + t.v + "</b><span>" + t.l + "</span></div>"; };
-    const statusRows = statuses().map(function (x) { return { n: x.name, c: stColor(x), v: W.filter(function (i) { return statusOf(i).id === x.id; }).length }; });
-    const typeRows = Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return { n: TYPES[t].name, c: TYPES[t].color, v: W.filter(function (i) { return i.type === t; }).length }; });
+    if (R) { const dn = W.filter(function (i) { return doneIn(i, R); }); showT.unshift({ id: "_per", ic: "calendar", v: nf(dn.length) + (SP ? " · " + nf(sp(dn)) + " SP" : ""), l: L("Delivered in the period", "Entregue no período"), c: "good" }); }
+    const TIC = { list: "#7b8db0", kr: "#16a3b8", objective: "#2a78d6", task: "#1baf7a", calendar: "#6250d6", bell: "#eda100", clock: "#7c5cff", sprint: "#2a78d6", trend: "#1baf7a", kanban: "#2a78d6", lock: "#e5484d", gantt: "#6250d6", pencil: "#7b8db0", plus: "#2a78d6" };
+    const tile = function (t) { return '<div class="bi-tile' + (t.c ? " " + t.c : "") + '"><span class="l">' + t.l + '</span><b>' + t.v + '</b><span class="ic" style="--c:' + (TIC[t.ic] || BR.accent) + '">' + IC(t.ic, 18) + "</span></div>"; };
+    const card = function (title, body, cls) { return '<section class="rp-card bi-card' + (cls ? " " + cls : "") + '"><h3>' + title + "</h3>" + body + "</section>"; };
+    const tbl = function (head, rows, tot, attrs) { return '<div class="rp-tw"><table class="rp-t"><thead><tr>' + head.map(function (h, k) { return "<th" + (k ? ' class="n"' : "") + ">" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows.map(function (r, ri) { return "<tr" + (attrs && attrs[ri] ? " " + attrs[ri] : "") + ">" + r.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody>" + (tot ? "<tfoot><tr>" + tot.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr></tfoot>" : "") + "</table></div>"; };
+    /* pages */
+    const PAGES = [["exec", "dashboard", L("Executive", "Executivo")], ["delivery", "trend", L("Delivery", "Entrega")]].concat(sps.length ? [["sprints", "sprint", "Sprints"]] : []).concat([["flow", "kanban", L("Flow & CFD", "Fluxo e CFD")]]).concat(BG ? [["budget", "kr", L("Budget", "Orçamento")]] : []).concat([["detail", "list", L("Detail", "Detalhe")]]);
+    let page = rpPageGet(); if (!PAGES.some(function (p) { return p[0] === page; })) page = "exec";
+    const PG = PAGES.find(function (p) { return p[0] === page; });
+    /* rows for charts – each carries the filter it applies when clicked (cross-filter) */
+    const statusRows = statuses().map(function (x) { return { n: x.name, c: stColor(x), v: W.filter(function (i) { return statusOf(i).id === x.id; }).length, f: "status|" + x.id }; });
+    const typeRows = Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return { n: TYPES[t].name, c: TYPES[t].color, v: W.filter(function (i) { return i.type === t; }).length, f: "type|" + t }; });
     const whoAll = ppl.map(function (m) { return m.email; });
-    const whoRows = whoAll.slice(0, 7).map(function (e, k) { return { n: memberName(e), c: RPAL[k], v: W.filter(function (i) { return i.assignee === e; }).length }; });
+    const whoRows = whoAll.slice(0, 7).map(function (e, k) { return { n: memberName(e), c: RPAL[k], v: W.filter(function (i) { return i.assignee === e; }).length, f: "who|" + e }; });
     const others = W.filter(function (i) { return i.assignee && whoAll.slice(0, 7).indexOf(i.assignee) < 0; }).length;
     if (others) whoRows.push({ n: L("Others", "Outros"), c: "#8a94a6", v: others });
-    whoRows.push({ n: L("Unassigned", "Sem responsável"), c: "#c9d1e0", v: W.filter(function (i) { return !i.assignee; }).length });
-    /* sprints (closed sprints use the snapshot taken when they were completed) */
+    whoRows.push({ n: L("Unassigned", "Sem responsável"), c: "#c9d1e0", v: W.filter(function (i) { return !i.assignee; }).length, f: "who|_" });
+    /* drill-down: children containers of the current epic filter (or the top level) */
+    const kids = conts.filter(function (c) { return rpt.epic ? c.parent === rpt.epic : !c.parent || !data.items[c.parent]; });
+    const contRow = function (c) { const its = W.filter(function (i) { return underOf(i, c.id); }), dn = its.filter(function (i) { return cat(i) === "done"; }); return { n: (c.key ? c.key + " " : "") + c.title, a: meas(dn), b: Math.max(0, meas(its) - meas(dn)), f: "epic|" + c.id, t: c.type }; };
+    const drillRows = kids.map(contRow).filter(function (r) { return r.a + r.b > 0; }).sort(function (x, y) { return (y.a + y.b) - (x.a + x.b); }).slice(0, 12);
+    const epicRows = conts.filter(function (c) { return c.type !== "initiative" && (!rpt.epic || underOf(c, rpt.epic) || c.id === rpt.epic); }).map(contRow).filter(function (r) { return r.a + r.b > 0; }).sort(function (x, y) { return (y.a + y.b) - (x.a + x.b); }).slice(0, 10);
+    const initRows = conts.filter(function (c) { return c.type === "initiative"; }).map(contRow).filter(function (r) { return r.a + r.b > 0; }).sort(function (x, y) { return (y.a + y.b) - (x.a + x.b); }).slice(0, 10);
+    const crumbs = (function () { const out = []; let p = rpt.epic, g = 0; while (p && data.items[p] && g++ < 10) { out.unshift(data.items[p]); p = data.items[p].parent; } return out; })();
+    const crumbHtml = '<nav class="bi-crumb"><a href="#" data-xf="epic|">' + L("All", "Tudo") + "</a>" + crumbs.map(function (c) { return ' › <a href="#" data-xf="epic|' + c.id + '">' + esc((TYPES[c.type] || {}).name || "") + ": " + esc(c.title) + "</a>"; }).join("") + "</nav>";
+    /* sprints */
     const sprRows = sps.map(function (S) {
-      const its = W.filter(function (i) { return i.sprint === S.id; }), dn = its.filter(function (i) { return cat(i) === "done"; });
+      const its = base.filter(function (i) { return i.sprint === S.id && (!rpt.type || i.type === rpt.type) && (!rpt.who || (i.assignee || "_") === rpt.who) && (!rpt.epic || underOf(i, rpt.epic)); }), dn = its.filter(function (i) { return cat(i) === "done"; });
       const live = { items: its.length, done: dn.length, sp: sp(its), spDone: sp(dn), noSp: its.filter(function (i) { return !i.points; }).length };
-      const r = S.state === "closed" && S.report && !rpt.type && !rpt.status && !rpt.who && !rpt.epic ? S.report : live;
-      return { id: S.id, n: S.name + (S.state === "active" ? L(" (in progress)", " (em andamento)") : ""), sp: r.sp, dn: r.spDone, rm: Math.max(0, r.sp - r.spDone), noSp: r.noSp, items: r.items, idone: r.done };
-    });
-    const epRows = conts.filter(function (c) { return c.type !== "initiative" || !conts.some(function (e) { return e.parent === c.id; }); }).map(function (c) {
-      const its = W.filter(function (i) { return laneOf(i) === c.id; }), dn = its.filter(function (i) { return cat(i) === "done"; });
-      const a = unitSp ? sp(dn) : dn.length, t = unitSp ? sp(its) : its.length;
-      return { n: (c.key ? c.key + " " : "") + c.title, a: a, b: Math.max(0, t - a) };
-    }).filter(function (r) { return r.a + r.b > 0; }).sort(function (x, y) { return (y.a + y.b) - (x.a + x.b); });
-    /* burndown + burnup of the selected (or active) sprint */
+      const r = S.state === "closed" && S.report && !rpt.type && !rpt.who && !rpt.epic ? S.report : live;
+      return { id: S.id, S: S, n: S.name + (S.state === "active" ? L(" (in progress)", " (em andamento)") : ""), sp: r.sp, dn: r.spDone, rm: Math.max(0, r.sp - r.spDone), noSp: r.noSp, items: r.items, idone: r.done, f: "sprint|" + S.id };
+    }).filter(function (r) { return !R || !r.S.end || (d2n(r.S.end) >= R.from && d2n(r.S.start || r.S.end) <= R.to); });
     const bs = data.sprints && (data.sprints[rpt.sprint] ? Object.assign({ id: rpt.sprint }, data.sprints[rpt.sprint]) : sps.find(function (S) { return S.state === "active"; }) || sps.filter(function (S) { return S.state === "closed"; }).slice(-1)[0]);
-    let burn = "", bup = "", sprintRep = "";
-    if (bs && bs.start && bs.end) {
-      const its = base.filter(function (i) { return i.sprint === bs.id; }), meas = function (l) { return unitSp ? sp(l) : l.length; }, tot = meas(its);
+    function burnHtml() {
+      if (!bs || !bs.start || !bs.end) return "";
+      const its = base.filter(function (i) { return i.sprint === bs.id; }), tot = meas(its);
       const s0 = d2n(bs.start), e0 = d2n(bs.end), lim = Math.min(e0, d2n(td)), rem = [], up = [];
       for (let t = s0; t <= lim; t += DAY) { const dn = its.filter(function (i) { return cat(i) === "done" && i.doneAt && i.doneAt <= t + DAY; }); rem.push([t, tot - meas(dn)]); up.push([t, meas(dn)]); }
-      const u = unitSp ? "SP" : L("items", "itens");
-      burn = lineChart([{ n: L("Ideal", "Ideal"), c: "#8a94a6", dash: 1, pts: [[s0, tot], [e0, 0]] }, { n: L("Remaining", "Restante"), c: "#2a78d6", pts: rem }], s0, e0, tot, u, "Burndown");
-      bup = lineChart([{ n: L("Scope", "Escopo"), c: "#8a94a6", dash: 1, pts: [[s0, tot], [e0, tot]] }, { n: L("Done", "Concluído"), c: "#1baf7a", pts: up }], s0, e0, tot, u, "Burnup");
       const dn = its.filter(function (i) { return cat(i) === "done"; }), left = its.filter(function (i) { return cat(i) !== "done"; });
       const blk = its.filter(function (i) { return blocksOf(i).some(function (b) { return b.since >= s0 && b.since <= e0 + DAY; }); });
-      sprintRep = '<section class="rp-card rp-sprint"><h3>' + IC("sprint", 16) + " " + L("Sprint report", "Relatório da sprint") + " · " + esc(bs.name) + '</h3><p class="muted small">' + fmt(bs.start) + " – " + fmt(bs.end) + (bs.goal ? " · " + L("Goal: ", "Objetivo: ") + esc(bs.goal) : "") + "</p>" +
-        '<div class="flow-m"><div><span>' + L("Committed", "Comprometido") + "</span><b>" + nf(tot) + "</b><small>" + u + "</small></div><div><span>" + L("Delivered", "Entregue") + "</span><b>" + nf(meas(dn)) + "</b><small>" + pct(meas(dn), tot) + "</small></div><div><span>" + L("Not finished", "Não concluído") + "</span><b>" + nf(meas(left)) + "</b><small>" + left.length + " " + L("items", "itens") + '</small></div><div class="bl"><span>' + L("Impediments", "Impedimentos") + "</span><b>" + blk.length + "</b><small>" + L("in the sprint", "na sprint") + "</small></div></div>" +
-        (left.length ? '<h3 class="bd-h3">' + L("Carried over / still open", "Fica para a próxima / em aberto") + '</h3><table class="rp-t"><tbody>' + left.slice(0, 12).map(function (i) { return '<tr data-open="' + i.id + '"><td><b>' + esc(i.key || "") + "</b> " + esc(i.title) + "</td><td>" + esc(statusOf(i).name) + '</td><td class="n">' + (SP ? nf(Number(i.points) || 0) + " SP" : "") + "</td></tr>"; }).join("") + "</tbody></table>" : "") + "</section>";
+      return '<div class="bi-g2">' + card(IC("sprint", 16) + " " + L("Sprint report", "Relatório da sprint") + " · " + esc(bs.name), '<p class="muted small">' + fmt(bs.start) + " – " + fmt(bs.end) + " · " + bizCount(bs.start, bs.end) + " " + L("working days", "dias úteis") + (bs.goal ? " · " + L("Goal: ", "Objetivo: ") + esc(bs.goal) : "") + "</p>" +
+        '<div class="flow-m"><div><span>' + L("Committed", "Comprometido") + "</span><b>" + nf(tot) + "</b><small>" + U + "</small></div><div><span>" + L("Delivered", "Entregue") + "</span><b>" + nf(meas(dn)) + "</b><small>" + pct(meas(dn), tot) + "</small></div><div><span>" + L("Not finished", "Não concluído") + "</span><b>" + nf(meas(left)) + "</b><small>" + left.length + " " + L("items", "itens") + '</small></div><div class="bl"><span>' + L("Impediments", "Impedimentos") + "</span><b>" + blk.length + "</b><small>" + L("in the sprint", "na sprint") + "</small></div></div>" +
+        (left.length ? '<h3 class="bd-h3">' + L("Carried over / still open", "Fica para a próxima / em aberto") + '</h3><table class="rp-t"><tbody>' + left.slice(0, 10).map(function (i) { return '<tr data-open="' + i.id + '"><td><b>' + esc(i.key || "") + "</b> " + esc(i.title) + "</td><td>" + esc(statusOf(i).name) + '</td><td class="n">' + (SP ? nf(Number(i.points) || 0) + " SP" : "") + "</td></tr>"; }).join("") + "</tbody></table>" : "")) +
+        card("Burndown · " + esc(bs.name), lineChart([{ n: L("Ideal", "Ideal"), c: "#8a94a6", dash: 1, pts: [[s0, tot], [e0, 0]] }, { n: L("Remaining", "Restante"), c: "#2a78d6", pts: rem }], s0, e0, tot, U, "Burndown") + '<h3 class="bd-h3">Burnup · ' + esc(bs.name) + "</h3>" + lineChart([{ n: L("Scope", "Escopo"), c: "#8a94a6", dash: 1, pts: [[s0, tot], [e0, tot]] }, { n: L("Done", "Concluído"), c: "#1baf7a", pts: up }], s0, e0, tot, U, "Burnup")) + "</div>";
     }
-    /* planned × actual (S-curve) for schedules */
-    let scurve = "";
-    if (scheduleOn()) {
-      const sch = W.filter(function (i) { return i.end; });
-      if (sch.length) {
-        const st0 = Math.min.apply(null, sch.map(function (i) { return d2n(i.start || i.end); })), en0 = Math.max.apply(null, sch.map(function (i) { return d2n(i.end); }));
-        const span = Math.max(DAY, en0 - st0), step = Math.max(DAY, Math.ceil(span / 40 / DAY) * DAY), pl = [], ac = [], nowN = Date.now();
-        for (let t = st0; t <= en0 + step; t += step) { const tt = Math.min(t, en0); pl.push([tt, sch.filter(function (i) { return d2n(i.end) <= tt; }).length / sch.length * 100]); if (tt <= nowN) ac.push([tt, sch.filter(function (i) { return i.doneAt && i.doneAt <= tt + DAY; }).length / sch.length * 100]); if (tt === en0) break; }
-        scurve = '<section class="rp-card"><h3>' + L("Planned × actual (schedule)", "Planejado × realizado (cronograma)") + "</h3>" + lineChart([{ n: L("Planned", "Planejado"), c: "#8a94a6", dash: 1, pts: pl }, { n: L("Actual", "Realizado"), c: "#2a78d6", pts: ac }], st0, en0, 100, "%", L("Planned × actual", "Planejado × realizado")) + "</section>";
-      }
+    function cfdHtml() {
+      if (!W.length) return card("CFD · " + L("cumulative flow", "fluxo cumulativo"), '<p class="muted small">' + L("No items in the filter.", "Sem itens no filtro.") + "</p>");
+      const a = R ? R.from : (rpt.sprint && bs && bs.start ? d2n(bs.start) : Math.max(d2n(td) - 90 * DAY, Math.min.apply(null, W.map(function (i) { return Number(i.created) || d2n(td); })))), b = Math.min(R ? R.to : (rpt.sprint && bs && bs.end ? d2n(bs.end) : d2n(td)), d2n(td));
+      return card("CFD · " + L("cumulative flow", "fluxo cumulativo") + ' <small class="muted">' + fmt(ymd(a)) + " – " + fmt(ymd(b)) + "</small>", cfdChart(W, a, Math.max(a + DAY, b)) + '<p class="muted small">' + L("Parallel bands = stable flow; a widening blue band = work piling up in progress.", "Faixas paralelas = fluxo estável; faixa azul alargando = trabalho acumulando em andamento.") + "</p>", "bi-wide");
     }
-    let cfd = "";
-    if (cfdOn() && W.length) {
-      const sp0 = rpt.sprint && bs && bs.start ? d2n(bs.start) : d2n(td) - 30 * DAY, sp1 = rpt.sprint && bs && bs.end ? Math.min(d2n(bs.end), d2n(td)) : d2n(td);
-      cfd = '<section class="rp-card"><h3>CFD · ' + L("cumulative flow", "fluxo cumulativo") + ' <small class="muted">(' + (rpt.sprint ? esc(bs ? bs.name : "") : L("last 30 days", "últimos 30 dias")) + ")</small></h3>" + cfdChart(W, sp0, sp1) + "</section>";
+    function yearsHtml() { /* comparison between years */
+      const ys = {}; base.forEach(function (i) { if (i.doneAt) ys[new Date(i.doneAt).getUTCFullYear()] = 1; if (i.created) ys[new Date(i.created).getUTCFullYear()] = 1; });
+      const yl = Object.keys(ys).map(Number).sort(); if (!yl.length) return "";
+      const F = base.filter(function (i) { return (!rpt.type || i.type === rpt.type) && (!rpt.who || (i.assignee || "_") === rpt.who) && (!rpt.epic || underOf(i, rpt.epic)); });
+      const rows = yl.map(function (y) {
+        const a = Date.UTC(y, 0, 1), b = Date.UTC(y + 1, 0, 1), dn = F.filter(function (i) { return cat(i) === "done" && i.doneAt >= a && i.doneAt < b; }), fl = dn.map(flowOf).filter(function (f) { return f && f.done; });
+        const av = function (k) { return fl.length ? fl.reduce(function (s, f) { return s + f[k]; }, 0) / fl.length : null; }, cl = sps.filter(function (S) { return S.state === "closed" && S.end && d2n(S.end) >= a && d2n(S.end) < b; });
+        const mths = y === new Date().getUTCFullYear() ? new Date().getUTCMonth() + 1 : 12;
+        return [String(y), nf(F.filter(function (i) { return i.created >= a && i.created < b; }).length), nf(dn.length)].concat(SP ? [nf(sp(dn))] : []).concat([dur(av("net")), dur(av("downNet")), nf(dn.length / mths, 1), nf(cl.length)]).concat(SP ? [cl.length ? nf(cl.reduce(function (s, S) { return s + ((S.report && S.report.spDone) || 0); }, 0) / cl.length, 1) : "–"] : []);
+      });
+      const y1 = Number(rpt.year) || yl[yl.length - 1], y0 = y1 - 1, months = [];
+      for (let m = 0; m < 12; m++) { const g = { n: new Date(Date.UTC(2000, m, 1)).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { month: "short", timeZone: "UTC" }) }; [y0, y1].forEach(function (y) { const a = Date.UTC(y, m, 1), b = Date.UTC(y, m + 1, 1); g["y" + y] = meas(F.filter(function (i) { return cat(i) === "done" && i.doneAt >= a && i.doneAt < b; })); }); months.push(g); }
+      return '<div class="bi-g2">' + card(L("Year comparison", "Comparação entre anos"), tbl([L("Year", "Ano"), L("Created", "Criados"), L("Delivered", "Entregues")].concat(SP ? [L("SP delivered", "SP entregues")] : []).concat([L("Lead time", "Lead time"), L("Cycle time", "Cycle time"), L("Delivered / month", "Entregues / mês"), L("Sprints closed", "Sprints concluídas")]).concat(SP ? [L("Velocity (SP/sprint)", "Velocidade (SP/sprint)")] : []), rows)) +
+        card(L("Delivered per month", "Entregue por mês") + " · " + y0 + " × " + y1 + " (" + U + ")", '<div class="rp-scroll">' + bars(months, [{ k: "y" + y0, n: String(y0), c: "#8a94a6" }, { k: "y" + y1, n: String(y1), c: BR.accent }], U) + "</div>") + "</div>";
     }
-    const tbl = function (head, rows, tot) { return '<div class="rp-tw"><table class="rp-t"><thead><tr>' + head.map(function (h, k) { return "<th" + (k ? ' class="n"' : "") + ">" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows.map(function (r) { return "<tr>" + r.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody>" + (tot ? "<tfoot><tr>" + tot.map(function (c, k) { return "<td" + (k ? ' class="n"' : "") + ">" + c + "</td>"; }).join("") + "</tr></tfoot>" : "") + "</table></div>"; };
-    const sum = function (k) { return sprRows.reduce(function (n, r) { return n + (r[k] || 0); }, 0); };
-    const MN = method().name;
-    v.innerHTML = '<div class="rp">' +
-      '<div class="rp-filters">' +
-      (sps.length ? "<label>" + L("Sprint / cycle", "Sprint / ciclo") + sel("sprint", rpt.sprint, sps.map(function (S) { return [S.id, S.name]; })) + "</label>" : "") +
-      "<label>" + L("Type", "Tipo") + sel("type", rpt.type, Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return [t, TYPES[t].name]; })) + "</label>" +
-      "<label>Status" + sel("status", rpt.status, statuses().map(function (x) { return [x.id, x.name]; })) + "</label>" +
-      "<label>" + L("Assignee", "Responsável") + sel("who", rpt.who, ppl.map(function (m) { return [m.email, m.name || m.email]; }).concat([["_", L("Unassigned", "Sem responsável")]])) + "</label>" +
-      "<label>" + L("Epic / initiative", "Épico / iniciativa") + sel("epic", rpt.epic, conts.map(function (c) { return [c.id, (c.key ? c.key + " " : "") + c.title]; })) + "</label>" +
-      (SP ? '<label>' + L("Measure", "Medida") + '<select data-rp="unit"><option value="sp"' + (unitSp ? " selected" : "") + '>Story points</option><option value="items"' + (!unitSp ? " selected" : "") + ">" + L("Items", "Itens") + "</option></select></label>" : "") +
-      '<span class="rp-acts">' + (canEdit ? '<button class="pl-btn sm ghost" id="rpTiles" title="' + L("Choose the big numbers", "Escolher os números") + '">' + IC("settings", 14) + " " + L("Numbers", "Números") + "</button>" : "") +
-      '<button class="pl-btn sm ghost" id="rpCsv">' + IC("export", 14) + ' CSV</button><button class="pl-btn sm ghost" id="rpPdf">' + IC("print", 14) + ' PDF</button><button class="pl-btn sm" id="rpOne">' + IC("dashboard", 14) + " One page</button></span></div>" +
-      '<p class="rp-mode muted small">' + IC(method().icon, 13) + " " + esc(MN) + " · " + (SP ? L("estimated in story points", "estimado em story points") : L("measured in items (no story points)", "medido em itens (sem story points)")) + (canEdit ? ' · <a href="#" id="rpCfg">' + L("change", "alterar") + "</a>" : "") + "</p>" +
-      (showT.filter(function (t) { return !t.sm; }).length ? '<div class="rp-tiles">' + showT.filter(function (t) { return !t.sm; }).map(tile).join("") + "</div>" : "") +
-      (showT.filter(function (t) { return t.sm; }).length ? '<div class="rp-tiles sm">' + showT.filter(function (t) { return t.sm; }).map(tile).join("") + "</div>" : "") +
-      '<div class="rp-grid3">' +
-      '<section class="rp-card"><h3>' + L("Items by status", "Itens por status") + "</h3>" + donut(statusRows, W.length, L("Items by status", "Itens por status")) + "</section>" +
-      '<section class="rp-card"><h3>' + L("Items by type", "Itens por tipo") + "</h3>" + donut(typeRows, W.length, L("Items by type", "Itens por tipo")) + "</section>" +
-      '<section class="rp-card"><h3>' + L("Items by assignee", "Itens por responsável") + "</h3>" + donut(whoRows, W.length, L("Items by assignee", "Itens por responsável")) + "</section></div>" +
-      (cfd || scurve ? '<div class="rp-grid2">' + cfd + scurve + "</div>" : "") +
-      flowSection(W) +
-      (sprRows.length ? (sprintRep ? '<div class="rp-grid2">' + sprintRep + '<section class="rp-card"><h3>Burndown · ' + esc(bs.name) + "</h3>" + burn + '<h3 class="bd-h3">Burnup · ' + esc(bs.name) + "</h3>" + bup + "</section></div>" : "") +
-        (SP ? '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Sprint delivery · story points", "Entrega por sprint · story points") + "</h3>" + tbl(["Sprint", L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes"), L("No SP (items)", "Sem SP (itens)"), L("% delivered", "% entregue")], sprRows.map(function (r) { return [esc(r.n), nf(r.sp), nf(r.dn), nf(r.rm), nf(r.noSp), pct(r.dn, r.sp)]; }), ["Total", nf(sum("sp")), nf(sum("dn")), nf(sum("rm")), nf(sum("noSp")), pct(sum("dn"), sum("sp"))]) + "</section>" +
-          '<section class="rp-card"><h3>' + L("Velocity · planned × delivered (SP)", "Velocidade · planejado × entregue (SP)") + '</h3><div class="rp-scroll">' + bars(sprRows, [{ k: "sp", n: L("SP planned", "SP planejados"), c: "#2a78d6" }, { k: "dn", n: L("SP delivered", "SP entregues"), c: "#1baf7a" }, { k: "rm", n: L("SP remaining", "SP restantes"), c: "#6250d6" }], "SP") + "</div></section></div>" : "") +
-        '<div class="rp-grid2"><section class="rp-card"><h3>' + L("Sprint delivery · items", "Entrega por sprint · itens") + "</h3>" + tbl(["Sprint", L("Items", "Itens"), L("Items done", "Itens concluídos"), L("Items remaining", "Itens restantes"), L("% done", "% concluído")], sprRows.map(function (r) { return [esc(r.n), nf(r.items), nf(r.idone), nf(r.items - r.idone), pct(r.idone, r.items)]; }), ["Total", nf(sum("items")), nf(sum("idone")), nf(sum("items") - sum("idone")), pct(sum("idone"), sum("items"))]) + "</section>" +
-        (SP ? "" : '<section class="rp-card"><h3>' + L("Items per sprint", "Itens por sprint") + '</h3><div class="rp-scroll">' + bars(sprRows, [{ k: "items", n: L("Items", "Itens"), c: "#2a78d6" }, { k: "idone", n: L("Done", "Concluídos"), c: "#1baf7a" }], L("items", "itens")) + "</div></section>") + "</div>"
-        : (info.method === "scrum" || SP ? '<section class="rp-card rp-hint"><p class="muted small">' + L("Sprint reports (sprint report, burndown, burnup and velocity) appear when the planning has sprints.", "Os relatórios de sprint (relatório da sprint, burndown, burnup e velocidade) aparecem quando o planejamento tem sprints.") + "</p></section>" : "")) +
-      '<div class="rp-grid2"><section class="rp-card"><h3>' + (info.method === "waterfall" ? L("Phases · delivered and remaining", "Fases · entregue e restante") : L("Epics · delivered and remaining", "Épicos · entregue e restante")) + " (" + (unitSp ? "SP" : L("items", "itens")) + ")</h3>" + (epRows.length ? hstack(epRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No items linked to epics yet.", "Ainda não há itens ligados a épicos.") + "</p>") + "</section>" +
-      (BG ? '<section class="rp-card"><h3>' + L("Budget × actual", "Orçado × realizado") + "</h3>" + (X.mb || X.ma ? '<div class="rp-money"><div><span>' + L("Budget", "Orçado") + "</span><b>" + money(X.mb) + "</b></div><div><span>" + L("Actual", "Realizado") + '</span><b class="' + (X.ma > X.mb && X.mb ? "late" : "") + '">' + money(X.ma) + "</b></div><div><span>" + L("Used", "Consumido") + "</span><b>" + pct(X.ma, X.mb) + '</b></div></div><span class="pbar big"><i style="width:' + Math.min(100, X.mb ? X.ma / X.mb * 100 : 0) + "%;background:" + (X.ma > X.mb ? "#e5484d" : "#1baf7a") + '"></i></span>' : '<p class="muted small">' + L("Fill in budget and actual on the items to follow the costs.", "Preencha orçado e realizado nos itens para acompanhar os custos.") + "</p>") + "</section>" : "") + "</div>" +
-      '<p class="muted small rp-foot">' + L("Updated live from this planning", "Atualizado ao vivo a partir deste planejamento") + " · " + new Date().toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { dateStyle: "short", timeStyle: "short" }) + "</p></div>";
-    v.querySelectorAll("[data-rp]").forEach(function (sl) { sl.onchange = function () { rpt[sl.dataset.rp] = sl.value; reportsView(v); }; });
+    function sprintsHtml() {
+      if (!sprRows.length) return card("Sprints", '<p class="muted small">' + L("Create sprints in the Backlog to see the sprint reports.", "Crie sprints no Backlog para ver os relatórios por sprint.") + "</p>");
+      const sum = function (k) { return sprRows.reduce(function (n, r) { return n + (r[k] || 0); }, 0); };
+      const hist = tbl(["Sprint", L("Dates", "Datas"), L("Working days", "Dias úteis"), L("Items", "Itens"), L("Done", "Concluídos")].concat(SP ? [L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes"), L("SP not set (items)", "Sem SP (itens)")] : []).concat([L("% delivered", "% entregue")]),
+        sprRows.map(function (r) { return [esc(r.n), r.S.start ? fmt(r.S.start) + " – " + fmt(r.S.end) : "–", r.S.start && r.S.end ? nf(bizCount(r.S.start, r.S.end)) : "–", nf(r.items), nf(r.idone)].concat(SP ? [nf(r.sp), nf(r.dn), nf(r.rm), nf(r.noSp)] : []).concat([SP ? pct(r.dn, r.sp) : pct(r.idone, r.items)]); }),
+        ["Total", "", "", nf(sum("items")), nf(sum("idone"))].concat(SP ? [nf(sum("sp")), nf(sum("dn")), nf(sum("rm")), nf(sum("noSp"))] : []).concat([SP ? pct(sum("dn"), sum("sp")) : pct(sum("idone"), sum("items"))]),
+        sprRows.map(function (r) { return 'class="bi-click' + (rpt.sprint === r.id ? " on" : "") + '" data-xf="' + r.f + '"'; }));
+      return '<div class="bi-g2">' + card(L("Sprint history", "Histórico das sprints") + (SP ? " · story points" : " · " + L("items", "itens")), hist) +
+        card(SP ? L("Planned × delivered × remaining (SP)", "Planejado × entregue × restante (SP)") : L("Items per sprint", "Itens por sprint"), '<div class="rp-scroll">' + bars(sprRows, SP ? [{ k: "sp", n: L("SP planned", "SP planejados"), c: "#64748b" }, { k: "dn", n: L("SP delivered", "SP entregues"), c: "#1baf7a" }, { k: "rm", n: L("SP remaining", "SP restantes"), c: "#a78bfa" }] : [{ k: "items", n: L("Items", "Itens"), c: "#64748b" }, { k: "idone", n: L("Done", "Concluídos"), c: "#1baf7a" }], U) + "</div>") + "</div>" + burnHtml();
+    }
+    function execHtml() {
+      const blk = W.map(function (i) { return { i: i, b: openBlock(i) }; }).filter(function (x) { return x.b; }).sort(function (a, b) { return a.b.since - b.b.since; });
+      const ms = items().filter(function (i) { return i.type === "milestone" && i.end && cat(i) !== "done"; }).sort(function (a, b) { return a.end < b.end ? -1 : 1; }).slice(0, 6);
+      const rag = function (n, v, s, cls) { return '<div class="bi-rag ' + cls + '"><i></i><span>' + n + "</span><b>" + v + "</b><small>" + s + "</small></div>"; };
+      const sched = X.donePct + 5 < X.plannedPct ? (X.donePct + 20 < X.plannedPct ? "bad" : "warn") : "good";
+      const health = rag(L("Schedule", "Prazo"), nf(X.donePct, 0) + "%", L("done · planned until today ", "concluído · planejado até hoje ") + nf(X.plannedPct, 0) + "%", sched) +
+        rag(L("Delays", "Atrasos"), nf(X.overdue), L("items overdue", "itens em atraso"), X.overdue > 5 ? "bad" : X.overdue ? "warn" : "good") +
+        rag(L("Impediments", "Impedimentos"), nf(blk.length), L("blocked now", "bloqueados agora"), blk.length > 3 ? "bad" : blk.length ? "warn" : "good") +
+        (BG ? rag(L("Budget", "Orçamento"), pct(X.ma, X.mb), money(X.ma) + " / " + money(X.mb), X.mb && X.ma > X.mb ? "bad" : X.mb && X.ma > X.mb * 0.9 ? "warn" : "good") : "") +
+        rag(L("Flow", "Fluxo"), dur(X.lead), "lead time · cycle " + dur(X.cycle), "neutral");
+      return '<div class="bi-rags">' + health + "</div>" +
+        '<div class="bi-g3">' + card((initRows.length && !rpt.epic ? L("Main initiatives", "Principais iniciativas") : L("Drill-down", "Detalhamento")) + " · " + U, crumbHtml + (drillRows.length ? hstack(drillRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No sub-levels here – see the items in Detail.", "Sem subníveis aqui – veja os itens em Detalhe.") + "</p>"), "bi-span2") +
+        card(L("Current status · items", "Status atual · itens"), donut(statusRows, W.length, L("Items by status", "Itens por status"))) + "</div>" +
+        '<div class="bi-g3">' + card(L("Main epics / features", "Principais épicos / features") + " · " + U, epicRows.length ? hstack(epicRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No epics with items yet.", "Ainda não há épicos com itens.") + "</p>", "bi-span2") +
+        card(L("Items by type", "Itens por tipo"), donut(typeRows, W.length, L("Items by type", "Itens por tipo"))) + "</div>" +
+        '<div class="bi-g2">' + card(L("Next milestones", "Próximos marcos"), ms.length ? tbl([L("Milestone", "Marco"), L("Date", "Data"), "Status"], ms.map(function (i) { return [esc(i.title), fmt(i.end), i.end < td ? '<span class="late">' + L("late", "atrasado") + "</span>" : esc(statusOf(i).name)]; }), null, ms.map(function (i) { return 'data-open="' + i.id + '"'; })) : '<p class="muted small">' + L("No open milestones.", "Sem marcos em aberto.") + "</p>") +
+        card(L("Risks & impediments", "Riscos e impedimentos"), blk.length || X.overdue ? tbl([L("Item", "Item"), L("Situation", "Situação"), L("Since", "Desde")], blk.slice(0, 6).map(function (x) { return [esc((x.i.key ? x.i.key + " " : "") + x.i.title), '<span class="late">' + L("blocked", "bloqueado") + (x.b.supplier ? " · " + esc(x.b.supplier) : "") + "</span>", fmt(ymd(x.b.since))]; }).concat(W.filter(overdue).slice(0, 6 - Math.min(6, blk.length)).map(function (i) { return [esc((i.key ? i.key + " " : "") + i.title), L("overdue", "em atraso"), fmt(i.end)]; })), null, blk.slice(0, 6).map(function (x) { return 'data-open="' + x.i.id + '"'; }).concat(W.filter(overdue).slice(0, 6).map(function (i) { return 'data-open="' + i.id + '"'; }))) : '<p class="muted small">' + L("No blocked or overdue items.", "Nenhum item bloqueado ou em atraso.") + "</p>") + "</div>";
+    }
+    function deliveryHtml() {
+      return '<div class="bi-g3">' + card(L("Items by status", "Itens por status"), donut(statusRows, W.length, "status")) + card(L("Items by type", "Itens por tipo"), donut(typeRows, W.length, "type")) + card(L("Items by assignee", "Itens por responsável"), donut(whoRows, W.length, "who")) + "</div>" +
+        '<div class="bi-g2">' + card((info.method === "waterfall" ? L("Phases", "Fases") : L("Epics / features", "Épicos / features")) + " · " + L("delivered and remaining", "entregue e restante") + " (" + U + ")", epicRows.length ? hstack(epicRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No items linked to epics yet.", "Ainda não há itens ligados a épicos.") + "</p>") +
+        card(L("Initiatives", "Iniciativas") + " (" + U + ")", initRows.length ? hstack(initRows, "a", "b", L("Delivered", "Entregue"), L("Remaining", "Restante")) : '<p class="muted small">' + L("No initiatives yet – create them above the epics (OKR → initiative → epic).", "Ainda não há iniciativas – crie-as acima dos épicos (OKR → iniciativa → épico).") + "</p>") + "</div>" +
+        yearsHtml();
+    }
+    function flowHtml() {
+      const wk = [], end = Math.min(R ? R.to : d2n(td), d2n(td));
+      for (let k = 11; k >= 0; k--) { const b = end - k * 7 * DAY + DAY, a = b - 7 * DAY; wk.push({ n: fmt(ymd(a)), v: W.filter(function (i) { return i.doneAt && i.doneAt >= a && i.doneAt < b; }).length }); }
+      const aging = W.filter(function (i) { return cat(i) === "doing"; }).map(function (i) { return { i: i, d: Math.round((Date.now() - (Number(i.startedAt) || Number(i.created) || Date.now())) / DAY) }; }).sort(function (a, b) { return b.d - a.d; }).slice(0, 8);
+      return '<div class="bi-g1">' + cfdHtml() + "</div>" +
+        '<div class="bi-g2">' + card(L("Throughput per week", "Vazão por semana") + " · " + L("items done", "itens concluídos"), '<div class="rp-scroll">' + bars(wk, [{ k: "v", n: L("Done", "Concluídos"), c: BR.accent }], L("items", "itens")) + "</div>") +
+        card(L("Aging work in progress", "Envelhecimento do WIP"), aging.length ? tbl([L("Item", "Item"), "Status", L("Days in progress", "Dias em andamento")], aging.map(function (x) { return [esc((x.i.key ? x.i.key + " " : "") + x.i.title), esc(statusOf(x.i).name), '<b class="' + (x.d > 14 ? "late" : "") + '">' + x.d + "</b>"]; }), null, aging.map(function (x) { return 'data-open="' + x.i.id + '"'; })) : '<p class="muted small">' + L("Nothing in progress.", "Nada em andamento.") + "</p>") + "</div>" +
+        flowSection(W);
+    }
+    function budgetHtml() {
+      const rows = conts.map(function (c) { const m = moneyOf(c); return { c: c, b: m.b || 0, a: m.a || 0 }; }).filter(function (r) { return r.b || r.a; }).slice(0, 15);
+      return '<div class="bi-g2">' + card(L("Budget × actual", "Orçado × realizado"), X.mb || X.ma ? '<div class="rp-money"><div><span>' + L("Budget", "Orçado") + "</span><b>" + money(X.mb) + "</b></div><div><span>" + L("Actual", "Realizado") + '</span><b class="' + (X.ma > X.mb && X.mb ? "late" : "") + '">' + money(X.ma) + "</b></div><div><span>" + L("Used", "Consumido") + "</span><b>" + pct(X.ma, X.mb) + '</b></div></div><span class="pbar big"><i style="width:' + Math.min(100, X.mb ? X.ma / X.mb * 100 : 0) + "%;background:" + (X.ma > X.mb ? "#e5484d" : "#1baf7a") + '"></i></span>' : '<p class="muted small">' + L("Fill in budget and actual on the items to follow the costs.", "Preencha orçado e realizado nos itens para acompanhar os custos.") + "</p>") +
+        card(L("By initiative / epic / phase", "Por iniciativa / épico / fase"), rows.length ? tbl([L("Item", "Item"), L("Budget", "Orçado"), L("Actual", "Realizado"), "%"], rows.map(function (r) { return [esc(r.c.title), money(r.b), '<span class="' + (r.a > r.b && r.b ? "late" : "") + '">' + money(r.a) + "</span>", pct(r.a, r.b)]; })) : '<p class="muted small">–</p>') + "</div>";
+    }
+    /* detail: configurable, sortable table */
+    const COLS = [["key", L("Key", "Chave")], ["title", L("Title", "Título")], ["type", L("Type", "Tipo")], ["status", "Status"], ["who", L("Assignee", "Responsável")], ["parent", L("Epic / phase", "Épico / fase")], ["sprint", "Sprint"], ["start", L("Start", "Início")], ["end", L("End", "Fim")], ["points", "Story points"], ["lead", "Lead time"], ["cycle", "Cycle time"], ["budget", L("Budget", "Orçado")], ["actual", L("Actual", "Realizado")]].filter(function (c) { return (c[0] !== "points" || SP) && ((c[0] !== "budget" && c[0] !== "actual") || BG) && (c[0] !== "sprint" || sps.length); });
+    function detailCols() { try { const v = JSON.parse(localStorage.getItem("cmcollab:rpcols:" + ID) || "null"); if (v && v.length) return v; } catch (e) { /* ignore */ } return ["key", "title", "type", "status", "who", "end"].concat(SP ? ["points"] : []).concat(["lead"]); }
+    function cellOf(i, k) {
+      const f = k === "lead" || k === "cycle" ? flowOf(i) : null, p = i.parent && data.items[i.parent], s = i.sprint && data.sprints && data.sprints[i.sprint];
+      return ({ key: [i.key || "", esc(i.key || "")], title: [i.title, esc(i.title)], type: [(TYPES[i.type] || TYPES.task).name, esc((TYPES[i.type] || TYPES.task).name)], status: [statusOf(i).name, esc(statusOf(i).name)], who: [i.assignee ? memberName(i.assignee) : "", esc(i.assignee ? memberName(i.assignee) : "")], parent: [p ? p.title : "", esc(p ? p.title : "")], sprint: [s ? s.name : "", esc(s ? s.name : "")], start: [i.start || "", fmt(i.start)], end: [i.end || "", (overdue(i) ? '<span class="late">' + fmt(i.end) + "</span>" : fmt(i.end))], points: [Number(i.points) || 0, i.points ? nf(i.points) : ""], lead: [f && f.done ? f.net : -1, f && f.done ? dur(f.net) : ""], cycle: [f && f.done ? f.downNet : -1, f && f.done ? dur(f.downNet) : ""], budget: [Number(i.budget) || 0, i.budget ? money(i.budget) : ""], actual: [Number(i.actual) || 0, i.actual ? money(i.actual) : ""] })[k] || ["", ""];
+    }
+    function detailHtml() {
+      const cols = detailCols().filter(function (k) { return COLS.some(function (c) { return c[0] === k; }); }), sk = rpt.sort || "", dir = rpt.dir === "desc" ? -1 : 1;
+      const rows = W.slice(); if (sk) rows.sort(function (a, b) { const x = cellOf(a, sk)[0], y = cellOf(b, sk)[0]; return (x > y ? 1 : x < y ? -1 : 0) * dir; });
+      return card(L("Items", "Itens") + " · " + nf(W.length) + '<span class="bi-sp"></span><details class="bi-cols"><summary class="pl-btn sm ghost">' + IC("settings", 14) + " " + L("Columns", "Colunas") + '</summary><div class="bi-colm">' + COLS.map(function (c) { return '<label class="chk"><input type="checkbox" data-col="' + c[0] + '"' + (cols.indexOf(c[0]) >= 0 ? " checked" : "") + "> " + esc(c[1]) + "</label>"; }).join("") + "</div></details>",
+        '<div class="rp-tw bi-detail"><table class="rp-t"><thead><tr>' + cols.map(function (k) { const c = COLS.find(function (x) { return x[0] === k; }); return '<th data-sort="' + k + '" class="bi-click' + (k === sk ? " on" : "") + '">' + esc(c[1]) + (k === sk ? (dir > 0 ? " ▲" : " ▼") : "") + "</th>"; }).join("") + "</tr></thead><tbody>" +
+        rows.slice(0, 500).map(function (i) { return '<tr data-open="' + i.id + '">' + cols.map(function (k) { return "<td>" + cellOf(i, k)[1] + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>" + (rows.length > 500 ? '<p class="muted small">' + L("Showing 500 – export the CSV for all.", "Mostrando 500 – exporte o CSV para ver todos.") + "</p>" : ""));
+    }
+    /* filters as cards + active chips */
+    const sel = function (id, cur, opts, all) { return '<select data-rp="' + id + '"><option value="">' + (all || L("All", "Tudo")) + "</option>" + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(cur) ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select>"; };
+    const yrs = {}; base.forEach(function (i) { [i.created, i.doneAt].forEach(function (t) { if (t) yrs[new Date(t).getUTCFullYear()] = 1; }); }); yrs[new Date().getUTCFullYear()] = 1;
+    const yrL = Object.keys(yrs).sort().reverse(), mons = [], qs = [];
+    yrL.forEach(function (y) { for (let m = 12; m >= 1; m--) { const k = y + "-" + String(m).padStart(2, "0"); if (k <= today().slice(0, 7)) mons.push([k, new Date(d2n(k + "-01")).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { month: "short", year: "numeric", timeZone: "UTC" })]); } for (let q = 4; q >= 1; q--) qs.push([y + "-Q" + q, y + " Q" + q]); });
+    const per = rpt.per || "all";
+    const perSub = per === "month" ? sel("month", rpt.month || today().slice(0, 7), mons, "—") : per === "quarter" ? sel("quarter", rpt.quarter || (new Date().getUTCFullYear() + "-Q" + (Math.floor(new Date().getUTCMonth() / 3) + 1)), qs, "—") : per === "year" ? sel("year", rpt.year || new Date().getUTCFullYear(), yrL.map(function (y) { return [y, y]; }), "—") : per === "custom" ? '<span class="bi-dates"><input type="date" data-rp="from" value="' + esc(rpt.from || "") + '"><input type="date" data-rp="to" value="' + esc(rpt.to || "") + '"></span>' : "";
+    const fcard = function (lbl, inner) { return '<label class="bi-f">' + lbl + inner + "</label>"; };
+    const filters = '<div class="bi-fs">' +
+      fcard(L("Period", "Período"), '<select data-rp="per">' + [["all", L("All time", "Todo o período")], ["month", L("Month", "Mês")], ["quarter", L("Quarter", "Trimestre")], ["year", L("Year", "Ano")], ["custom", L("Custom", "Personalizado")]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === per ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>" + perSub) +
+      (sps.length ? fcard(L("Sprint / cycle", "Sprint / ciclo"), sel("sprint", rpt.sprint, sps.map(function (S) { return [S.id, S.name]; }))) : "") +
+      fcard(L("Type", "Tipo"), sel("type", rpt.type, Object.keys(TYPES).filter(function (t) { return !isContainer({ type: t }) && t !== "milestone"; }).map(function (t) { return [t, TYPES[t].name]; }))) +
+      fcard("Status", sel("status", rpt.status, statuses().map(function (x) { return [x.id, x.name]; }))) +
+      fcard(L("Assignee", "Responsável"), sel("who", rpt.who, ppl.map(function (m) { return [m.email, m.name || m.email]; }).concat([["_", L("Unassigned", "Sem responsável")]]))) +
+      fcard(L("Initiative / epic", "Iniciativa / épico"), sel("epic", rpt.epic, conts.map(function (c) { return [c.id, (c.key ? c.key + " " : "") + c.title]; }))) +
+      (SP ? fcard(L("Measure", "Medida"), '<select data-rp="unit"><option value="sp"' + (unitSp ? " selected" : "") + '>Story points</option><option value="items"' + (!unitSp ? " selected" : "") + ">" + L("Items", "Itens") + "</option></select>") : "") + "</div>";
+    const chipsA = [];
+    if (R) chipsA.push(["per", L("Period", "Período") + ": " + R.label]);
+    if (rpt.sprint && data.sprints[rpt.sprint]) chipsA.push(["sprint", "Sprint: " + data.sprints[rpt.sprint].name]);
+    if (rpt.type) chipsA.push(["type", L("Type", "Tipo") + ": " + (TYPES[rpt.type] || {}).name]);
+    if (rpt.status) chipsA.push(["status", "Status: " + ((statuses().find(function (x) { return x.id === rpt.status; }) || {}).name || rpt.status)]);
+    if (rpt.who) chipsA.push(["who", L("Assignee", "Responsável") + ": " + (rpt.who === "_" ? L("Unassigned", "Sem responsável") : memberName(rpt.who))]);
+    if (rpt.epic && data.items[rpt.epic]) chipsA.push(["epic", ((TYPES[data.items[rpt.epic].type] || {}).name || "") + ": " + data.items[rpt.epic].title]);
+    const chips = chipsA.length ? '<div class="bi-chips">' + chipsA.map(function (c) { return '<button class="bi-chip" data-clr="' + c[0] + '">' + esc(c[1]) + " ✕</button>"; }).join("") + '<button class="bi-chip clr" data-clr="_all">' + L("Clear all", "Limpar tudo") + "</button></div>" : "";
+    const body = page === "exec" ? execHtml() : page === "delivery" ? deliveryHtml() : page === "sprints" ? sprintsHtml() : page === "flow" ? flowHtml() : page === "budget" ? budgetHtml() : detailHtml();
+    const sub = { exec: L("Executive view · health, initiatives, epics and risks", "Visão executiva · saúde, iniciativas, épicos e riscos"), delivery: L("What was delivered, by epic, initiative and year", "O que foi entregue, por épico, iniciativa e ano"), sprints: L("Sprint history, velocity, burndown and burnup", "Histórico das sprints, velocidade, burndown e burnup"), flow: L("CFD, throughput, lead time and cycle time", "CFD, vazão, lead time e cycle time"), budget: L("Budget × actual", "Orçado × realizado"), detail: L("Items with the columns you choose", "Itens com as colunas que você escolher") }[page];
+    v.innerHTML = '<div class="bi ' + BR.theme + '" style="--bi-acc:' + BR.accent + '">' +
+      '<aside class="bi-side">' + (BR.logo ? '<img class="bi-logo" src="' + esc(BR.logo) + '" alt="logo">' : '<span class="bi-mark">' + esc((wsInfo.name || info.title || "CM").slice(0, 2).toUpperCase()) + "</span>") + '<b class="bi-pn">' + esc(info.title) + "</b>" +
+      '<nav class="bi-nav">' + PAGES.map(function (p) { return '<button data-pg="' + p[0] + '" class="' + (p[0] === page ? "on" : "") + '">' + IC(p[1], 16) + " <span>" + esc(p[2]) + "</span></button>"; }).join("") + "</nav>" +
+      '<p class="bi-meta">' + esc(wsInfo.name || "") + " · " + esc(method().name) + "</p></aside>" +
+      '<div class="bi-main"><header class="bi-head"><div><span class="bi-kick">' + esc((wsInfo.name || "") + " · " + info.title) + "</span><h2>" + esc(PG[2]) + '</h2><span class="bi-sub">' + sub + " · " + (SP ? L("story points", "story points") : L("measured in items", "medido em itens")) + '</span></div><span class="rp-acts">' +
+      (canEdit ? '<button class="pl-btn sm ghost" id="rpBrand">' + IC("pencil", 14) + " " + L("Logo & colours", "Logo e cores") + '</button><button class="pl-btn sm ghost" id="rpTiles">' + IC("settings", 14) + " " + L("Indicators", "Indicadores") + '</button><a href="#" id="rpCfg" class="pl-btn sm ghost">' + IC("settings", 14) + " " + L("Method", "Metodologia") + "</a>" : "") +
+      '<button class="pl-btn sm ghost" id="rpCsv">' + IC("export", 14) + ' CSV</button><button class="pl-btn sm ghost" id="rpPdf">' + IC("print", 14) + ' PDF</button><button class="pl-btn sm" id="rpOne">' + IC("dashboard", 14) + " One page</button></span></header>" +
+      filters + chips +
+      (page === "exec" || page === "delivery" ? (showT.filter(function (t) { return !t.sm; }).length ? '<div class="bi-tiles">' + showT.filter(function (t) { return !t.sm; }).map(tile).join("") + "</div>" : "") + (page === "exec" && showT.filter(function (t) { return t.sm; }).length ? '<div class="bi-tiles sm">' + showT.filter(function (t) { return t.sm; }).map(tile).join("") + "</div>" : "") : "") +
+      body + '<p class="bi-foot">' + L("Updated live from this planning", "Atualizado ao vivo a partir deste planejamento") + " · " + new Date().toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { dateStyle: "short", timeStyle: "short" }) + " · " + L("click a slice, bar or row to filter", "clique numa fatia, barra ou linha para filtrar") + "</p></div></div>";
+    const redraw = function () { reportsView(v); };
+    v.querySelectorAll("[data-pg]").forEach(function (b) { b.onclick = function () { rpPageSet(b.dataset.pg); redraw(); }; });
+    v.querySelectorAll("[data-rp]").forEach(function (sl) { sl.onchange = function () { rpt[sl.dataset.rp] = sl.value; if (sl.dataset.rp === "per" && sl.value === "year" && !rpt.year) rpt.year = String(new Date().getUTCFullYear()); redraw(); }; });
+    v.querySelectorAll("[data-clr]").forEach(function (b) { b.onclick = function () { const k = b.dataset.clr; if (k === "_all") ["sprint", "type", "status", "who", "epic"].forEach(function (x) { rpt[x] = ""; }), rpt.per = "all"; else if (k === "per") rpt.per = "all"; else rpt[k] = ""; redraw(); }; });
+    v.querySelectorAll("[data-xf]").forEach(function (el) { el.style.cursor = "pointer"; el.onclick = function (e) { e.preventDefault(); e.stopPropagation(); const q = el.dataset.xf.split("|"), k = q[0], val = q.slice(1).join("|"); rpt[k] = rpt[k] === val && k !== "epic" ? "" : val; redraw(); }; });
     v.querySelectorAll(".rp-t tr[data-open]").forEach(function (r) { r.onclick = function () { openDrawer(r.dataset.open); }; });
+    v.querySelectorAll("[data-sort]").forEach(function (th) { th.onclick = function () { const k = th.dataset.sort; if (rpt.sort === k) rpt.dir = rpt.dir === "desc" ? "asc" : "desc"; else { rpt.sort = k; rpt.dir = "asc"; } redraw(); }; });
+    v.querySelectorAll("[data-col]").forEach(function (c) { c.onchange = function () { const on = Array.prototype.map.call(v.querySelectorAll("[data-col]:checked"), function (x) { return x.dataset.col; }); try { localStorage.setItem("cmcollab:rpcols:" + ID, JSON.stringify(on)); } catch (e) { /* ignore */ } redraw(); const d = v.querySelector(".bi-cols"); if (d) d.open = true; }; });
     const tb = document.getElementById("rpTiles"); if (tb) tb.onclick = function () { tilesDialog(allT); };
+    const bb = document.getElementById("rpBrand"); if (bb) bb.onclick = brandDialog;
     const cf = document.getElementById("rpCfg"); if (cf) cf.onclick = function (e) { e.preventDefault(); planSettingsDialog(); };
     document.getElementById("rpPdf").onclick = function () { document.body.classList.add("print-rp"); setTimeout(function () { window.print(); document.body.classList.remove("print-rp"); }, 50); };
     document.getElementById("rpOne").onclick = function () { onePage(W, X, showT); };
     document.getElementById("rpCsv").onclick = function () {
       const q = function (x) { x = x == null ? "" : String(x); return /[",;\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
-      const lines = [[L("Report", "Relatório"), info.title].map(q).join(";"), [L("Method", "Método"), MN].map(q).join(";"), [L("Generated", "Gerado em"), new Date().toLocaleString(window.MB_LOCALE || "pt-BR")].map(q).join(";"), "", [L("Indicator", "Indicador"), L("Value", "Valor")].map(q).join(";")]
-        .concat(showT.map(function (t) { return [t.l, t.v].map(q).join(";"); }));
-      if (sprRows.length) { lines.push("", ["Sprint"].concat(SP ? [L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes")] : []).concat([L("Items", "Itens"), L("Items done", "Itens concluídos")]).map(q).join(";")); sprRows.forEach(function (r) { lines.push([r.n].concat(SP ? [r.sp, r.dn, r.rm] : []).concat([r.items, r.idone]).map(q).join(";")); }); }
-      lines.push("", [L("Key", "Chave"), L("Title", "Título"), L("Type", "Tipo"), "Status", L("Assignee", "Responsável"), L("Start", "Início"), L("End", "Fim")].concat(SP ? ["Story points"] : []).concat(["Lead time (d)", "Cycle time (d)"]).map(q).join(";"));
-      W.forEach(function (i) { const f = flowOf(i) || {}; lines.push([i.key, i.title, (TYPES[i.type] || TYPES.task).name, statusOf(i).name, i.assignee ? memberName(i.assignee) : "", i.start, i.end].concat(SP ? [i.points] : []).concat([f.done ? nf(f.net / DAY, 1) : "", f.done ? nf(f.downNet / DAY, 1) : ""]).map(q).join(";")); });
-      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" })); a.download = (info.title || "planning") + "-relatorio.csv"; a.click();
+      const lines = [[L("Report", "Relatório"), info.title].map(q).join(";"), [L("Page", "Página"), PG[2]].map(q).join(";"), [L("Filters", "Filtros"), chipsA.map(function (c) { return c[1]; }).join(" · ") || L("none", "nenhum")].map(q).join(";"), [L("Generated", "Gerado em"), new Date().toLocaleString(window.MB_LOCALE || "pt-BR")].map(q).join(";"), "", [L("Indicator", "Indicador"), L("Value", "Valor")].map(q).join(";")]
+        .concat(showT.map(function (t) { return [t.l, String(t.v).replace(/<[^>]+>/g, "")].map(q).join(";"); }));
+      if (sprRows.length) { lines.push("", ["Sprint", L("Start", "Início"), L("End", "Fim")].concat(SP ? [L("SP planned", "SP planejados"), L("SP delivered", "SP entregues"), L("SP remaining", "SP restantes")] : []).concat([L("Items", "Itens"), L("Items done", "Itens concluídos")]).map(q).join(";")); sprRows.forEach(function (r) { lines.push([r.n, r.S.start, r.S.end].concat(SP ? [r.sp, r.dn, r.rm] : []).concat([r.items, r.idone]).map(q).join(";")); }); }
+      const cols = COLS.map(function (c) { return c[0]; });
+      lines.push("", COLS.map(function (c) { return c[1]; }).map(q).join(";"));
+      W.forEach(function (i) { lines.push(cols.map(function (k) { const c = cellOf(i, k)[0]; return (k === "lead" || k === "cycle") ? (c >= 0 ? nf(c / DAY, 1) : "") : c; }).map(q).join(";")); });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" })); a.download = (info.title || "planning") + "-" + page + ".csv"; a.click();
     };
   }
-  /* one-page status report (print / save as PDF) */
   function onePage(W, X, showT) {
     const td = today(), in14 = n2d(d2n(td) + 14 * DAY), all = items();
     const ms = all.filter(function (i) { return i.type === "milestone" && i.end; }).sort(function (a, b) { return a.end < b.end ? -1 : 1; });
@@ -1470,7 +1603,7 @@
       ".g{display:grid;grid-template-columns:1fr 1fr;gap:12px}section{border:1px solid #e3e7ef;border-radius:8px;padding:10px}ul{margin:0;padding-left:16px}li{margin:2px 0}.bar{height:8px;background:#eef1f6;border-radius:6px;overflow:hidden;margin:3px 0 6px}.bar i{display:block;height:100%;background:#1baf7a}" +
       ".pb{position:fixed;bottom:14px;right:14px;padding:8px 14px;border:0;border-radius:8px;background:#2f80ed;color:#fff;font-weight:700;cursor:pointer}@media print{.pb{display:none}}</style></head><body>" +
       '<button class="pb" onclick="print()">' + L("Print / save PDF", "Imprimir / salvar PDF") + "</button>" +
-      "<header><div><h1>" + esc(info.title) + '</h1><div class="m">' + esc(wsInfo.name || "") + " · " + esc(method().name) + " · " + new Date().toLocaleDateString(window.MB_LOCALE || "pt-BR") + '</div></div><span class="st ' + health[0] + '">' + health[1] + "</span></header>" +
+      "<header><div>" + (brand().logo ? '<img src="' + esc(brand().logo) + '" alt="logo" style="max-height:44px;max-width:180px;display:block;margin-bottom:6px">' : "") + "<h1>" + esc(info.title) + '</h1><div class="m">' + esc(wsInfo.name || "") + " · " + esc(method().name) + " · " + new Date().toLocaleDateString(window.MB_LOCALE || "pt-BR") + '</div></div><span class="st ' + health[0] + '">' + health[1] + "</span></header>" +
       '<div class="t">' + showT.filter(function (t) { return !t.sm; }).slice(0, 8).map(function (t) { return "<div><b>" + t.v + "</b><span>" + t.l + "</span></div>"; }).join("") + "</div>" +
       '<div class="g">' +
       box(L("Milestones", "Marcos"), (msLate.length || msNext.length ? "<ul>" + msLate.map(function (i) { return li(i, "⚠ " + fmt(i.end)); }).join("") + msNext.map(function (i) { return li(i, fmt(i.end)); }).join("") + "</ul>" : none)) +
