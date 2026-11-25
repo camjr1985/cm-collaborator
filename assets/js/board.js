@@ -563,7 +563,7 @@
     if (votes) h += '<span class="bd vote" title="' + esc(t(votes + " vote(s)")) + '">' + votes + "</span>";
     if (nC) h += '<span class="bd com" title="' + esc(t(nC + " comment(s)")) + '">' + ico("comment") + nC + "</span>";
     if (r !== null) h += '<span class="bd rice" title="RICE">' + fmt(r) + "</span>";
-    if (o.link) h += '<button class="bd lnk" data-follow="' + esc(o.id) + '" title="' + esc(linkLabel(o.link)) + '">' + (window.CMIcon ? window.CMIcon(o.link.kind === "planitem" ? "planning" : o.link.kind === "frame" ? "board" : "link", 13) : "🔗") + "<span>" + esc(o.link.key || o.link.title || o.link.url || "") + "</span></button>";
+    if (o.link) { const ls = linkStatus(o.link); h += '<button class="bd lnk' + (ls ? " st-" + ls.cat : "") + '" data-follow="' + esc(o.id) + '" title="' + esc(linkLabel(o.link) + (ls ? " · " + ls.name : "")) + '">' + (window.CMIcon ? window.CMIcon(o.link.kind === "planitem" ? "planning" : o.link.kind === "itsmrec" ? "itsm" : o.link.kind === "frame" ? "board" : "link", 13) : "🔗") + "<span>" + esc(o.link.key || o.link.title || o.link.url || "") + "</span>" + (ls ? '<em class="lst">' + esc(ls.name) + "</em>" : "") + "</button>"; }
     b.innerHTML = h;
   }
   function fitText(el) {
@@ -686,6 +686,7 @@
         '<button class="cb' + (one.link ? " on" : "") + '" data-act="link" title="' + esc(LL("Link to a board, frame, planning or URL – or create a planning item", "Ligar a um quadro, frame, planejamento ou URL – ou criar item no planejamento")) + '">' + (window.CMIcon ? window.CMIcon("link", 18) : "🔗") + '</button><span class="sep v"></span>';
     } else if (!one) {
       h += '<span class="ctx-count">' + esc(t(list.length + " selected")) + '</span><span class="sep v"></span>';
+      if (CFG.ws && CFG.signedIn && list.some(function (o) { return objText(o); })) h += '<button class="cb txt" data-act="bulkplan" title="' + esc(LL("Turn the selected notes into planning items", "Transformar as notas selecionadas em itens de planejamento")) + '">' + (window.CMIcon ? window.CMIcon("planning", 15) : "") + "<span>" + esc(LL("Planning", "Planejamento")) + '</span></button><button class="cb txt" data-act="bulkitsm" title="' + esc(LL("Turn the selected notes into ITSM records", "Transformar as notas selecionadas em registros ITSM")) + '">' + (window.CMIcon ? window.CMIcon("itsm", 15) : "") + '<span>ITSM</span></button><span class="sep v"></span>';
     }
     const movable = list.filter(function (o) { return typeOf(o) !== "arrow"; });
     if (movable.length >= 2) {
@@ -754,6 +755,7 @@
     if (act === "comment") { openPanel("comments"); return setTimeout(function () { const x = $("#cmtText"); if (x) x.focus(); }, 30); }
     if (act === "rice") return riceModal(one.id);
     if (act === "link") return linkModal(one.id);
+    if (act === "bulkplan" || act === "bulkitsm") return conn().then(function (c) { if (act === "bulkplan" && !c.planning) return toast(LL("Collaboration → Planning is off in this workspace's connections", "Colaboração → Planejamento está desligada nas conexões deste workspace")); if (act === "bulkitsm" && !c.itsm) return toast(LL("Collaboration → ITSM is off in this workspace's connections", "Colaboração → ITSM está desligada nas conexões deste workspace")); bulkConnect(act === "bulkitsm" ? "itsm" : "plan"); });
     if (act === "front") { let z = maxZ(); return commit(list.sort(function (a, b) { return (a.z || 1) - (b.z || 1); }).map(function (o) { return { path: "stickies/" + o.id + "/z", value: ++z }; })); }
     if (act === "back") { let z = minZ() - list.length; return commit(list.sort(function (a, b) { return (a.z || 1) - (b.z || 1); }).map(function (o) { return { path: "stickies/" + o.id + "/z", value: z++ }; })); }
     if (act === "dup") return duplicate();
@@ -1346,6 +1348,7 @@
     if (l.kind === "frame") return LL("Go to frame: ", "Ir para o frame: ") + (l.title || "");
     if (l.kind === "plan") return LL("Open planning: ", "Abrir planejamento: ") + (l.title || "");
     if (l.kind === "planitem") return LL("Planning item ", "Item do planejamento ") + (l.key || "") + " · " + (l.title || "");
+    if (l.kind === "itsmrec") return LL("ITSM record ", "Registro ITSM ") + (l.key || "") + " · " + (l.title || "");
     return l.url || "";
   }
   function followLink(id) {
@@ -1354,6 +1357,7 @@
     if (l.kind === "board") { location.href = ROOT + "board/?id=" + encodeURIComponent(l.id); return; }
     if (l.kind === "plan") return openPlan(l.id);
     if (l.kind === "planitem") { window.open(ROOT + "planning/?id=" + encodeURIComponent(l.plan) + "&item=" + encodeURIComponent(l.item), "_blank", "noopener"); return; }
+    if (l.kind === "itsmrec") { window.open(ROOT + "itsm/?id=" + encodeURIComponent(l.itsm) + "&rec=" + encodeURIComponent(l.rec), "_blank", "noopener"); return; }
     if (l.url && /^https?:\/\//i.test(l.url)) window.open(l.url, "_blank", "noopener");
   }
   function setLink(id, link) {
@@ -1362,19 +1366,123 @@
     commit([{ path: "stickies/" + id, value: n }]);
   }
   function objText(o) { return String(o.text || o.title || "").replace(/\s+/g, " ").trim().slice(0, 120); }
+  /* ---- Connections (Collaboration → Planning / ITSM), configured per workspace by its owner: workspaces/<ws>/connections ---- */
+  let connCache = null, connAt = 0;
+  function authDb() { return window.CMAuth && window.CMAuth.enabled && CFG.signedIn ? window.CMAuth.db() : null; }
+  function conn() {
+    const db = authDb(); if (!db || !CFG.ws) return Promise.resolve({ planning: false, itsm: false });
+    if (connCache && Date.now() - connAt < 20000) return Promise.resolve(connCache);
+    return db.ref("workspaces/" + CFG.ws + "/connections").once("value").then(function (s) { connCache = Object.assign({ planning: true, itsm: true }, s.val() || {}); connAt = Date.now(); return connCache; }, function () { return { planning: true, itsm: true }; });
+  }
+  const linkSt = {}, linkW = {};
+  const ITSM_CAT = { todo: "todo", doing: "doing", wait: "doing", done: "done" };
+  function linkStatus(l) {
+    if (!l || (l.kind !== "planitem" && l.kind !== "itsmrec")) return null;
+    const k = l.kind === "planitem" ? "p|" + l.plan + "|" + l.item : "i|" + l.itsm + "|" + l.rec, db = authDb();
+    if (!linkW[k] && db) {
+      linkW[k] = 1;
+      const upd = function (v) { linkSt[k] = v; Object.keys(S.stickies).forEach(function (id) { const o = S.stickies[id]; if (o && o.link && (o.link.item === l.item && o.link.plan === l.plan || o.link.rec === l.rec && o.link.itsm === l.itsm)) updateBadges(o); }); };
+      if (l.kind === "planitem") {
+        db.ref("planning/" + l.plan + "/data/settings/statuses").once("value").then(function (ss) {
+          const sts = ss.val() || [];
+          db.ref("planning/" + l.plan + "/data/items/" + l.item + "/status").on("value", function (x) { const id = x.val(); if (!id) return upd({ name: LL("removed", "removido"), cat: "gone" }); const st = (Array.isArray(sts) ? sts : Object.keys(sts).map(function (q) { return sts[q]; })).find(function (z) { return z.id === id; }); upd({ name: st ? st.name : ({ todo: LL("To do", "A fazer"), doing: LL("In progress", "Em andamento"), done: LL("Done", "Concluído") })[id] || id, cat: st ? st.cat : (id === "done" ? "done" : id === "todo" ? "todo" : "doing") }); }, function () { /* no access */ });
+        }, function () { /* no access */ });
+      } else {
+        db.ref("itsm/" + l.itsm + "/data/records/" + l.rec + "/status").on("value", function (x) { const id = x.val(); if (!id) return; const st = window.ITSM ? window.ITSM.status(l.rk || "problem", id) : null; upd({ name: st ? st.name : id, cat: st ? ITSM_CAT[st.cat] || "doing" : "doing" }); }, function () { /* no access */ });
+      }
+    }
+    return linkSt[k] || null;
+  }
+  function planItemCreate(db, pid, type, title, objId) {
+    const base = db.ref("planning/" + pid + "/data");
+    return base.child("settings").once("value").then(function (sn) {
+      const st = sn.val() || {};
+      return base.child("settings/seq").transaction(function (v) { return (v || 0) + 1; }).then(function (r) {
+        const seq = r.snapshot.val(), key = (st.prefix || "PL") + "-" + seq, iid = "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const statuses = st.statuses || []; const stt = ((Array.isArray(statuses) ? statuses : []).find(function (x) { return x.cat === "todo"; }) || statuses[0] || { id: "todo" }).id;
+        const item = { type: type, title: title, status: stt, key: key, order: seq, created: Date.now(), by: ((window.CMAuth && window.CMAuth.user && window.CMAuth.user()) || {}).email || me.name || "", src: { board: CFG.id, obj: objId } };
+        return base.child("items/" + iid).set(item).then(function () { return { kind: "planitem", plan: pid, item: iid, key: key, title: title }; });
+      });
+    });
+  }
+  function itsmRecCreate(db, cid, kind, title, objId) {
+    const I = window.ITSM, K = I && I.KINDS[kind]; if (!K) return Promise.reject(new Error("ITSM"));
+    return db.ref("itsm/" + cid + "/data/settings/prefixes").once("value").then(function (ps) {
+      const pre = (ps.val() || {})[kind] || K.prefix, rid = db.ref().push().key, t0 = Date.now(), em = ((window.CMAuth && window.CMAuth.user && window.CMAuth.user()) || {}).email || "";
+      return db.ref("itsm/" + cid + "/data/counters/" + pre).transaction(function (n) { return (n || 0) + 1; }).then(function (res) {
+        const key = pre + "-" + String(res.snapshot.val()).padStart(4, "0");
+        const o = { kind: kind, title: title, status: I.flow(kind)[0].id, created: t0, updated: t0, by: em, key: key, priority: I.priority("medium", "medium"), impact: "medium", urgency: "medium", desc: LL("Created from the collaboration board ", "Criado a partir do quadro de colaboração ") + (CFG.title || ""), src: { board: CFG.id, obj: objId } };
+        const u = {}; u["data/records/" + rid] = o; u["data/history/" + rid + "/" + db.ref().push().key] = { by: em, t: t0, field: "created", to: o.status };
+        return db.ref("itsm/" + cid).update(u).then(function () { return { kind: "itsmrec", itsm: cid, rec: rid, rk: kind, key: key, title: title }; });
+      });
+    });
+  }
+  function connDialog() {
+    const db = authDb(); if (!db || !CFG.ws) return;
+    Promise.all([conn(), db.ref("workspaces/" + CFG.ws + "/plannings").once("value").then(function (s) { return s.val() || {}; }, function () { return {}; }), db.ref("workspaces/" + CFG.ws + "/itsm").once("value").then(function (s) { return s.val() || {}; }, function () { return {}; })]).then(function (x) {
+      const c = x[0], pl = x[1], it = x[2], opt = function (o, cur) { return '<option value="">—</option>' + Object.keys(o).map(function (k) { return '<option value="' + esc(k) + '"' + (k === cur ? " selected" : "") + ">" + esc(o[k].title || k) + "</option>"; }).join(""); };
+      const KINDS = [["improvement", LL("Improvement", "Melhoria")], ["problem", LL("Problem", "Problema")], ["change", LL("Change", "Mudança")], ["request", LL("Request", "Requisição")], ["incident", LL("Incident", "Incidente")]];
+      const TYPES = [["epic", LL("Epic", "Épico")], ["initiative", LL("Initiative", "Iniciativa")], ["story", LL("Story", "História")], ["task", LL("Task", "Tarefa")]];
+      modal('<div class="tpl-head"><h2 class="no-i18n">' + LL("Workspace connections", "Conexões do workspace") + '</h2><button class="icon-btn" id="cnClose" title="Close">' + ico("close") + "</button></div>" +
+        '<p class="muted small no-i18n">' + LL("Decide how this workspace's collaboration boards connect to Planning and ITSM. Notes, steps of a flow or ideas of a brainstorm become planning items or service records, and the board shows their status.", "Defina como os quadros de colaboração deste workspace se conectam ao Planejamento e ao ITSM. Notas, etapas de um fluxo ou ideias de um brainstorm viram itens de planejamento ou registros de serviço, e o quadro mostra o status deles.") + "</p>" +
+        '<form id="cnF" class="lk-form no-i18n"><label class="chk"><input type="checkbox" name="planning"' + (c.planning ? " checked" : "") + "> " + LL("Collaboration → Planning", "Colaboração → Planejamento") + "</label>" +
+        '<div class="g2"><label>' + LL("Default planning", "Planejamento padrão") + '<select name="planDefault">' + opt(pl, c.planDefault) + "</select></label><label>" + LL("Default type", "Tipo padrão") + '<select name="typeDefault">' + TYPES.map(function (q) { return '<option value="' + q[0] + '"' + (q[0] === (c.typeDefault || "epic") ? " selected" : "") + ">" + q[1] + "</option>"; }).join("") + "</select></label></div>" +
+        '<label class="chk"><input type="checkbox" name="itsm"' + (c.itsm ? " checked" : "") + "> " + LL("Collaboration → ITSM", "Colaboração → ITSM") + "</label>" +
+        (Object.keys(it).length ? '<div class="g2"><label>' + LL("Default ITSM centre", "Central ITSM padrão") + '<select name="itsmDefault">' + opt(it, c.itsmDefault) + "</select></label><label>" + LL("Default record", "Registro padrão") + '<select name="kindDefault">' + KINDS.map(function (q) { return '<option value="' + q[0] + '"' + (q[0] === (c.kindDefault || "improvement") ? " selected" : "") + ">" + q[1] + "</option>"; }).join("") + "</select></label></div>" : '<p class="muted small">' + LL("This workspace has no ITSM centre yet (ITSM module).", "Este workspace ainda não tem central ITSM (módulo ITSM).") + "</p>") +
+        '<p class="muted small">' + LL("Planning ↔ ITSM is set in each planning: ⋯ → Planning settings → Projects + Service.", "Planejamento ↔ ITSM fica em cada planejamento: ⋯ → Configurações do planejamento → Projetos + Serviço.") + "</p>" +
+        '<div class="row-end"><button type="button" class="btn" id="cnX">' + LL("Cancel", "Cancelar") + '</button><button class="btn primary">' + LL("Save", "Salvar") + "</button></div></form>", function (root) {
+        root.querySelector("#cnClose").onclick = root.querySelector("#cnX").onclick = closeModal;
+        const f = root.querySelector("#cnF");
+        f.onsubmit = function (e) {
+          e.preventDefault();
+          const v = { planning: f.planning.checked, itsm: f.itsm.checked, planDefault: f.planDefault.value || null, typeDefault: f.typeDefault.value, itsmDefault: f.itsmDefault ? f.itsmDefault.value || null : null, kindDefault: f.kindDefault ? f.kindDefault.value : null };
+          db.ref("workspaces/" + CFG.ws + "/connections").set(v).then(function () { connCache = Object.assign({}, v); connAt = Date.now(); closeModal(); toast(LL("Connections saved", "Conexões salvas")); updateCtx(); }, function (er) { toast(er.message); });
+        };
+      });
+    });
+  }
+  /* several notes/steps at once → planning items or ITSM records */
+  function bulkConnect(target) {
+    const db = authDb(); if (!db || !CFG.ws) return toast(LL("Available on boards inside a workspace.", "Disponível em quadros de um workspace."));
+    const list = selObjs().filter(function (o) { return ["sticky", "shape", "text", "frame"].indexOf(typeOf(o)) >= 0 && objText(o) && !o.link; });
+    if (!list.length) return toast(LL("Select notes or shapes with text (not yet linked)", "Selecione notas ou formas com texto (ainda não ligadas)"));
+    Promise.all([conn(), db.ref("workspaces/" + CFG.ws + (target === "itsm" ? "/itsm" : "/plannings")).once("value").then(function (s) { return s.val() || {}; }, function () { return {}; })]).then(function (x) {
+      const c = x[0], dest = x[1], ks = Object.keys(dest);
+      if (!ks.length) return toast(target === "itsm" ? LL("No ITSM centre in this workspace", "Nenhuma central ITSM neste workspace") : LL("No planning in this workspace yet", "Ainda não há planejamento neste workspace"));
+      const def = target === "itsm" ? c.itsmDefault : c.planDefault;
+      const TYP = target === "itsm" ? [["improvement", LL("Improvement", "Melhoria")], ["problem", LL("Problem", "Problema")], ["change", LL("Change", "Mudança")], ["request", LL("Request", "Requisição")], ["incident", LL("Incident", "Incidente")]] : [["epic", LL("Epic", "Épico")], ["initiative", LL("Initiative", "Iniciativa")], ["story", LL("Story", "História")], ["task", LL("Task", "Tarefa")]];
+      const tdef = target === "itsm" ? (c.kindDefault || "improvement") : (c.typeDefault || "story");
+      modal('<div class="tpl-head"><h2 class="no-i18n">' + (target === "itsm" ? LL("Send to ITSM", "Enviar ao ITSM") : LL("Send to planning", "Enviar ao planejamento")) + " · " + list.length + '</h2><button class="icon-btn" id="bkClose" title="Close">' + ico("close") + "</button></div>" +
+        '<form id="bkF" class="lk-form no-i18n"><label>' + (target === "itsm" ? LL("ITSM centre", "Central ITSM") : LL("Planning", "Planejamento")) + '<select name="dest" required>' + ks.map(function (k) { return '<option value="' + esc(k) + '"' + (k === def ? " selected" : "") + ">" + esc(dest[k].title || k) + "</option>"; }).join("") + "</select></label>" +
+        "<label>" + LL("Create as", "Criar como") + '<select name="type">' + TYP.map(function (q) { return '<option value="' + q[0] + '"' + (q[0] === tdef ? " selected" : "") + ">" + q[1] + "</option>"; }).join("") + "</select></label>" +
+        '<ul class="bk-list">' + list.map(function (o) { return "<li>" + esc(objText(o)) + "</li>"; }).join("") + "</ul>" +
+        '<div class="row-end"><button type="button" class="btn" id="bkX">' + LL("Cancel", "Cancelar") + '</button><button class="btn primary">' + LL("Create and link", "Criar e ligar") + " (" + list.length + ")</button></div></form>", function (root) {
+        root.querySelector("#bkClose").onclick = root.querySelector("#bkX").onclick = closeModal;
+        const f = root.querySelector("#bkF");
+        f.onsubmit = function (e) {
+          e.preventDefault(); const b = f.querySelector(".btn.primary"); b.disabled = true;
+          const go = target === "itsm" ? itsmRecCreate : planItemCreate, out = [];
+          list.reduce(function (p, o) { return p.then(function () { return go(db, f.dest.value, f.type.value, objText(o), o.id).then(function (lk) { out.push({ path: "stickies/" + o.id + "/link", value: lk }); }); }); }, Promise.resolve()).then(function () {
+            commit(out); closeModal(); toast(out.length + " " + LL("created and linked", "criados e ligados"));
+          }, function (er) { if (out.length) commit(out); b.disabled = false; toast((er && er.message) || "Error"); });
+        };
+      });
+    });
+  }
   function linkModal(id) {
     const o = S.stickies[id]; if (!o) return;
     const db = window.CMAuth && window.CMAuth.enabled && CFG.signedIn ? window.CMAuth.db() : null;
     const frames = Object.keys(S.stickies).map(function (k) { return S.stickies[k]; }).filter(function (x) { return typeOf(x) === "frame" && x.id !== id && x.title; });
     const IC = function (n) { return window.CMIcon ? window.CMIcon(n, 16) : ""; };
-    let h = '<div class="tpl-head"><h2 class="no-i18n">' + LL("Link and connect", "Ligar e conectar") + '</h2><button class="icon-btn" id="lkClose" title="Close">' + ico("close") + "</button></div>" +
+    let h = '<div class="tpl-head"><h2 class="no-i18n">' + LL("Link and connect", "Ligar e conectar") + "</h2>" + (CFG.canPlan && db && CFG.ws ? '<button class="btn sm ghost no-i18n" id="lkConn">' + IC("settings") + " " + LL("Workspace connections", "Conexões do workspace") + "</button>" : "") + '<button class="icon-btn" id="lkClose" title="Close">' + ico("close") + "</button></div>" +
       (o.link ? '<div class="lk-cur no-i18n">' + IC("link") + "<span>" + esc(linkLabel(o.link)) + '</span><button class="btn sm ghost" id="lkGo">' + LL("Open", "Abrir") + '</button><button class="btn sm ghost" id="lkDel">' + LL("Remove link", "Remover link") + "</button></div>" : "") +
       '<div class="lk-grid no-i18n">' +
-      '<section><h3 class="tpl-cat">' + IC("planning") + " " + LL("Create a planning item from this step", "Criar item no planejamento a partir deste passo") + "</h3>" +
+      '<section id="lkSecP"><h3 class="tpl-cat">' + IC("planning") + " " + LL("Create a planning item from this step", "Criar item no planejamento a partir deste passo") + "</h3>" +
       (db && CFG.ws ? '<form id="lkPI" class="lk-form"><label>' + LL("Planning", "Planejamento") + '<select name="plan" required><option value="">' + LL("Loading…", "Carregando…") + "</option></select></label>" +
         "<label>" + LL("Type", "Tipo") + '<select name="type"><option value="epic">' + LL("Epic", "Épico") + '</option><option value="initiative">' + LL("Initiative", "Iniciativa") + '</option><option value="story">' + LL("Story", "História") + '</option><option value="task" selected>' + LL("Task", "Tarefa") + '</option><option value="milestone">' + LL("Milestone", "Marco") + "</option></select></label>" +
         "<label>" + LL("Title", "Título") + '<input name="title" required maxlength="140" value="' + esc(objText(o)) + '"></label><button class="btn primary">' + LL("Create item and link", "Criar item e ligar") + "</button></form>"
         : '<p class="muted small">' + LL("Available on boards inside a workspace.", "Disponível em quadros de um workspace.") + "</p>") + "</section>" +
+      (db && CFG.ws ? '<section id="lkSecI" hidden><h3 class="tpl-cat">' + IC("itsm") + " " + LL("Create an ITSM record from this step", "Criar registro no ITSM a partir deste passo") + '</h3><form id="lkIT" class="lk-form"><label>' + LL("ITSM centre", "Central ITSM") + '<select name="cid" required></select></label><label>' + LL("Record", "Registro") + '<select name="kind"><option value="improvement">' + LL("Improvement", "Melhoria") + '</option><option value="problem">' + LL("Problem", "Problema") + '</option><option value="change">' + LL("Change", "Mudança") + '</option><option value="request">' + LL("Request", "Requisição") + '</option><option value="incident">' + LL("Incident", "Incidente") + "</option></select></label><label>" + LL("Title", "Título") + '<input name="title" required maxlength="140" value="' + esc(objText(o)) + '"></label><button class="btn primary">' + LL("Create record and link", "Criar registro e ligar") + "</button></form></section>" : "") +
       '<section><h3 class="tpl-cat">' + IC("link") + " " + LL("Link to…", "Ligar a…") + "</h3>" +
       '<label>' + LL("A frame on this board (sub-process / detail)", "Um frame deste quadro (subprocesso / detalhe)") + '<select id="lkFrame"><option value="">—</option>' + frames.map(function (f) { return '<option value="' + esc(f.id) + '">' + esc(f.title) + "</option>"; }).join("") + "</select></label>" +
       (db && CFG.ws ? '<label>' + LL("Another board of this workspace", "Outro quadro deste workspace") + '<select id="lkBoard"><option value="">' + LL("Loading…", "Carregando…") + "</option></select></label>" +
@@ -1386,13 +1494,25 @@
       root.querySelector("#lkClose").onclick = closeModal;
       const del = root.querySelector("#lkDel"); if (del) del.onclick = function () { setLink(id, null); closeModal(); };
       const go = root.querySelector("#lkGo"); if (go) go.onclick = function () { closeModal(); followLink(id); };
+      const cb = root.querySelector("#lkConn"); if (cb) cb.onclick = function () { closeModal(); connDialog(); };
+      if (db && CFG.ws && !o.link) conn().then(function (c) {
+        const sp = root.querySelector("#lkSecP"); if (sp && !c.planning) sp.hidden = true;
+        const tp = root.querySelector('#lkPI [name="type"]'); if (tp && c.typeDefault) tp.value = c.typeDefault;
+        if (c.itsm) db.ref("workspaces/" + CFG.ws + "/itsm").once("value").then(function (sn) {
+          const it = sn.val() || {}, ks = Object.keys(it), si = root.querySelector("#lkSecI"); if (!si || !ks.length || !window.ITSM) return;
+          si.hidden = false; const fi = root.querySelector("#lkIT");
+          fi.cid.innerHTML = ks.map(function (k) { return '<option value="' + esc(k) + '"' + (k === c.itsmDefault ? " selected" : "") + ">" + esc(it[k].title || k) + "</option>"; }).join("");
+          if (c.kindDefault) fi.kind.value = c.kindDefault;
+          fi.onsubmit = function (e) { e.preventDefault(); const b = fi.querySelector(".btn.primary"); b.disabled = true; itsmRecCreate(db, fi.cid.value, fi.kind.value, fi.title.value.trim(), id).then(function (lk) { setLink(id, lk); closeModal(); toast(LL("Created ", "Criado ") + lk.key + LL(" in ITSM", " no ITSM")); }, function (er) { b.disabled = false; toast((er && er.message) || LL("No access to this ITSM centre", "Sem acesso a esta central ITSM")); }); };
+        }, function () { /* ignore */ });
+      });
       let plans = {}, boards = {};
       if (db && CFG.ws) {
         db.ref("workspaces/" + CFG.ws + "/plannings").once("value").then(function (sn) {
           plans = sn.val() || {};
           const opts = Object.keys(plans).map(function (k) { return '<option value="' + esc(k) + '">' + esc(plans[k].title || k) + "</option>"; }).join("");
           root.querySelectorAll('[name="plan"], #lkPlan').forEach(function (sel) { sel.innerHTML = '<option value="">' + (Object.keys(plans).length ? "—" : LL("No plannings yet", "Ainda não há planejamentos")) + "</option>" + opts; });
-          const linked = o.link && (o.link.plan || (o.link.kind === "plan" && o.link.id)); const pf = root.querySelector('[name="plan"]'); if (pf && linked) pf.value = linked; else if (pf && Object.keys(plans).length === 1) pf.value = Object.keys(plans)[0];
+          const linked = o.link && (o.link.plan || (o.link.kind === "plan" && o.link.id)); const pf = root.querySelector('[name="plan"]'); if (pf && linked) pf.value = linked; else if (pf && Object.keys(plans).length === 1) pf.value = Object.keys(plans)[0]; else if (pf && connCache && connCache.planDefault && plans[connCache.planDefault]) pf.value = connCache.planDefault;
         }, function () {});
         db.ref("workspaces/" + CFG.ws + "/boards").once("value").then(function (sn) {
           boards = sn.val() || {}; delete boards[CFG.id];

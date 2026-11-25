@@ -589,3 +589,10 @@ body.canvas-dark .planobj { border-color: #2c3554; }
 .lk-grid select, .lk-grid input { width: 100%; margin-top: 4px; }
 .lk-grid .btn { margin-top: 14px; }
 @media (max-width: 760px) { .lk-grid { grid-template-columns: 1fr; gap: 6px; } }
+/* connections: live status of the linked planning item / ITSM record */
+.badges .bd.lnk em.lst { font-style: normal; font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 6px; background: rgba(255,255,255,.22); margin-left: 2px; white-space: nowrap; }
+.badges .bd.lnk.st-todo { background: #626a80; } .badges .bd.lnk.st-doing { background: #2f80ed; } .badges .bd.lnk.st-done { background: #1baf7a; } .badges .bd.lnk.st-gone { background: #a3262b; }
+.bk-list { max-height: 220px; overflow: auto; margin: 6px 0 10px; padding-left: 18px; font-size: 13px; }
+.bk-list li { margin: 2px 0; }
+.tpl-head #lkConn { margin-left: auto; margin-right: 8px; }
+.badges .bd.lnk[class*="st-"] { max-width: 230px; }
