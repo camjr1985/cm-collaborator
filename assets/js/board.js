@@ -2376,7 +2376,7 @@
           CFG.title = info.title || prettify(CFG.id);
           CFG.template = info.template || "persona";
           CFG.defaults = CFG.template === "persona" ? { name: info.title } : {};
-          CFG.readOnly = role === "viewer";
+          CFG.readOnly = role === "viewer" && !x[2]; /* the workspace owner is not always listed as a member */
           CFG.isAdmin = admin;
           CFG.signedIn = true;
           CFG.crumbs = [{ label: t("My boards"), href: ROOT + "workspaces/" }].concat(wsName ? [{ label: wsName }] : []).concat([{ label: CFG.title }]);
