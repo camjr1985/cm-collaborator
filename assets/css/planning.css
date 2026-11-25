@@ -879,3 +879,59 @@ body.no-sp .kb-card .pts, body.no-sp .bl-row .pts, body.no-sp .sp-f, body.no-sp 
 .ps-role { display: grid; grid-template-columns: 1fr 190px; gap: 8px; align-items: center; margin: 4px 0; }
 .ps-role span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 560px) { .ps-role { grid-template-columns: 1fr; } }
+/* ---------- Dashboard appearance (theme + logos, planning-brand.js) ---------- */
+.br-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.br-eyebrow { font-size: var(--fs-11); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--br-ink2, var(--ink3)); }
+.br-logos { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.br-logos img { max-height: 36px; max-width: 140px; object-fit: contain; }
+.pl-view.br-on { background: var(--br-bg); color: var(--br-ink); }
+.pl-view.br-on .rp { color: var(--br-ink); }
+.pl-view.br-on .rp-card, .pl-view.br-on .pf-filters, .pl-view.br-on .rp-tile, .pl-view.br-on .pl-empty { background: var(--br-card); border-color: var(--br-line); color: var(--br-ink); }
+.pl-view.br-on .rp-card h3, .pl-view.br-on .rp h2, .pl-view.br-on .pf-head h2, .pl-view.br-on .pf-name, .pl-view.br-on .pf-ibr .l, .pl-view.br-on .pf-ibr b, .pl-view.br-on .pf-kv b, .pl-view.br-on .pf-sum, .pl-view.br-on .pf-crumbs span, .pl-view.br-on .rp-tile b { color: var(--br-ink); }
+.pl-view.br-on .muted, .pl-view.br-on .pf-foot, .pl-view.br-on .pf-leg, .pl-view.br-on .pf-hbr .l, .pl-view.br-on .pf-hbr b, .pl-view.br-on .pf-kv > div > span, .pl-view.br-on .pf-name small, .pl-view.br-on .pf-note, .pl-view.br-on .pf-lvl, .pl-view.br-on .pf-filters label, .pl-view.br-on .pf-crumbs, .pl-view.br-on .rp-tile span:not(.ic), .pl-view.br-on .rp-leg { color: var(--br-ink2); }
+.pl-view.br-on .pf-tiles { background: var(--br-tile); }
+.pl-view.br-on .pf-tiles.small { border-color: var(--br-line); }
+.pl-view.br-on .pf-tile.on { background: var(--br-card); }
+.pl-view.br-on .rp-t th, .pl-view.br-on .pf-t thead th { background: var(--br-head); color: var(--br-head-ink); border-color: var(--br-line); }
+.pl-view.br-on .rp-t td { border-color: var(--br-line); }
+.pl-view.br-on .pf-t tbody tr:nth-child(even) { background: color-mix(in srgb, var(--br-card) 92%, var(--br-ink)); }
+.pl-view.br-on .pf-t tbody tr[data-open]:hover, .pl-view.br-on .pf-t tbody tr[data-island]:hover, .pl-view.br-on .pf-hbr:hover, .pl-view.br-on .pf-crumbs button:hover { background: color-mix(in srgb, var(--br-card) 84%, var(--br-ink)); }
+.pl-view.br-on select, .pl-view.br-on input, .pl-view.br-on textarea { background: var(--br-card); color: var(--br-ink); border-color: var(--br-line); }
+.pl-view.br-on .pf-bar { background: var(--br-card); }
+.pl-view.br-on .pf-hbr .t, .pl-view.br-on .pf-prog { background: color-mix(in srgb, var(--br-card) 80%, var(--br-ink)); }
+.pl-view.br-on .pf-hbr .t i { background: var(--br-doing); }
+.pl-view.br-on .pf-prog i { background: var(--br-doing); }
+.pl-view.br-on .pf-svcpick button { background: var(--br-card); border-color: var(--br-line); color: var(--br-ink2); }
+.pl-view.br-on .pf-svcpick button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.pl-view.br-on .pf-note-box { background: color-mix(in srgb, var(--br-card) 88%, var(--br-doing)); border-color: var(--br-line); color: var(--br-ink); }
+.pl-view.br-on .pl-btn:not(.primary) { background: var(--br-card); color: var(--br-ink); border-color: var(--br-line); }
+.pl-view.br-on .rp-tile .ic { background: color-mix(in srgb, var(--br-card) 84%, var(--br-ink)); color: var(--br-ink); }
+.pl-view.br-dark .pf-att.bad, .pl-view.br-dark td.bad { color: #fca5a5; }
+.pl-view.br-dark .pf-att.warn { color: #fcd34d; }
+.pl-view.br-dark .pf-svc { background: rgba(45, 212, 191, .14); color: #5eead4; }
+.pl-view.br-dark .pf-crumbs button { color: #93c5fd; }
+.pl-view.br-dark .rp-t td a, .pl-view.br-dark a { color: #93c5fd; }
+.pl-view.br-dark svg .rp-val, .pl-view.br-dark svg .rp-ax, .pl-view.br-dark svg text.rp-lbl { fill: var(--br-ink2); }
+.pl-view.br-dark svg .rp-grid, .pl-view.br-dark svg line { stroke: var(--br-line); }
+/* appearance dialog */
+.br-form h3 { margin: 10px 0 4px; font-size: var(--fs-14); }
+.br-colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; }
+.br-c { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; font-size: var(--fs-12); font-weight: 500; }
+.br-c input[type=color] { width: 34px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; flex: none; }
+.br-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.br-slot { border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-12); }
+.br-img { height: 48px; display: grid; place-items: center; background: repeating-conic-gradient(#f1f3f8 0 25%, #fff 0 50%) 0 0 / 12px 12px; border-radius: 6px; }
+.br-img img { max-height: 44px; max-width: 100%; object-fit: contain; }
+.br-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.br-prev { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.br-pv { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.br-pv .br-eyebrow { color: inherit; opacity: .75; }
+.br-pvt { display: flex; gap: 18px; padding: 8px 12px; border-radius: 8px; font-weight: 700; font-size: var(--fs-20); }
+.br-pvc { border: 1px solid; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.br-pvb { display: flex; gap: 2px; height: 18px; }
+.br-pvb span { display: grid; place-items: center; font-size: var(--fs-11); font-weight: 600; border-radius: 2px; }
+.br-pvh { padding: 4px 8px; border-radius: 4px; font-size: var(--fs-12); font-weight: 600; }
+@media (max-width: 560px) { .br-logos img { max-height: 28px; max-width: 100px; } }
+.pl-view.br-on { --ink: var(--br-ink); --ink2: var(--br-ink2); --ink3: var(--br-ink2); --line: var(--br-line); --hover: color-mix(in srgb, var(--br-card) 84%, var(--br-ink)); }
+.pl-view.br-on svg text.rp-big, .pl-view.br-on svg text.rp-sm { fill: var(--br-ink); }
+.pl-view.br-dark .rp-donut circle[stroke="#eef1f6"] { stroke: var(--br-line); }

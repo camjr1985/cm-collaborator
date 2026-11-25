@@ -41,6 +41,26 @@
   const UNMAPPED = "Não mapeado";
 
   let A = null; /* api from planning.js */
+  let BR = null; /* appearance (CMBrand) of the current render */
+  function useBrand() {
+    BR = window.CMBrand ? window.CMBrand.get(A.data().settings || {}) : null;
+    const c = BR ? BR.c : null, ink = function (x) { return window.CMBrand ? window.CMBrand.inkOn(x) : "#fff"; };
+    const P = c || { doing: "#2563eb", blocked: "#d1344a", backlog: "#e8a020", l1: "#1e3a6e", l2: "#4f7fc0", l3: "#a9bfdf" };
+    SIT.doing.c = P.doing; SIT.blocked.c = P.blocked; SIT.backlog.c = P.backlog;
+    LEVEL["Estratégico"].c = P.l1; LEVEL["Tático"].c = P.l2; LEVEL["Operacional"].c = P.l3;
+    [SIT.doing, SIT.blocked, SIT.backlog, SIT.done, LEVEL["Estratégico"], LEVEL["Tático"], LEVEL["Operacional"]].forEach(function (x) { x.ink = ink(x.c); });
+  }
+  /* text colour for a series colour on a surface: the colour itself when readable, otherwise the theme's text */
+  function tcol(col, surf) {
+    const c = BR ? BR.c : { ink: "#172036", tile: "#eef3fa", card: "#ffffff" };
+    surf = surf || c.tile;
+    if (!window.CMBrand) return col;
+    if (window.CMBrand.contrast(col, surf) >= 3) return col;
+    /* darken / lighten towards the text colour until it reads */
+    const mix = function (a, b, t) { const p = function (h, i) { return parseInt(h.slice(1 + i * 2, 3 + i * 2), 16); }; return "#" + [0, 1, 2].map(function (i) { return ("0" + Math.round(p(a, i) * (1 - t) + p(b, i) * t).toString(16)).slice(-2); }).join(""); };
+    for (let t = 0.15; t <= 1; t += 0.15) { const m = mix(col, c.ink, t); if (window.CMBrand.contrast(m, surf) >= 3) return m; }
+    return c.ink;
+  }
   const st = { island: null, item: null, f: {}, withBacklog: false };
 
   function S() { return (A.data().settings || {}).portfolio || {}; }
@@ -98,6 +118,7 @@
 
   /* ---------- small renderers ---------- */
   function tile(label, val, color, filt, on) {
+    if (color === "var(--ink)" && BR) color = BR.c.ink;
     return '<button class="pf-tile' + (on ? " on" : "") + '"' + (filt ? ' data-f="' + esc(filt) + '"' : "") + ' title="' + esc(filt ? L("Filter by ", "Filtrar por ") + label : label) + '"><span class="pf-tl" style="color:' + (color || "var(--ink)") + '">' + esc(label) + '</span><b style="color:' + (color || "var(--ink)") + '">' + val + "</b></button>";
   }
   function seg(parts, total, extraAttr) { /* 100% stacked bar with direct labels; parts: [{k, n, c, ink, label, f}] */
@@ -116,10 +137,10 @@
     }).join("") + "</div>";
   }
   function attCell(a) { return a ? '<span class="pf-att ' + ATT[a].cls + '">' + esc(ATT[a].n()) + "</span>" : ""; }
-  function sitCell(s) { return '<span class="pf-sit" style="color:' + (s === "backlog" ? "#9a6400" : SIT[s].c) + '">' + esc(SIT[s].n()) + "</span>"; }
+  function sitCell(s) { return '<span class="pf-sit" style="color:' + tcol(SIT[s].c, BR ? BR.c.card : "#fff") + '">' + esc(SIT[s].n()) + "</span>"; }
   function svcCell(s) { return s && SVC[s] ? '<span class="pf-svc">' + IC(SVC[s].ic, 13) + " " + esc(SVC[s].n()) + "</span>" : ""; }
   function head(title, sub, actions) {
-    return '<div class="pf-head"><div><h2>' + title + '</h2><p class="muted small">' + sub + '</p></div><div class="pf-acts">' + actions + "</div></div>";
+    return (BR && window.CMBrand ? window.CMBrand.logosHtml(BR) : "") + '<div class="pf-head"><div><h2>' + title + '</h2><p class="muted small">' + sub + '</p></div><div class="pf-acts">' + actions + "</div></div>";
   }
   function crumbs() {
     const org = S().org || "Portfolio";
@@ -161,7 +182,7 @@
 
   /* ---------- views ---------- */
   function actions() {
-    return (A.canEdit() ? '<button class="pl-btn sm" data-act="import">' + IC("upload", 14) + " " + L("Import GLPI export", "Importar exportação do GLPI") + "</button>" : "") +
+    return '<button class="pl-btn sm" data-act="brand" title="' + L("Colours and logos", "Cores e logos") + '">' + IC("settings", 14) + " " + L("Appearance", "Aparência") + "</button>" + (A.canEdit() ? '<button class="pl-btn sm" data-act="import">' + IC("upload", 14) + " " + L("Import GLPI export", "Importar exportação do GLPI") + "</button>" : "") +
       '<button class="pl-btn sm" data-act="csv">' + IC("export", 14) + " CSV</button>" +
       '<button class="pl-btn sm primary" data-act="pdf">' + IC("export", 14) + " " + L("Executive PDF (A4)", "PDF executivo (A4)") + "</button>";
   }
@@ -171,10 +192,10 @@
     const f = st.f, isl = islands(all);
     const tiles = '<div class="pf-tiles">' +
       tile(L("Total", "Total"), list.length, "var(--ink)", "", false) +
-      SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }).map(function (k) { return tile(SIT[k].n(), count(list, "sit", k), k === "backlog" ? "#b26f00" : SIT[k].c, "sit=" + k, f.sit === k); }).join("") +
-      LEVEL_ORDER.map(function (k) { return tile(LEVEL[k].n(), count(list, "level", k), k === "Operacional" ? "#5d6b85" : LEVEL[k].c, "level=" + k, f.level === k); }).join("") + "</div>";
-    const att = '<div class="pf-tiles small">' + Object.keys(ATT).filter(function (k) { return k !== "blocked"; }).map(function (k) { return tile(ATT[k].n(), count(list, "att", k), ATT[k].cls === "bad" ? "#b42318" : "#8a6400", "att=" + k, f.att === k); }).join("") +
-      Object.keys(SVC).map(function (k) { return tile(SVC[k].n(), count(list, "svc", k), "#0f766e", "svc=" + k, f.svc === k); }).join("") + "</div>";
+      SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }).map(function (k) { return tile(SIT[k].n(), count(list, "sit", k), tcol(SIT[k].c), "sit=" + k, f.sit === k); }).join("") +
+      LEVEL_ORDER.map(function (k) { return tile(LEVEL[k].n(), count(list, "level", k), tcol(LEVEL[k].c), "level=" + k, f.level === k); }).join("") + "</div>";
+    const att = '<div class="pf-tiles small">' + Object.keys(ATT).filter(function (k) { return k !== "blocked"; }).map(function (k) { return tile(ATT[k].n(), count(list, "att", k), tcol(ATT[k].cls === "bad" ? SIT.blocked.c : SIT.backlog.c, BR && BR.c.dark ? BR.c.card : "#f6f8fc"), "att=" + k, f.att === k); }).join("") +
+      Object.keys(SVC).map(function (k) { return tile(SVC[k].n(), count(list, "svc", k), tcol("#0f766e", BR && BR.c.dark ? BR.c.card : "#f6f8fc"), "svc=" + k, f.svc === k); }).join("") + "</div>";
     const maxI = Math.max.apply(null, isl.map(function (n) { return list.filter(function (p) { return p.island === n; }).length; }).concat([1]));
     const bars = '<div class="pf-ib">' + isl.map(function (n) {
       const sub = list.filter(function (p) { return p.island === n; });
@@ -199,8 +220,8 @@
     const sub = all.filter(function (p) { return p.island === st.island; }), list = sub.filter(function (p) { return pass(p); }), f = st.f;
     const disc = list.filter(function (p) { return st.withBacklog || p.sit !== "backlog"; });
     const tiles = '<div class="pf-tiles">' + tile("Total", list.length, "var(--ink)", "", false) +
-      SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }).map(function (k) { return tile(SIT[k].n(), count(list, "sit", k), k === "backlog" ? "#b26f00" : SIT[k].c, "sit=" + k, f.sit === k); }).join("") +
-      LEVEL_ORDER.map(function (k) { return tile(LEVEL[k].n(), count(list, "level", k), k === "Operacional" ? "#5d6b85" : LEVEL[k].c, "level=" + k, f.level === k); }).join("") + "</div>";
+      SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }).map(function (k) { return tile(SIT[k].n(), count(list, "sit", k), tcol(SIT[k].c), "sit=" + k, f.sit === k); }).join("") +
+      LEVEL_ORDER.map(function (k) { return tile(LEVEL[k].n(), count(list, "level", k), tcol(LEVEL[k].c), "level=" + k, f.level === k); }).join("") + "</div>";
     return head(esc((org ? org + " / " : "") + st.island), subline(), actions()) + filterBar(sub) + tiles +
       '<div class="pf-grid"><section class="rp-card"><h3>' + L("Situation", "Situação da carteira") + "</h3>" + seg(sitParts(list), list.length) + legend(SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }), SIT) + "</section>" +
       '<section class="rp-card"><h3>' + L("By level", "Distribuição por nível") + "</h3>" + seg(lvlParts(list), list.length) + legend(LEVEL_ORDER, LEVEL) + "</section></div>" +
@@ -245,6 +266,7 @@
   let tip = null;
   function render(v, api) {
     A = api;
+    useBrand();
     if (tip) tip.hidden = true;
     const all = projects();
     if (!all.length) {
@@ -275,7 +297,7 @@
     });
     const cl = v.querySelector("[data-clear]"); if (cl) cl.onclick = function () { st.f = {}; rerender(); };
     const bl = v.querySelector("#pfBl"); if (bl) bl.onchange = function () { st.withBacklog = bl.checked; rerender(); };
-    v.querySelectorAll("[data-act]").forEach(function (b) { b.onclick = function () { const a = b.dataset.act; if (a === "import") importDialog(); else if (a === "csv") csv(); else if (a === "pdf") pdfDialog(); else if (a === "drawer") A.openDrawer(st.item); }; });
+    v.querySelectorAll("[data-act]").forEach(function (b) { b.onclick = function () { const a = b.dataset.act; if (a === "import") importDialog(); else if (a === "csv") csv(); else if (a === "pdf") pdfDialog(); else if (a === "brand" && window.CMBrand) window.CMBrand.dialog(A); else if (a === "drawer") A.openDrawer(st.item); }; });
     v.querySelectorAll("[data-svc]").forEach(function (b) { b.onclick = function () { const val = b.dataset.svc || null; A.patch(st.item, { pfSvc: val }).then(function () { A.toast(val ? L("Classified as ", "Classificado como ") + SVC[val].n() : L("Back to project only", "Voltou a ser só projeto")); }); }; });
     const ns = v.querySelector("#pfNoteSave"); if (ns) ns.onclick = function () { A.patch(st.item, { pfNote: (document.getElementById("pfNote").value || "").trim() || null }).then(function () { A.toast(L("Next step saved", "Encaminhamento salvo")); }); };
     /* hover tooltip for bars */
@@ -298,12 +320,15 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   }
   /* ---------- A4 PDF (executive one page + one page per island) with optional watermark ---------- */
+  const SLOTS_PDF = ["company", "project", "client", "vendor"];
   function pdfDialog() {
+    useBrand();
     const s = S(), w = s.wm || {}, isl = islands(projects());
     A.modal("<h2>" + IC("export", 18) + " " + L("Executive PDF (A4)", "PDF executivo (A4)") + '</h2><p class="muted small">' + L("The PDF is laid out on A4 pages. In the print window choose “Save as PDF”.", "O PDF é montado em páginas A4. Na janela de impressão, escolha “Salvar como PDF”.") + "</p>" +
       '<form class="pl-form" id="pfPdf"><div class="g2"><label>' + L("Orientation", "Orientação") + '<select name="orient"><option value="landscape"' + (s.orient !== "portrait" ? " selected" : "") + ">" + L("A4 landscape", "A4 paisagem") + '</option><option value="portrait"' + (s.orient === "portrait" ? " selected" : "") + ">" + L("A4 portrait", "A4 retrato") + "</option></select></label>" +
       "<label>" + L("Pages", "Páginas") + '<select name="pages"><option value="all">' + L("Executive one page + each island", "One page executivo + cada ilha") + '</option><option value="macro">' + L("Executive one page only", "Só o one page executivo") + "</option>" + isl.map(function (n) { return '<option value="i:' + esc(n) + '">' + L("Only ", "Só ") + esc(n) + "</option>"; }).join("") + "</select></label></div>" +
       '<label class="chk"><input type="checkbox" name="filt"' + (Object.keys(st.f).some(function (k) { return st.f[k]; }) ? " checked" : "") + "> " + L("Apply the filters in use", "Aplicar os filtros em uso") + "</label>" +
+      (BR && BR.c.dark ? '<label class="chk"><input type="checkbox" name="dark"' + (s.pdfDark ? " checked" : "") + "> " + L("Use the theme background (dark) in the PDF", "Usar o fundo do tema (escuro) no PDF") + "</label>" : "") +
       "<h3>" + L("Watermark", "Marca d'água") + '</h3><div class="g2"><label>' + L("Text (optional)", "Texto (opcional)") + '<input name="wmText" maxlength="60" value="' + esc(w.text || "") + '" placeholder="' + L("CONFIDENTIAL", "CONFIDENCIAL") + '"></label>' +
       "<label>" + L("Image / logo (optional, PNG or JPG)", "Imagem / logo (opcional, PNG ou JPG)") + '<input type="file" name="wmImg" accept="image/png,image/jpeg,image/svg+xml"></label></div>' +
       '<div id="wmPrev" class="pf-wmprev">' + (w.img ? '<img src="' + esc(w.img) + '" alt=""><button type="button" class="pl-btn sm" id="wmRm">' + L("Remove image", "Remover imagem") + "</button>" : "") + "</div>" +
@@ -321,26 +346,32 @@
       };
       f.onsubmit = function (e) {
         e.preventDefault();
-        const o = { orient: f.orient.value, pages: f.pages.value, filt: f.filt.checked, wm: { text: f.wmText.value.trim(), img: img, op: Number(f.op.value) / 100, pos: f.pos.value } };
-        if (f.keep && f.keep.checked) { const u = {}; u["settings/portfolio/orient"] = o.orient; u["settings/portfolio/wm"] = { text: o.wm.text || null, img: img && img.length < 450000 ? img : null, op: o.wm.op, pos: o.wm.pos }; A.db.ref("planning/" + A.ID + "/data").update(u).catch(function () { /* the PDF still works */ }); }
+        const o = { orient: f.orient.value, pages: f.pages.value, filt: f.filt.checked, dark: !!(f.dark && f.dark.checked), wm: { text: f.wmText.value.trim(), img: img, op: Number(f.op.value) / 100, pos: f.pos.value } };
+        if (f.keep && f.keep.checked) { const u = {}; u["settings/portfolio/orient"] = o.orient; u["settings/portfolio/pdfDark"] = o.dark || null; u["settings/portfolio/wm"] = { text: o.wm.text || null, img: img && img.length < 450000 ? img : null, op: o.wm.op, pos: o.wm.pos }; A.db.ref("planning/" + A.ID + "/data").update(u).catch(function () { /* the PDF still works */ }); }
         close(); printPdf(o);
       };
     });
   }
   function pdfHtml(o) {
+    useBrand();
+    const B = BR || { c: { dark: false }, logos: {} }, D = !!(o.dark && B.c.dark), bc = B.c;
+    const T = D ? { bg: bc.card, ink: bc.ink, ink2: bc.ink2, line: bc.line, tile: bc.tile, head: bc.head, hink: bc.headInk, h: bc.ink, zebra: "rgba(255,255,255,.04)" } : { bg: "#ffffff", ink: "#172036", ink2: "#4a5468", line: "#e3e7ef", tile: "#eef3fa", head: (bc.head && !bc.dark ? bc.head : "#16335c"), hink: "#ffffff", h: (bc.head && !bc.dark ? bc.head : "#16335c"), zebra: "#f3f6fa" };
+    if (T.hink === "#ffffff" && window.CMBrand) T.hink = window.CMBrand.inkOn(T.head);
+    const tc = function (col) { return tcol(col, T.tile); };
     const org = S().org || "", all = projects(), keepF = o.filt, saveI = st.island;
     st.island = null;
     const base = all.filter(function (p) { return !keepF || pass(p); });
     st.island = saveI;
     const isl = islands(base), L4 = o.orient === "portrait";
     const kp = function (list) {
-      const cells = [["Total", list.length, "#172036"]].concat(SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }).map(function (k) { return [SIT[k].n(), count(list, "sit", k), k === "backlog" ? "#b26f00" : SIT[k].c]; }), LEVEL_ORDER.map(function (k) { return [LEVEL[k].n(), count(list, "level", k), k === "Operacional" ? "#5d6b85" : LEVEL[k].c]; }));
+      const cells = [["Total", list.length, T.ink]].concat(SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }).map(function (k) { return [SIT[k].n(), count(list, "sit", k), tc(SIT[k].c)]; }), LEVEL_ORDER.map(function (k) { return [LEVEL[k].n(), count(list, "level", k), tc(LEVEL[k].c)]; }));
       return '<div class="kp">' + cells.map(function (c) { return '<div><span style="color:' + c[2] + '">' + esc(c[0]) + '</span><b style="color:' + c[2] + '">' + c[1] + "</b></div>"; }).join("") + "</div>";
     };
     const bar = function (parts, tot) { return '<div class="bar">' + (tot ? parts.filter(function (x) { return x.n; }).map(function (x) { const wd = x.n / tot * 100; return '<span style="width:' + wd + "%;background:" + x.c + ";color:" + x.ink + '">' + (wd >= 5 ? x.n : "") + "</span>"; }).join("") : "") + "</div>"; };
     const leg = function (order, MAP) { return '<div class="leg">' + order.map(function (k) { return '<span><i style="background:' + MAP[k].c + '"></i>' + esc(MAP[k].n()) + "</span>"; }).join("") + "</div>"; };
     const sitsOf = function (list) { return SIT_ORDER.filter(function (k) { return k !== "done" || count(list, "sit", "done"); }); };
-    const hd = function (t) { return '<header><h1>' + esc(t) + "</h1><p>" + subline().replace(/<[^>]+>/g, "") + "</p></header>"; };
+    const lg = SLOTS_PDF.filter(function (k) { return B.logos[k] && B.logos[k].img; }).map(function (k) { return '<img src="' + esc(B.logos[k].img) + '" alt="' + esc(B.logos[k].label || k) + '">'; }).join("");
+    const hd = function (t) { return '<header><div>' + (B.eyebrow ? '<div class="eb">' + esc(B.eyebrow) + "</div>" : "") + "<h1>" + esc(t) + "</h1><p>" + subline().replace(/<[^>]+>/g, "") + "</p></div>" + (lg ? '<div class="lg">' + lg + "</div>" : "") + "</header>"; };
     const pages = [];
     if (o.pages === "all" || o.pages === "macro") {
       const maxI = Math.max.apply(null, isl.map(function (n) { return base.filter(function (p) { return p.island === n; }).length; }).concat([1]));
@@ -361,7 +392,7 @@
         '<div class="two"><section><h2>' + L("Situation", "Situação da carteira") + "</h2>" + bar(sitParts(list), list.length) + leg(sitsOf(list), SIT) + "</section><section><h2>" + L("By level", "Distribuição por nível") + "</h2>" + bar(lvlParts(list), list.length) + leg(LEVEL_ORDER, LEVEL) + "</section></div>" +
         "<h2>" + L("Under discussion: ", "Carteira em discussão: ") + disc.length + " | " + L("Overdue: ", "Prazo vencido: ") + count(list, "att", "late") + " | " + L("In progress without a due date: ", "Em execução sem prazo: ") + count(list, "att", "nodate") + "</h2>" +
         '<table class="' + (dense ? "dense" : "") + '"><thead><tr><th>' + L("Project", "Projeto") + " (GLPI)</th><th>" + L("Level", "Nível") + "</th><th>" + L("Situation", "Estado") + "</th><th>" + L("Progress", "Avanço") + "</th><th>" + L("Due", "Prazo") + "</th><th>" + L("Attention", "Atenção") + "</th><th>" + L("Next step", "Encaminhamento") + "</th></tr></thead><tbody>" +
-        disc.map(function (p) { return "<tr><td>" + esc(p.title) + "</td><td>" + esc((LEVEL[p.level] || { n: function () { return p.level; } }).n()) + '</td><td style="color:' + (p.sit === "backlog" ? "#9a6400" : SIT[p.sit].c) + ';font-weight:700">' + esc(SIT[p.sit].n()) + '</td><td class="n">' + p.progress + '%</td><td class="n">' + fmtD(p.end) + '</td><td class="' + (p.att ? ATT[p.att].cls : "") + '">' + (p.att ? esc(ATT[p.att].n()) : "") + '</td><td class="nt">' + esc(p.it.pfNote || "") + "</td></tr>"; }).join("") + "</tbody></table>" +
+        disc.map(function (p) { return "<tr><td>" + esc(p.title) + "</td><td>" + esc((LEVEL[p.level] || { n: function () { return p.level; } }).n()) + '</td><td style="color:' + (tcol(SIT[p.sit].c, T.bg)) + ';font-weight:700">' + esc(SIT[p.sit].n()) + '</td><td class="n">' + p.progress + '%</td><td class="n">' + fmtD(p.end) + '</td><td class="' + (p.att ? ATT[p.att].cls : "") + '">' + (p.att ? esc(ATT[p.att].n()) : "") + '</td><td class="nt">' + esc(p.it.pfNote || "") + "</td></tr>"; }).join("") + "</tbody></table>" +
         '<p class="ft">' + L("Next step: record the decision, owner and date. The GLPI state is not the project's health.", "Encaminhamento: registrar decisão, responsável e prazo. Estado cadastrado não equivale à saúde do projeto.") + "</p>");
     });
     const W = o.wm || {}, op = W.op == null ? 0.12 : W.op;
@@ -371,15 +402,15 @@
       wm = W.pos === "tile" ? '<div class="wm tile" style="opacity:' + op + '">' + new Array(L4 ? 13 : 10).join('<div class="t">' + one + "</div>") + "</div>" : '<div class="wm ' + (W.pos === "center" ? "c" : "d") + '" style="opacity:' + op + '">' + one + "</div>";
     }
     const pw = L4 ? 210 : 297, ph = L4 ? 297 : 210;
-    const css = "@page{size:A4 " + (L4 ? "portrait" : "landscape") + ";margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0;background:#fff;font-family:Inter,Arial,Helvetica,sans-serif;color:#172036}" +
+    const css = "@page{size:A4 " + (L4 ? "portrait" : "landscape") + ";margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0;background:" + T.bg + ";font-family:Inter,Arial,Helvetica,sans-serif;color:" + T.ink + "}.pg{background:" + T.bg + "}" +
       ".pg{position:relative;width:" + pw + "mm;height:" + ph + "mm;padding:11mm 12mm;overflow:hidden;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}" +
-      ".ct{position:relative;z-index:1}header h1{margin:0;font-size:20pt;color:#16335c}header p{margin:1mm 0 4mm;font-size:7.5pt;color:#626a80}h2{font-size:10pt;font-weight:600;color:#16335c;margin:4mm 0 2mm}" +
-      ".kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(20mm,1fr));background:#eef3fa;padding:2.5mm 3mm;gap:2mm}.kp span{display:block;font-size:7pt;font-weight:700}.kp b{font-size:" + (L4 ? "15" : "18") + "pt}" +
+      ".ct{position:relative;z-index:1}header{display:flex;justify-content:space-between;gap:6mm;align-items:flex-start}header .eb{font-size:7pt;font-weight:700;letter-spacing:.4mm;text-transform:uppercase;color:" + T.ink2 + "}header .lg{display:flex;gap:4mm;align-items:center}header .lg img{max-height:11mm;max-width:34mm;object-fit:contain}header h1{margin:0;font-size:20pt;color:" + T.h + "}header p{margin:1mm 0 4mm;font-size:7.5pt;color:" + T.ink2 + "}h2{font-size:10pt;font-weight:600;color:" + T.h + ";margin:4mm 0 2mm}" +
+      ".kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(20mm,1fr));background:" + T.tile + ";padding:2.5mm 3mm;gap:2mm}.kp span{display:block;font-size:7pt;font-weight:700}.kp b{font-size:" + (L4 ? "15" : "18") + "pt}" +
       ".two{display:grid;grid-template-columns:" + (L4 ? "1fr" : "1.1fr 1fr") + ";gap:" + (L4 ? "0" : "8mm") + "}.bar{display:flex;gap:.5mm;height:5mm}.bar span{display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:600}" +
-      ".ir{display:grid;grid-template-columns:30mm 1fr 8mm;align-items:center;gap:2mm;margin:1.2mm 0;font-size:7.5pt}.ir>div{min-width:0}.ir b{text-align:right}.leg{display:flex;flex-wrap:wrap;gap:1mm 5mm;font-size:7pt;color:#4a5468;margin-top:2mm}.leg i{display:inline-block;width:2.5mm;height:2.5mm;margin-right:1.2mm;vertical-align:-.3mm}" +
-      "table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:#16335c;color:#fff;text-align:left;padding:1.4mm 2mm;font-weight:600}td{padding:1.2mm 2mm;border-bottom:.2mm solid #e3e7ef;vertical-align:top}tbody tr:nth-child(even) td{background:#f3f6fa}td.n{white-space:nowrap}td.nt{max-width:55mm;color:#4a5468}td.bad{color:#b42318}td.warn{color:#8a6400}" +
-      "table.dense{font-size:6.3pt}table.dense td,table.dense th{padding:.8mm 1.5mm}.ft{font-size:7pt;color:#626a80;margin-top:3mm}.ft b{color:#16335c;font-size:8pt}" +
-      ".wm{position:absolute;inset:0;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center}.wm img{max-width:55%;max-height:45%;object-fit:contain}.wm span{font-size:" + (L4 ? "46" : "60") + "pt;font-weight:800;color:#16335c;letter-spacing:2mm;white-space:nowrap;text-transform:uppercase}" +
+      ".ir{display:grid;grid-template-columns:30mm 1fr 8mm;align-items:center;gap:2mm;margin:1.2mm 0;font-size:7.5pt}.ir>div{min-width:0}.ir b{text-align:right}.leg{display:flex;flex-wrap:wrap;gap:1mm 5mm;font-size:7pt;color:" + T.ink2 + ";margin-top:2mm}.leg i{display:inline-block;width:2.5mm;height:2.5mm;margin-right:1.2mm;vertical-align:-.3mm}" +
+      "table{width:100%;border-collapse:collapse;font-size:7.5pt}th{background:" + T.head + ";color:" + T.hink + ";text-align:left;padding:1.4mm 2mm;font-weight:600}td{padding:1.2mm 2mm;border-bottom:.2mm solid " + T.line + ";vertical-align:top}tbody tr:nth-child(even) td{background:" + T.zebra + "}td.n{white-space:nowrap}td.nt{max-width:55mm;color:" + T.ink2 + "}td.bad{color:" + tcol(SIT.blocked.c, T.bg) + "}td.warn{color:" + tcol(SIT.backlog.c, T.bg) + "}" +
+      "table.dense{font-size:6.3pt}table.dense td,table.dense th{padding:.8mm 1.5mm}.ft{font-size:7pt;color:" + T.ink2 + ";margin-top:3mm}.ft b{color:" + T.h + ";font-size:8pt}" +
+      ".wm{position:absolute;inset:0;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center}.wm img{max-width:55%;max-height:45%;object-fit:contain}.wm span{font-size:" + (L4 ? "46" : "60") + "pt;font-weight:800;color:" + T.h + ";letter-spacing:2mm;white-space:nowrap;text-transform:uppercase}" +
       ".wm.d,.wm.c{flex-direction:column;gap:6mm}.wm.d{transform:rotate(-30deg)}.wm.tile{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(" + (L4 ? 4 : 3) + ",1fr);transform:rotate(-24deg) scale(1.3)}.wm.tile .t{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm}.wm.tile img{max-width:30mm;max-height:18mm}.wm.tile span{font-size:16pt;letter-spacing:.6mm}" +
       ".pn{position:absolute;right:12mm;bottom:6mm;font-size:6.5pt;color:#8a94a6;z-index:1}@media screen{body{background:#e9edf4}.pg{margin:8mm auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15)}}";
     return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>' + esc((org ? org + " – " : "") + L("Executive portfolio", "Portfólio executivo") + " – " + fmtLong(S().ref || today())) + "</title><style>" + css + "</style></head><body>" +

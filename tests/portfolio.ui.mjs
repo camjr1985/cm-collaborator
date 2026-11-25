@@ -106,6 +106,31 @@ for (const [orient, pos] of [["landscape", "diag"], ["portrait", "tile"]]) {
   check(n === 7 && Math.abs(box[0] - a4[0]) < 2 && Math.abs(box[1] - a4[1]) < 2, "PDF " + orient + ": 7 páginas A4 (" + n + " pág., " + box.join("×") + " pt)");
   await pp.close();
 }
+// appearance: dark theme + logos (company, client) + eyebrow
+const LOGO = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACinX6EAAAAQ0lEQVR42u3QMQEAAAgDoK1/aI3hAzEB0bKqTicCBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAh4tgDhdQEhmJ9nUQAAAABJRU5ErkJggg==", "base64");
+await a.click('[data-act="brand"]'); await a.waitForSelector("#brF");
+await a.selectOption("#brF [name=theme]", "dark");
+await a.fill("#brF [name=eyebrow]", "FUABC · Portfólio de TI");
+await a.setInputFiles('#brF [data-up="company"]', { name: "edp.png", mimeType: "image/png", buffer: LOGO });
+await a.setInputFiles('#brF [data-up="client"]', { name: "fuabc.png", mimeType: "image/png", buffer: LOGO });
+await a.waitForFunction(() => document.querySelectorAll("#brF .br-img img").length === 2);
+await a.fill('#brF [name=lb_client]', "FUABC");
+check(await a.locator("#brPrev .br-logos img").count() === 2, "prévia mostra os 2 logos");
+await a.click("#brF .pl-btn.primary"); await a.waitForTimeout(400);
+db = await dbOf(a); const brd = db.planning.p1.data.settings.brand || {};
+check(brd.theme === "dark" && brd.logos && brd.logos.company && brd.logos.client && brd.logos.client.label === "FUABC" && brd.eyebrow, "aparência salva (tema escuro, logos de empresa e cliente, linha do projeto)");
+check(await a.evaluate(() => { const v = document.getElementById("view"); return v.classList.contains("br-on") && v.classList.contains("br-dark") && getComputedStyle(v).backgroundColor === "rgb(21, 27, 38)"; }), "painel em tema escuro");
+check(await a.locator(".pf .br-logos img").count() === 2 && /FUABC · Portfólio de TI/.test(await a.textContent(".pf")), "logos e linha do projeto no topo do portfólio");
+const lowC = await a.evaluate(() => { const C = window.CMBrand.contrast, rgb = (x) => "#" + x.match(/\d+/g).slice(0, 3).map((n) => ("0" + Number(n).toString(16)).slice(-2)).join(""); return [...document.querySelectorAll(".pf-tile")].filter((t) => { const bg = getComputedStyle(t.closest(".pf-tiles")).backgroundColor, fg = getComputedStyle(t.querySelector("b")).color; return C(rgb(fg), rgb(bg)) < 3; }).length; });
+check(lowC === 0, "números dos cartões legíveis no tema escuro (contraste ≥ 3:1)");
+await a.screenshot({ path: SHOTS + "/5-escuro.png", fullPage: true });
+await a.click('.pl-tabs [data-view="reports"]'); await a.waitForTimeout(400);
+check(await a.locator("#view .rp .br-logos img").count() === 2, "Relatórios também com logos e tema");
+await a.screenshot({ path: SHOTS + "/6-relatorios-escuro.png", fullPage: false });
+await a.click('.pl-tabs [data-view="portfolio"]'); await a.waitForTimeout(200);
+const htmlD = await a.evaluate(() => window.CMPortfolio.pdfHtml({ orient: "landscape", pages: "macro", dark: true, wm: {} }));
+check((htmlD.match(/<img /g) || []).length === 2 && /FUABC · Portfólio de TI/.test(htmlD), "PDF com logos e linha do projeto");
+const pd = await a.context().newPage(); await pd.setContent(htmlD); fs.writeFileSync(SHOTS + "/exec-dark.pdf", await pd.pdf({ preferCSSPageSize: true, printBackground: true })); await pd.close();
 await a.close();
 
 console.log("Daniel (editor) e leitor");

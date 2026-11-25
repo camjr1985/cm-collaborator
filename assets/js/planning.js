@@ -212,6 +212,7 @@
     document.getElementById("sum").innerHTML = tot + " " + L("items", "itens") + " · " + (tot ? Math.round(done / tot * 100) : 0) + "% " + L("done", "concluído") + (late ? ' · <b class="late">' + late + " " + L("overdue", "em atraso") + "</b>" : "") + (mb || ma ? ' · <span class="money" title="' + L("Budget vs actual", "Orçado x realizado") + '">' + L("Budget ", "Orçado ") + money(mb) + " · " + L("Actual ", "Realizado ") + '<b class="' + (ma > mb && mb ? "late" : "") + '">' + money(ma) + "</b></span>" : "");
     if (view === "okr" && window.CMMarkSeen) window.CMMarkSeen("okr");
     if (view === "timeline") timeline(v); else if (view === "board") board(v); else if (view === "backlog") backlog(v); else if (view === "okr") okrView(v); else if (view === "reports") reportsView(v); else if (view === "kpi") kpiView(v); else if (view === "budget") budgetView(v); else if (view === "service") serviceView(v); else if (view === "portfolio") window.CMPortfolio.render(v, pfApi()); else list(v);
+    if (window.CMBrand) window.CMBrand.apply(v, data.settings, view);
     if (openItem && !document.getElementById("drawer")) openDrawer(openItem);
   }
 
@@ -2005,6 +2006,7 @@
     const owner = isAdm || (wsInfo.owner && wsInfo.owner === A.key(me.email));
     modal("<h2>" + L("Planning options", "Opções do planejamento") + '</h2><div class="pl-menu">' +
       (canEdit ? '<button data-act="psettings">' + IC("settings") + " " + L("Planning settings (story points, budget, indicators)", "Configurações do planejamento (story points, orçamento, indicadores)") + "</button>" : "") +
+      '<button data-act="brand">' + IC("settings") + " " + L("Dashboard appearance (colours and logos)", "Aparência dos painéis (cores e logos)") + "</button>" +
       (canEdit ? '<button data-act="workflow">' + IC("settings") + " " + L("Workflow and columns", "Fluxo e colunas") + "</button>" : "") +
       (canEdit ? '<button data-act="alerts">' + IC("bell") + " " + L("E-mail alerts (milestones, key activities, delays)", "Alertas por e-mail (marcos, atividades principais, atrasos)") + "</button>" : "") +
       (canEdit ? '<button data-act="remind">' + IC("send") + " " + L("Send deadline reminders now", "Enviar lembretes de prazo agora") + "</button>" : "") +
@@ -2020,7 +2022,7 @@
       box.querySelectorAll("[data-act]").forEach(function (b) {
         b.onclick = function () {
           close();
-          ({ psettings: planSettingsDialog, kpitab: function () { save("settings/kpiTab", !kpiOn()).then(function () { if (kpiOn()) view = "kpi"; }); }, workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog, delete: deletePlanning, alerts: alertsDialog, bulk: function () { bulkCreate(b.dataset.p); } })[b.dataset.act]();
+          ({ brand: function () { if (window.CMBrand) window.CMBrand.dialog(pfApi()); }, psettings: planSettingsDialog, kpitab: function () { save("settings/kpiTab", !kpiOn()).then(function () { if (kpiOn()) view = "kpi"; }); }, workflow: workflowDialog, remind: sendReminders, import: importDialog, export: exportCsv, print: function () { window.print(); }, integrations: integrationsDialog, rename: renameDialog, delete: deletePlanning, alerts: alertsDialog, bulk: function () { bulkCreate(b.dataset.p); } })[b.dataset.act]();
         };
       });
     });
