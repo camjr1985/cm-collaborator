@@ -21,6 +21,7 @@
  *   CMModules.gate(mod, wsId, el) → Promise<bool>  renders the "module not licensed" screen into el when false
  *   CMModules.request(mod, wsId) → Promise         records an access request for the admin
  *   CMModules.active(grant)    → bool          grant on and not expired
+ *   CMModules.video(mod) / CMModules.showVideo(mod)  presentation video (media/modulos/<mod>.mp4) inline / in a dialog
  */
 (function () {
   "use strict";
@@ -68,11 +69,30 @@
     return d.ref("moduleRequests").push({ email: u.email, name: u.displayName || "", ws: wsId || "", mod: mod, t: window.firebase.database.ServerValue.TIMESTAMP });
   }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  /* short presentation video of each module (media/modulos/<id>.mp4 + poster .jpg) */
+  const VIDEO = { collab: 1, planning: 1, itsm: 1, game: 1, sst: 1 };
+  function vbase() { return BASE || window.CMCOLLAB_BASE || "../"; }
+  function videoHtml(mod) {
+    if (!VIDEO[mod]) return "";
+    const b = vbase() + "media/modulos/" + mod;
+    return '<video class="mod-vid" controls playsinline preload="none" poster="' + esc(b + ".jpg") + '"><source src="' + esc(b + ".mp4") + '" type="video/mp4"></video>';
+  }
+  function showVideo(mod) {
+    const a = apps().find(function (x) { return x.id === mod; }) || { name: mod, desc: "" };
+    const d = document.createElement("div"); d.className = "modsw-dlg mod-vid-dlg"; d.setAttribute("role", "dialog");
+    d.innerHTML = '<div class="modsw-dlg-card"><h2><span class="modsw-hic" data-m="' + esc(mod) + '">' + modIcon(mod, 20) + "</span> " + esc(a.name) + '</h2><p class="modsw-muted">' + esc(a.desc) + "</p>" + videoHtml(mod) + '<div class="mod-gate-acts"><button class="modsw-b" data-x>' + esc(L("Close", "Fechar")) + "</button></div></div>";
+    document.body.appendChild(d);
+    const v = d.querySelector("video"); if (v) { try { v.play(); } catch (e) { /* autoplay may be blocked */ } }
+    const close = function () { if (v) v.pause(); d.remove(); document.removeEventListener("keydown", esc2); };
+    const esc2 = function (e) { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", esc2);
+    d.addEventListener("click", function (e) { if (e.target === d || e.target.hasAttribute("data-x")) close(); });
+  }
   function gate(mod, wsId, el) {
     return has(mod, wsId).then(function (ok) {
       if (ok || !el) return ok;
       const m = get(mod) || { name: mod, full: mod, desc: "" };
-      el.innerHTML = '<div class="mod-gate"><div class="mod-gate-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h1>" + esc(m.full) + "</h1><p>" + esc(m.desc) + "</p><p>" +
+      el.innerHTML = '<div class="mod-gate"><div class="mod-gate-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h1>" + esc(m.full) + "</h1><p>" + esc(m.desc) + "</p>" + videoHtml(mod) + "<p>" +
         esc(L("This module is not part of your licence yet. Contact the CM Collaborator administration to purchase it.", "Este módulo ainda não faz parte da sua licença. Entre em contato com a administração do CM Collaborator para fazer a aquisição.")) +
         '</p><div class="mod-gate-acts"><button class="btn primary" id="modReq">' + esc(L("Contact the administration", "Falar com a administração")) + '</button><a class="btn" href="' + esc((window.CMCOLLAB_BASE || "../") + "workspaces/") + '">' + esc(L("Back to my boards", "Voltar para Meus quadros")) + "</a></div></div></div>";
       const b = el.querySelector("#modReq");
@@ -132,7 +152,7 @@
     const d = document.createElement("div"); d.className = "modsw-dlg"; d.setAttribute("role", "dialog");
     d.innerHTML = '<div class="modsw-dlg-card"><span class="mod-gate-tag">' + esc(L("Add-on module", "Módulo adicional")) + "</span><h2><span class=\"modsw-hic\" data-m=\"" + mod + "\">" + modIcon(mod, 20) + "</span> " + esc(m.full) + "</h2><p>" +
       esc(L("This module is not part of your licence yet. Contact the CM Collaborator administration to purchase it.", "Este módulo ainda não faz parte da sua licença. Entre em contato com a administração do CM Collaborator para fazer a aquisição.")) +
-      '</p><p class="modsw-muted">' + esc(m.desc) + '</p><div class="mod-gate-acts"><button class="modsw-b primary" data-req>' + esc(L("Contact the administration", "Falar com a administração")) + '</button><button class="modsw-b" data-x>' + esc(L("Close", "Fechar")) + "</button></div></div>";
+      '</p><p class="modsw-muted">' + esc(m.desc) + "</p>" + videoHtml(mod) + '<div class="mod-gate-acts"><button class="modsw-b primary" data-req>' + esc(L("Contact the administration", "Falar com a administração")) + '</button><button class="modsw-b" data-x>' + esc(L("Close", "Fechar")) + "</button></div></div>";
     document.body.appendChild(d);
     const close = function () { d.remove(); };
     d.addEventListener("click", function (e) { if (e.target === d) close(); });
@@ -154,7 +174,8 @@
       else if (acc[a.id] && acc[a.id].ok) chip = L("Licensed", "Licenciado");
       else { chip = "🔒 " + L("Add-on", "Adicional"); cls = " locked"; ok = false; }
       if (a.id === "itsm" && ok && !avail.itsm) chip += " · " + L("soon", "em breve");
-      return '<button type="button" role="menuitem" class="modsw-row' + cls + '" data-app="' + a.id + '"><span class="modsw-ic" data-m="' + a.id + '">' + icon(a) + '</span><span class="modsw-t"><b>' + esc(a.name) + "</b><small>" + esc(a.desc) + '</small></span><span class="modsw-chip' + (ok ? "" : " no") + '">' + esc(chip) + "</span></button>";
+      return '<div class="modsw-line"><button type="button" role="menuitem" class="modsw-row' + cls + '" data-app="' + a.id + '"><span class="modsw-ic" data-m="' + a.id + '">' + icon(a) + '</span><span class="modsw-t"><b>' + esc(a.name) + "</b><small>" + esc(a.desc) + '</small></span><span class="modsw-chip' + (ok ? "" : " no") + '">' + esc(chip) + "</span></button>" +
+        (VIDEO[a.id] ? '<button type="button" class="modsw-play" data-vid="' + a.id + '" title="' + esc(L("Watch the presentation", "Ver a apresentação")) + '" aria-label="' + esc(L("Watch the presentation of", "Ver a apresentação de") + " " + a.name) + '">▶</button>' : "") + "</div>";
     }).join("");
   }
   function mountInto(host, after) {
@@ -173,6 +194,7 @@
         const acc = r[0], avail = { itsm: r[1] };
         pop.innerHTML = '<div class="modsw-h">' + esc(L("Modules", "Módulos")) + "<small>" + esc(acc.admin ? L("Main administrator · full access", "Administrador principal · acesso total") : L("What your licence includes", "O que a sua licença inclui")) + "</small></div>" + rows(acc, avail) +
           (acc.admin ? '<a class="modsw-foot" href="' + BASE + 'admin/#modulos">' + esc(L("Manage licences", "Gerenciar licenças")) + " →</a>" : "");
+        pop.querySelectorAll("[data-vid]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); close(); showVideo(b.dataset.vid); }; });
         pop.querySelectorAll("[data-app]").forEach(function (b) { b.onclick = function () {
           const a = apps().find(function (x) { return x.id === b.dataset.app; }); close();
           if (!a.core && !acc.admin && !(acc[a.id] && acc[a.id].ok)) return contact(a.id, ((acc[a.id] || {}).ws || [])[0]);
@@ -205,5 +227,5 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else setTimeout(start, 0);
 
-  window.CMModules = { LIST: LIST, PACKAGES: PACKAGES, get: get, active: active, has: has, forWorkspace: forWorkspace, gate: gate, request: request, key: key, access: access, contact: contact, apps: apps, icon: modIcon };
+  window.CMModules = { LIST: LIST, PACKAGES: PACKAGES, get: get, active: active, has: has, forWorkspace: forWorkspace, gate: gate, request: request, key: key, access: access, contact: contact, apps: apps, icon: modIcon, video: videoHtml, showVideo: showVideo };
 })();

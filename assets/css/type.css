@@ -121,3 +121,13 @@ code, kbd, pre { font-family: var(--font-mono); }
 .board-card .tpl-pv { position: relative; }
 .modsw-ic[data-m="sst"], .modsw-hic[data-m="sst"] { background: rgba(27,175,122,.14); color: #12804a; }
 .mod-tile-ic[data-m="sst"] { background: rgba(27,175,122,.18); color: #5fd38d; }
+
+/* presentation video of each module (Módulos menu, module gate, home page) */
+.modsw-line { display: flex; align-items: center; gap: 4px; }
+.modsw-line .modsw-row { flex: 1; min-width: 0; }
+.modsw-play { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid #d7dce8; background: #fff; color: #0E1A33; font-size: var(--fs-12); line-height: 1; cursor: pointer; display: grid; place-items: center; padding-left: 2px; }
+.modsw-play:hover, .modsw-play:focus-visible { background: #2CC4B3; border-color: #2CC4B3; color: #0E1A33; outline: none; }
+.mod-vid { display: block; width: 100%; aspect-ratio: 16 / 9; height: auto; border-radius: 12px; background: #0E1A33; margin: 12px 0; border: 1px solid rgba(14, 26, 51, .12); }
+.mod-vid-dlg .modsw-dlg-card { width: min(880px, 100%); }
+.mod-gate-card .mod-vid, .modsw-dlg-card .mod-vid { margin: 14px 0; }
+

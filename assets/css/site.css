@@ -676,6 +676,11 @@ body.mkt h1, body.mkt h2, body.mkt h3 { font-weight: 700; }
 .pillar h3 { margin: 0; font-size: var(--fs-20); }
 .pillar .btn { align-self: flex-start; margin-top: 6px; }
 .pillar .note { font-size: var(--fs-12); color: var(--ink-3); margin: 4px 0 0; }
+.mod-grid .mod-card .mod-vid { margin: 0 0 8px; }
+.mod-grid .mod-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.mod-grid .mod-card:last-child:nth-child(odd) .mod-vid { max-width: 720px; }
+.mod-tag { align-self: flex-start; font-size: var(--fs-11); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--navy, #0E1A33); background: #E8C468; border-radius: 999px; padding: 3px 10px; }
+.mod-tag.inc { background: #2CC4B3; }
 .ticks { list-style: none; padding: 0; margin: 8px 0 0; }
 .ticks li { position: relative; padding: 7px 0 7px 24px; font-size: var(--fs-14); color: var(--ink-2); border-top: 1px solid rgba(127,140,170,.15); }
 .ticks li::before { content: ""; position: absolute; left: 3px; top: 13px; width: 10px; height: 6px; border-left: 2px solid var(--teal, #2cc4b3); border-bottom: 2px solid var(--teal, #2cc4b3); transform: rotate(-45deg); }
