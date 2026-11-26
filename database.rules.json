@@ -371,6 +371,13 @@
         ".write": "auth != null && (auth.token.email.toLowerCase().replace('.', ',') == $k || root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true)",
         ".validate": "newData.hasChildren(['email']) && newData.child('email').val() == $k.replace(',', '.')"
       }
+    },
+    "audit": {
+      ".read": "auth != null && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
+      "$id": {
+        ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true && !data.exists()",
+        ".validate": "newData.hasChildren(['t','by','act']) && newData.child('by').val() == auth.token.email.toLowerCase() && newData.child('act').isString() && newData.child('act').val().length <= 200"
+      }
     }
   }
 }

@@ -56,8 +56,18 @@
     });
   }
   /* every signed-in account is listed for the admins (Admin → Users), even before it gets any access */
+  /* usage & adoption: one mark per day and per module (users/<key>/days/<YYYY-MM-DD>, users/<key>/mods/<module>) – read by Administration → Usage */
+  function trackUsage(u) {
+    if (!u || !u.email) return;
+    const p = location.pathname, mod = /\/board\//.test(p) ? "collab" : /\/planning\//.test(p) ? "planning" : /\/itsm\//.test(p) ? "itsm" : /\/game\//.test(p) ? "game" : /\/sst\//.test(p) ? "sst" : /\/workspaces\//.test(p) ? "hub" : "";
+    const day = new Date().toISOString().slice(0, 10), mark = "cm:use:" + day + ":" + mod;
+    try { if (sessionStorage.getItem(mark)) return; } catch (e) { /* ignore */ }
+    const o = { email: u.email.toLowerCase(), last: window.firebase.database.ServerValue.TIMESTAMP }; o["days/" + day] = true; if (mod) o["mods/" + mod] = window.firebase.database.ServerValue.TIMESTAMP;
+    window.firebase.database().ref("users/" + key(u.email)).update(o).then(function () { try { sessionStorage.setItem(mark, "1"); } catch (e) { /* ignore */ } }, function () { /* rules not published yet */ });
+  }
   function registerAccount(u) {
     if (!u || !u.email) return;
+    setTimeout(function () { trackUsage(u); }, 1500);
     try { if (sessionStorage.getItem("cm:acct") === u.uid) return; } catch (e) { /* ignore */ }
     const r = window.firebase.database().ref("users/" + key(u.email)), prov = ((u.providerData || [])[0] || {}).providerId || "password";
     r.update({ email: u.email.toLowerCase(), name: u.displayName || null, provider: prov, verified: !!u.emailVerified, last: window.firebase.database.ServerValue.TIMESTAMP }).then(function () {

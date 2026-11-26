@@ -69,11 +69,29 @@
       db.ref("signups").once("value").catch(function () { return { val: function () { return {}; } }; }),
       db.ref("entitlements").once("value").catch(function () { return { val: function () { return null; } }; }),
       db.ref("moduleRequests").once("value").catch(function () { return { val: function () { return null; } }; }),
-      db.ref("users").once("value").catch(function () { return { val: function () { return {}; } }; })
-    ]).then(function (r) { accounts = r[7].val() || {}; announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
+      db.ref("users").once("value").catch(function () { return { val: function () { return {}; } }; }),
+      db.ref("audit").orderByKey().limitToLast(1500).once("value").catch(function () { return { val: function () { return {}; } }; })
+    ]).then(function (r) { auditLog = r[8].val() || {}; accounts = r[7].val() || {}; announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
   }
   function update(u, okMsg) {
-    return db.ref().update(u).then(function () { if (okMsg) toast(okMsg); return load(); }).catch(fail);
+    return db.ref().update(u).then(function () { audit(u, okMsg); if (okMsg) toast(okMsg); return load(); }).catch(fail);
+  }
+  /* ---- audit trail: every administrative change (audit/<push>, admins only) ---- */
+  let auditLog = {};
+  function AREAS() { return { workspaces: LL("Access & workspaces", "Acessos e workspaces"), entitlements: LL("Modules & licences", "Módulos e licenças"), plans: LL("Plans", "Planos"), signups: LL("Beta sign-ups", "Inscrições no beta"), announcement: LL("Announcement", "Comunicação"), feedback: "Feedback", userWorkspaces: LL("Access & workspaces", "Acessos e workspaces"), boards: LL("Boards", "Quadros"), planning: LL("Plannings", "Planejamentos"), itsm: "ITSM", game: "Business Game", sst: LL("Health", "Saúde"), users: LL("Accounts", "Contas") }; }
+  function audit(u, msg) {
+    const AREA = AREAS();
+    if (OWNER || !db || !me) return;
+    const ps = Object.keys(u || {}), areas = {}, who = {}, wsx = {};
+    ps.forEach(function (p) {
+      const s = p.split("/"); if (AREA[s[0]]) areas[AREA[s[0]]] = 1;
+      s.forEach(function (x) { if (x.indexOf(",") > 0 && x.indexOf("@") > 0) who[x.replace(/,/g, ".")] = 1; });
+      if ((s[0] === "workspaces" || (s[0] === "entitlements" && s[1] === "ws")) && s[s[0] === "workspaces" ? 1 : 2]) { const id = s[s[0] === "workspaces" ? 1 : 2]; wsx[(ws[id] && ws[id].info && ws[id].info.name) || id] = 1; }
+      if (s[0] === "userWorkspaces" && s[2]) { const id = s[2]; wsx[(ws[id] && ws[id].info && ws[id].info.name) || id] = 1; }
+    });
+    const area = Object.keys(areas).join(", ");
+    const e = { t: TS(), by: me.email.toLowerCase(), act: String(msg || area || LL("Change", "Alteração")).slice(0, 200), area: area.slice(0, 200), who: Object.keys(who).slice(0, 12).join(", ").slice(0, 600), ws: Object.keys(wsx).slice(0, 8).join(", ").slice(0, 400), n: ps.length, paths: ps.slice(0, 40).join("\n").slice(0, 2500) };
+    db.ref("audit").push(e).catch(function () { /* audit rules not published yet */ });
   }
   /* area of work (healthcare, retail, consulting, education, service management…) – drives the ready-made plannings */
   function areaSelect(name, cur, attrs) {
@@ -147,7 +165,7 @@
     update(u, "Access removed");
   }
   function setRole(wsId, k, role) {
-    db.ref("workspaces/" + wsId + "/members/" + k + "/role").set(role).then(function () { ws[wsId].members[k].role = role; toast("Role updated"); }).catch(fail);
+    db.ref("workspaces/" + wsId + "/members/" + k + "/role").set(role).then(function () { ws[wsId].members[k].role = role; const u = {}; u["workspaces/" + wsId + "/members/" + k + "/role"] = role; audit(u, LL("Role changed to ", "Papel alterado para ") + role); toast("Role updated"); }).catch(fail);
   }
   function renameBoard(wsId, id) {
     const cur = ws[wsId].boards[id].title;
@@ -767,6 +785,71 @@
     }).join("") + "</tbody></table></div>" : '<p class="muted small">' + LL("Nothing expiring in the next 7 days.", "Nenhum acesso vencendo nos próximos 7 dias.") + "</p>";
     return h + "</section>";
   }
+  /* ---- Usage & adoption (from users/<key>: last, first, days/<date>, mods/<module>) ---- */
+  const AF = { q: "", per: "30", by: "" }; /* audit filters */
+  function usagePane(ids, map) {
+    const now = Date.now(), d7 = now - 7 * DAY, d30 = now - 30 * DAY;
+    const acc = Object.keys(accounts).map(function (k) { return Object.assign({ k: k }, accounts[k]); }).filter(function (a) { return a.email; });
+    const lastOf = function (a) { const ds = Object.keys(a.days || {}).sort(); const ld = ds.length ? Date.parse(ds[ds.length - 1] + "T12:00:00Z") : 0; return Math.max(Number(a.last) || 0, ld); };
+    const a7 = acc.filter(function (a) { return lastOf(a) >= d7; }).length, a30 = acc.filter(function (a) { return lastOf(a) >= d30; }).length;
+    const inact = acc.filter(function (a) { return lastOf(a) && lastOf(a) < d30; });
+    const members = Object.keys(map).filter(function (k) { return map[k].acc.some(function (x) { return x.st !== "off"; }); });
+    const never = members.filter(function (k) { return !accounts[k]; });
+    const nw = acc.filter(function (a) { return Number(a.first) >= d30; }).length;
+    const tile = function (n, l, sub, cls) { return '<div class="ov-tile' + (cls ? " " + cls : "") + '"><b>' + n + "</b><span>" + l + "</span>" + (sub ? '<small class="muted">' + sub + "</small>" : "") + "</div>"; };
+    const pc = function (a, b) { return b ? Math.round(a / b * 100) + "%" : "–"; };
+    /* daily actives – last 30 days */
+    const days = []; for (let i = 29; i >= 0; i--) { const d = new Date(now - i * DAY).toISOString().slice(0, 10); days.push([d, acc.filter(function (a) { return a.days && a.days[d]; }).length]); }
+    const mx = Math.max(1, Math.max.apply(null, days.map(function (d) { return d[1]; })));
+    const chart = '<div class="us-bars" role="img" aria-label="' + esc(LL("Active people per day", "Pessoas ativas por dia")) + '">' + days.map(function (d) { return '<span title="' + esc(fmtShort(Date.parse(d[0] + "T12:00:00Z")) + " · " + d[1]) + '"><i style="height:' + Math.max(2, d[1] / mx * 100) + '%"></i></span>'; }).join("") + '</div><div class="us-ax muted small"><span>' + fmtShort(Date.parse(days[0][0] + "T12:00:00Z")) + "</span><span>" + LL("today", "hoje") + "</span></div>";
+    /* adoption per module (used in the last 30 days) */
+    const MODL = [["collab", LL("Collaboration (boards)", "Colaboração (quadros)")], ["planning", LL("Planning", "Planejamento")], ["itsm", "ITSM"], ["game", "Business Game"], ["sst", LL("Health", "Saúde")]];
+    const modRows = MODL.map(function (m) { const n = acc.filter(function (a) { return a.mods && Number(a.mods[m[0]]) >= d30; }).length; return '<div class="us-row"><span>' + m[1] + '</span><span class="us-tr"><i style="width:' + (a30 ? n / Math.max(a30, 1) * 100 : 0) + '%"></i></span><b>' + n + '</b><small class="muted">' + pc(n, a30) + "</small></div>"; }).join("");
+    /* per workspace */
+    const wsRows = ids.map(function (id) {
+      const w = ws[id], mm = w.members || {}, ks = Object.keys(mm).filter(function (k) { return !mm[k].expires || mm[k].expires > now; });
+      const act = ks.filter(function (k) { return accounts[k] && lastOf(Object.assign({}, accounts[k])) >= d30; }).length;
+      const last = Math.max.apply(null, [0].concat(ks.map(function (k) { return accounts[k] ? lastOf(accounts[k]) : 0; })));
+      return { id: id, name: (w.info || {}).name || id, n: ks.length, act: act, last: last, b: Object.keys(w.boards || {}).length, p: Object.keys(w.plannings || {}).length };
+    }).sort(function (a, b) { return b.act - a.act || b.n - a.n; });
+    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Usage & adoption", "Uso e adoção") + '</h2><p class="muted small">' + LL("Who is really using the platform, which modules and in which workspaces – to act before a licence is wasted.", "Quem está usando de verdade, quais módulos e em quais workspaces – para agir antes de uma licença ser desperdiçada.") + '</p></div><button class="btn sm" id="usCsv">' + LL("Export CSV", "Exportar CSV") + "</button></div>" +
+      '<div class="ov-grid">' + tile(acc.length, LL("Accounts", "Contas"), LL("signed in at least once", "entraram pelo menos uma vez")) + tile(a7, LL("Active in 7 days", "Ativos em 7 dias"), pc(a7, acc.length)) + tile(a30, LL("Active in 30 days", "Ativos em 30 dias"), pc(a30, acc.length), "ok") +
+      tile(inact.length, LL("Inactive > 30 days", "Inativos há mais de 30 dias"), "", inact.length ? "warn" : "") + tile(never.length, LL("Never signed in", "Nunca entraram"), LL("have access", "têm acesso"), never.length ? "warn" : "") + tile(nw, LL("New in 30 days", "Novos em 30 dias")) + "</div>" +
+      '<div class="us-g2"><div class="us-card"><h3>' + LL("Active people per day · 30 days", "Pessoas ativas por dia · 30 dias") + "</h3>" + chart + '</div><div class="us-card"><h3>' + LL("Adoption by module · 30 days", "Adoção por módulo · 30 dias") + "</h3>" + modRows + '<p class="muted small">' + LL("% of the people active in 30 days.", "% das pessoas ativas em 30 dias.") + "</p></div></div>" +
+      '<h3>' + LL("By workspace", "Por workspace") + '</h3><div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>Workspace</th><th>' + LL("People with access", "Pessoas com acesso") + "</th><th>" + LL("Active 30 d", "Ativas 30 d") + "</th><th>" + LL("Adoption", "Adoção") + "</th><th>" + LL("Last activity", "Última atividade") + "</th><th>" + LL("Boards", "Quadros") + "</th><th>" + LL("Plannings", "Planejamentos") + "</th></tr></thead><tbody>" +
+      wsRows.map(function (r) { return '<tr><td data-l="Workspace" class="no-i18n"><b>' + esc(r.name) + '</b></td><td data-l="' + esc(LL("People", "Pessoas")) + '" class="tnum">' + r.n + '</td><td data-l="' + esc(LL("Active", "Ativas")) + '" class="tnum">' + r.act + '</td><td data-l="' + esc(LL("Adoption", "Adoção")) + '"><span class="us-tr sm"><i style="width:' + (r.n ? r.act / r.n * 100 : 0) + '%"></i></span> ' + pc(r.act, r.n) + '</td><td data-l="' + esc(LL("Last activity", "Última atividade")) + '" class="tnum">' + (r.last ? fmtShort(r.last) : "—") + '</td><td data-l="' + esc(LL("Boards", "Quadros")) + '" class="tnum">' + r.b + '</td><td data-l="' + esc(LL("Plannings", "Planejamentos")) + '" class="tnum">' + r.p + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+      "<h3>" + LL("Inactive or never signed in", "Inativos ou que nunca entraram") + ' <span class="count">' + (inact.length + never.length) + "</span></h3>" +
+      (inact.length + never.length ? '<div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>' + LL("Person", "Pessoa") + "</th><th>" + LL("Last access", "Último acesso") + "</th><th>Workspaces</th><th></th></tr></thead><tbody>" +
+        never.map(function (k) { return { k: k, u: map[k], last: 0 }; }).concat(inact.map(function (a) { return { k: a.k, u: map[a.k], a: a, last: lastOf(a) }; })).slice(0, 200).map(function (x) {
+          const nm = x.u ? (x.u.name || x.u.email) : (x.a.name || x.a.email), em = x.u ? x.u.email : x.a.email;
+          return '<tr><td data-l="' + esc(LL("Person", "Pessoa")) + '"><b class="no-i18n">' + esc(nm) + '</b> <span class="muted small no-i18n">' + esc(em) + '</span></td><td data-l="' + esc(LL("Last access", "Último acesso")) + '" class="tnum">' + (x.last ? fmtShort(x.last) + ' <span class="muted small">(' + Math.floor((now - x.last) / DAY) + " " + LL("days", "dias") + ")</span>" : '<span class="lic nr">' + LL("never", "nunca") + "</span>") + '</td><td data-l="Workspaces" class="no-i18n">' + esc(x.u ? x.u.acc.map(function (a) { return a.ws; }).join(" · ") : "—") + '</td><td class="go">' + (map[x.k] ? '<button class="btn sm" data-user="' + esc(x.k) + '">' + LL("Manage", "Gerenciar") + " ›</button>" : "") + "</td></tr>";
+        }).join("") + "</tbody></table></div>" : '<p class="muted small">' + LL("Everyone with access used the platform in the last 30 days.", "Todos com acesso usaram a plataforma nos últimos 30 dias.") + "</p>") +
+      '<p class="muted small">' + LL("Usage is recorded from today on (one mark per person, day and module). Days before that only show the last sign-in.", "O uso passa a ser registrado a partir de hoje (uma marca por pessoa, dia e módulo). Antes disso, só aparece o último acesso.") + "</p></section>";
+    return h;
+  }
+  /* ---- Audit trail ---- */
+  function auditRows() {
+    const now = Date.now(), lim = AF.per === "all" ? 0 : now - Number(AF.per) * DAY, q = (AF.q || "").toLowerCase();
+    return Object.keys(auditLog).map(function (k) { return Object.assign({ id: k }, auditLog[k]); }).filter(function (e) {
+      if ((Number(e.t) || 0) < lim) return false; if (AF.by && e.by !== AF.by) return false;
+      return !q || [e.act, e.area, e.who, e.ws, e.by].join(" ").toLowerCase().indexOf(q) >= 0;
+    }).sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+  }
+  function auditPane() {
+    const rows = auditRows(), bys = {}; Object.keys(auditLog).forEach(function (k) { if (auditLog[k].by) bys[auditLog[k].by] = 1; });
+    const when = function (ts) { return new Date(ts).toLocaleString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); };
+    return '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Audit trail", "Auditoria") + '</h2><p class="muted small">' + LL("Every administrative change – who did it, what, for whom and when. Kept for governance and can be exported.", "Toda alteração administrativa – quem fez, o quê, para quem e quando. Fica guardada para governança e pode ser exportada.") + '</p></div><button class="btn sm" id="auCsv">' + LL("Export CSV", "Exportar CSV") + "</button></div>" +
+      '<div class="fbar f2"><input id="auQ" type="search" value="' + esc(AF.q) + '" placeholder="' + esc(LL("Search action, person, workspace…", "Buscar ação, pessoa, workspace…")) + '"><select id="auPer"><option value="7"' + (AF.per === "7" ? " selected" : "") + ">" + LL("Last 7 days", "Últimos 7 dias") + '</option><option value="30"' + (AF.per === "30" ? " selected" : "") + ">" + LL("Last 30 days", "Últimos 30 dias") + '</option><option value="90"' + (AF.per === "90" ? " selected" : "") + ">" + LL("Last 90 days", "Últimos 90 dias") + '</option><option value="all"' + (AF.per === "all" ? " selected" : "") + ">" + LL("All", "Tudo") + '</option></select><select id="auBy" class="no-i18n"><option value="">' + LL("Everyone", "Todos") + "</option>" + Object.keys(bys).sort().map(function (b) { return '<option value="' + esc(b) + '"' + (AF.by === b ? " selected" : "") + ">" + esc(b) + "</option>"; }).join("") + "</select></div>" +
+      (rows.length ? '<div class="tbl-wrap"><table class="adm-tbl au-tbl"><thead><tr><th>' + LL("When", "Quando") + "</th><th>" + LL("Who", "Quem") + "</th><th>" + LL("Action", "Ação") + "</th><th>" + LL("Area", "Área") + "</th><th>" + LL("For", "Para") + "</th><th>Workspace</th></tr></thead><tbody>" +
+        rows.slice(0, 400).map(function (e) { return '<tr><td data-l="' + esc(LL("When", "Quando")) + '" class="tnum">' + (e.t ? when(e.t) : "—") + '</td><td data-l="' + esc(LL("Who", "Quem")) + '" class="no-i18n">' + esc(e.by || "") + '</td><td data-l="' + esc(LL("Action", "Ação")) + '"><b>' + esc(e.act || "") + '</b><details class="au-d"><summary>' + (e.n || 0) + " " + LL("field(s)", "campo(s)") + '</summary><pre class="no-i18n">' + esc(e.paths || "") + '</pre></details></td><td data-l="' + esc(LL("Area", "Área")) + '">' + esc(e.area || "") + '</td><td data-l="' + esc(LL("For", "Para")) + '" class="no-i18n">' + esc(e.who || "—") + '</td><td data-l="Workspace" class="no-i18n">' + esc(e.ws || "—") + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+        (rows.length > 400 ? '<p class="muted small">' + LL("Showing 400 – export the CSV for all.", "Mostrando 400 – exporte o CSV para ver todos.") + "</p>" : "")
+        : '<p class="muted small">' + (Object.keys(auditLog).length ? LL("Nothing matches the filters.", "Nada corresponde aos filtros.") : LL("The audit trail starts with the next administrative change.", "A auditoria começa a partir da próxima alteração administrativa.")) + "</p>") + "</section>";
+  }
+  function csvDl(name, head, rows) {
+    const q = function (v) { v = v == null ? "" : String(v); return '"' + v.replace(/"/g, '""') + '"'; };
+    const blob = new Blob(["﻿" + [head].concat(rows).map(function (r) { return r.map(q).join(";"); }).join("\n")], { type: "text/csv;charset=utf-8" });
+    const x = document.createElement("a"); x.href = URL.createObjectURL(blob); x.download = name + "-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(x); x.click(); x.remove();
+  }
   function usersPane(ids, map) {
     const all = Object.keys(map).map(function (k) { return map[k]; }), list = usersFiltered(map);
     const n = function (st) { return all.filter(function (u) { return st === "all" ? true : st === "norenew" ? u.noRenew : u.st === st; }).length; };
@@ -839,20 +922,24 @@
     const map = buildUsers(), users = Object.keys(map).map(function (k) { return map[k]; });
     let h = OWNER ? '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(me.email) + '</b></span><span class="plan-badge">' + esc(t("Plan")) + ": <b>" + esc(PLAN.name) + "</b> · " + PLAN.seats + " " + esc(t("seats")) + '</span><a class="btn sm primary" href="../pricing/">' + esc(t("Upgrade")) + '</a><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>'
       : '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
-    const SECS = [["overview", LL("Overview", "Visão geral"), "visao-geral", "", "chart"], ["users", LL("Users & licences", "Usuários e licenças"), "usuarios", users.filter(function (u) { return u.st === "soon"; }).length || users.length, "users"], ["ws", "Workspaces", "workspaces", ids.length, "folder"]]
-      .concat(OWNER ? [] : [["modules", LL("Modules & packages", "Módulos e pacotes"), "modulos", Object.keys(modReq || {}).length || "", "grid"], ["signups", LL("Beta sign-ups", "Inscrições no beta"), "inscricoes", Object.keys(signups).length, "inbox"], ["plans", LL("Plans", "Planos"), "planos", Object.keys(plans).length, "card"], ["comms", LL("Announcement", "Comunicação"), "comunicacao", "", "bell"], ["feedback", "Feedback", "feedback", Object.keys(feedback).length, "chat"]]);
+    const G1 = LL("Operation", "Operação"), G2 = LL("Governance", "Governança"), G3 = LL("Commercial", "Comercial");
+    const SECS = [["overview", LL("Overview", "Visão geral"), "visao-geral", "", "dashboard", G1], ["users", LL("Users & licences", "Usuários e licenças"), "usuarios", users.filter(function (u) { return u.st === "soon"; }).length || users.length, "people", G1], ["ws", "Workspaces", "workspaces", ids.length, "layers", G1]]
+      .concat(OWNER ? [] : [["modules", LL("Modules & packages", "Módulos e pacotes"), "modulos", Object.keys(modReq || {}).length || "", "catalog", G1], ["usage", LL("Usage & adoption", "Uso e adoção"), "uso", "", "trend", G2], ["audit", LL("Audit trail", "Auditoria"), "auditoria", Object.keys(auditLog).length || "", "lock", G2], ["signups", LL("Beta sign-ups", "Inscrições no beta"), "inscricoes", Object.keys(signups).length, "mail", G3], ["plans", LL("Plans", "Planos"), "planos", Object.keys(plans).length, "kr", G3], ["comms", LL("Announcement", "Comunicação"), "comunicacao", "", "bell", G3], ["feedback", "Feedback", "feedback", Object.keys(feedback).length, "pulse", G3]]);
     const hash = (location.hash || "").slice(1);
     let sec = (SECS.find(function (s) { return s[2] === hash || s[0] === hash; }) || [])[0];
     if (!sec) { try { sec = localStorage.getItem("cmcollab:admsec"); } catch (e) { /* ignore */ } }
     if (!SECS.some(function (s) { return s[0] === sec; })) sec = "overview";
     const soon = users.filter(function (u) { return u.st === "soon"; }).length;
-    h += '<div class="adm-shell"><nav class="adm-nav no-i18n" aria-label="' + esc(LL("Administration", "Administração")) + '">' + SECS.map(function (s) {
+    let lastG = "";
+    h += '<div class="adm-shell"><nav class="adm-nav no-i18n" aria-label="' + esc(LL("Administration", "Administração")) + '"><div class="adm-search"><input type="search" id="admQ" list="admQL" placeholder="' + esc(LL("Find a person or workspace", "Buscar pessoa ou workspace")) + '" autocomplete="off"><datalist id="admQL">' +
+      users.map(function (u) { return '<option value="' + esc(u.email) + '">' + esc(u.name || "") + "</option>"; }).join("") + ids.map(function (id) { return '<option value="' + esc("ws: " + ((ws[id].info || {}).name || id)) + '"></option>'; }).join("") + "</datalist></div>" + SECS.map(function (s) {
       const badge = s[0] === "users" && soon ? '<span class="count warn" title="' + esc(LL("Expiring in 7 days", "Vencendo em 7 dias")) + '">' + soon + "</span>" : s[3] !== "" ? '<span class="count">' + s[3] + "</span>" : "";
-      return '<button data-sec="' + s[0] + '"' + (s[0] === sec ? ' class="on" aria-current="page"' : "") + "><span>" + s[1] + "</span>" + badge + "</button>";
+      const gh = !OWNER && s[5] !== lastG ? '<span class="adm-g">' + esc(s[5]) + "</span>" : ""; lastG = s[5];
+      return gh + '<button data-sec="' + s[0] + '"' + (s[0] === sec ? ' class="on" aria-current="page"' : "") + '><span class="adm-ni">' + (window.CMIcon ? window.CMIcon(s[4], 16) : "") + "<span>" + s[1] + "</span></span>" + badge + "</button>";
     }).join("") + '</nav><div class="adm-main no-i18n-wrap">';
     const pane = function (k, html) { return '<div class="adm-pane" data-pane="' + k + '"' + (k === sec ? "" : " hidden") + ">" + html + "</div>"; };
     h += pane("overview", overviewPane(ids, map)) + pane("users", usersPane(ids, map)) + pane("ws", wsPane(ids));
-    if (!OWNER) h += pane("modules", modulesPane(ids)) + pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
+    if (!OWNER) h += pane("modules", modulesPane(ids)) + pane("usage", usagePane(ids, map)) + pane("audit", auditPane()) + pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
     h += "</div></div>" + '<div id="admDrawer">' + (drawerK && map[drawerK] ? drawerHtml(map[drawerK]) : "") + "</div>";
     h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">' + t("The sign-in link was e-mailed automatically. If you like, also send this personal message (e.g. by WhatsApp).") + '</p>' +
       '<textarea rows="10" readonly></textarea><div class="row-end"><button class="btn" id="dlgClose">Close</button><button class="btn" id="copyInv">Copy message</button><a class="btn primary" id="mailBtn" href="#">Open in e-mail</a></div></div></div>';
@@ -902,6 +989,23 @@
     if (drawerK) document.onkeydown = function (e) { if (e.key === "Escape" && drawerK) { drawerK = null; const d = document.getElementById("admDrawer"); if (d) d.innerHTML = ""; } };
     el.querySelectorAll(".ws-det").forEach(function (d) { d.ontoggle = function () { if (d.open) { UF.open = d.id.slice(4); saveUF(); } else if (UF.open === d.id.slice(4)) { UF.open = ""; saveUF(); } }; });
     if (!OWNER) bindModules();
+    const admQ = document.getElementById("admQ"); if (admQ) admQ.onchange = admQ.onkeydown = function (e) {
+      if (e.type === "keydown" && e.key !== "Enter") return; const v = admQ.value.trim(); if (!v) return;
+      if (v.indexOf("ws: ") === 0) { const nm = v.slice(4), id = ids.find(function (i) { return ((ws[i].info || {}).name || i) === nm; }); if (id) { UF.open = id; saveUF(); render(); go("ws"); const d = document.getElementById("det-" + id); if (d) { d.open = true; d.scrollIntoView({ block: "start" }); } } return; }
+      const u = users.find(function (x) { return x.email === v.toLowerCase(); }) || users.find(function (x) { return (x.name || "").toLowerCase().indexOf(v.toLowerCase()) >= 0 || x.email.indexOf(v.toLowerCase()) >= 0; });
+      if (u) { drawerK = u.k; render(); go("users"); } else { UF.q = v; saveUF(); render(); go("users"); }
+    };
+    const auQ = document.getElementById("auQ"); if (auQ) auQ.oninput = function () { AF.q = auQ.value; rr("auQ"); };
+    const auPer = document.getElementById("auPer"); if (auPer) auPer.onchange = function () { AF.per = auPer.value; rr(); };
+    const auBy = document.getElementById("auBy"); if (auBy) auBy.onchange = function () { AF.by = auBy.value; rr(); };
+    const auCsv = document.getElementById("auCsv"); if (auCsv) auCsv.onclick = function () { csvDl("cm-collaborator-auditoria", [LL("when", "quando"), LL("who", "quem"), LL("action", "ação"), LL("area", "área"), LL("for", "para"), "workspace", LL("fields", "campos")], auditRows().map(function (e) { return [e.t ? new Date(e.t).toISOString() : "", e.by, e.act, e.area, e.who, e.ws, (e.paths || "").replace(/\n/g, " | ")]; })); };
+    const usCsv = document.getElementById("usCsv"); if (usCsv) usCsv.onclick = function () {
+      const MK = ["collab", "planning", "itsm", "game", "sst"];
+      csvDl("cm-collaborator-uso", [LL("name", "nome"), "email", LL("first access", "primeiro acesso"), LL("last access", "último acesso"), LL("active days (30 d)", "dias ativos (30 d)")].concat(MK.map(function (m) { return LL("last use: ", "último uso: ") + m; })), Object.keys(accounts).map(function (k) {
+        const a = accounts[k] || {}, ds = Object.keys(a.days || {}).filter(function (d) { return Date.parse(d) >= Date.now() - 30 * DAY; }).length;
+        return [a.name || "", a.email || "", a.first ? new Date(a.first).toISOString().slice(0, 10) : "", a.last ? new Date(a.last).toISOString().slice(0, 10) : "", ds].concat(MK.map(function (m) { return a.mods && a.mods[m] ? new Date(a.mods[m]).toISOString().slice(0, 10) : ""; }));
+      }));
+    };
     const uCsv = document.getElementById("uCsv"); if (uCsv) uCsv.onclick = function () {
       const q = function (v) { v = v == null ? "" : String(v); return '"' + v.replace(/"/g, '""') + '"'; };
       const rows = []; usersFiltered(map).forEach(function (u) { u.acc.forEach(function (a) { rows.push([u.name, u.email, a.ws, a.m.role || "editor", a.m.expires ? new Date(a.m.expires).toISOString().slice(0, 10) : "", a.st === "none" ? "sem prazo" : a.st === "off" ? "expirado" : a.st === "soon" ? "vence em 7 dias" : "ativo", a.m.noRenew ? "sim" : "", a.boards, a.plans, a.m.welcomed ? new Date(a.m.welcomed).toISOString().slice(0, 10) : "", a.m.prospected ? new Date(a.m.prospected).toISOString().slice(0, 10) : ""].map(q).join(",")); }); });
@@ -911,9 +1015,9 @@
 
     document.getElementById("newWs").onsubmit = function (e) { e.preventDefault(); createWorkspace(e.target); };
     const af = document.getElementById("annForm");
-    if (af) af.onsubmit = function (e) { e.preventDefault(); db.ref("announcement").set({ title: af.title.value.trim(), text: af.text.value.trim(), on: af.on.checked, t: TS(), by: me.email }).then(function () { toast("Announcement saved"); load(); }, fail); };
+    if (af) af.onsubmit = function (e) { e.preventDefault(); db.ref("announcement").set({ title: af.title.value.trim(), text: af.text.value.trim(), on: af.on.checked, t: TS(), by: me.email }).then(function () { audit({ announcement: 1 }, LL("Announcement saved", "Comunicado salvo") + (af.on.checked ? "" : LL(" (off)", " (desligado)"))); toast("Announcement saved"); load(); }, fail); };
     const pf = document.getElementById("planForm"); if (pf) pf.onsubmit = function (e) { e.preventDefault(); savePlan(pf); };
-    el.querySelectorAll("[data-delplan]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Remove this plan? The customer goes back to Free."))) db.ref("plans/" + b.dataset.delplan).remove().then(load, fail); }; });
+    el.querySelectorAll("[data-delplan]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Remove this plan? The customer goes back to Free."))) db.ref("plans/" + b.dataset.delplan).remove().then(function () { const u = {}; u["plans/" + b.dataset.delplan] = null; audit(u, LL("Plan removed (back to Free)", "Plano removido (volta ao Free)")); load(); }, fail); }; });
     document.getElementById("soBtn").onclick = A.signOut;
     el.querySelectorAll("form[data-newboard]").forEach(function (f) { f.onsubmit = function (e) { e.preventDefault(); createBoard(f.dataset.newboard, f); }; });
     el.querySelectorAll("form[data-add]").forEach(function (f) { f.onsubmit = function (e) { e.preventDefault(); addMember(f.dataset.add, f); }; });
@@ -956,7 +1060,7 @@
     const suAll = document.getElementById("suAll"); if (suAll) suAll.onclick = grantAllPending;
     const suCsv = document.getElementById("suCsv"); if (suCsv) suCsv.onclick = exportSignups;
     el.querySelectorAll("[data-grant]").forEach(function (b) { b.onclick = function () { grantSignup(b.dataset.grant); }; });
-    el.querySelectorAll("[data-delsu]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Delete this sign-up?"))) db.ref("signups/" + b.dataset.delsu).remove().then(load, fail); }; });
+    el.querySelectorAll("[data-delsu]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Delete this sign-up?"))) db.ref("signups/" + b.dataset.delsu).remove().then(function () { audit({ signups: 1 }, LL("Beta sign-up deleted", "Inscrição no beta apagada")); load(); }, fail); }; });
     el.querySelectorAll("[data-copy-beta]").forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText(abs("../beta/")).then(function () { toast("Link copied"); }); }; });
     const csv = document.getElementById("fbCsv"); if (csv) csv.onclick = exportCsv;
     el.querySelectorAll("[data-delfb]").forEach(function (b) { b.onclick = function () { if (window.confirm(t("Delete this response?"))) db.ref("feedback/" + b.dataset.delfb).remove().then(load, fail); }; });
