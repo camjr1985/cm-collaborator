@@ -6,7 +6,7 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, accounts = {}, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null;
+  let db, me, accounts = {}, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null, orgs = {}, myOrgs = {}, CUR_ORG = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short", year: "numeric" }); }
@@ -58,7 +58,15 @@
       ]).then(function (r) {
         PLAN = window.CMPlan(r[1].val());
         const raw = r[0].val() || {}, ids = Object.keys(raw).filter(function (k) { return raw[k] && raw[k].owner; });
-        return Promise.all(ids.map(function (id) { return db.ref("workspaces/" + id).once("value").then(function (x) { return [id, x.val()]; }, function () { return [id, null]; }); }));
+        return db.ref("userOrgs/" + MEK).once("value").then(function (s) { return s.val() || {}; }, function () { return {}; }).then(function (mo) {
+          myOrgs = mo;
+          return Promise.all(Object.keys(mo).map(function (o) { return db.ref("orgs/" + o).once("value").then(function (x) { return [o, x.val()]; }, function () { return [o, null]; }); }));
+        }).then(function (os) {
+          orgs = {}; os.forEach(function (x) { if (x[1]) orgs[x[0]] = x[1]; });
+          if (!CUR_ORG || !orgs[CUR_ORG]) CUR_ORG = Object.keys(orgs)[0] || null;
+          const all = ids.slice(); Object.keys(orgs).forEach(function (o) { Object.keys(orgs[o].workspaces || {}).forEach(function (w) { if (all.indexOf(w) < 0) all.push(w); }); });
+          return Promise.all(all.map(function (id) { return db.ref("workspaces/" + id).once("value").then(function (x) { return [id, x.val()]; }, function () { return [id, null]; }); }));
+        });
       }).then(function (rows) { ws = {}; rows.forEach(function (x) { if (x[1]) ws[x[0]] = x[1]; }); render(); });
     }
     return Promise.all([
@@ -70,8 +78,9 @@
       db.ref("entitlements").once("value").catch(function () { return { val: function () { return null; } }; }),
       db.ref("moduleRequests").once("value").catch(function () { return { val: function () { return null; } }; }),
       db.ref("users").once("value").catch(function () { return { val: function () { return {}; } }; }),
-      db.ref("audit").orderByKey().limitToLast(1500).once("value").catch(function () { return { val: function () { return {}; } }; })
-    ]).then(function (r) { auditLog = r[8].val() || {}; accounts = r[7].val() || {}; announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
+      db.ref("audit").orderByKey().limitToLast(1500).once("value").catch(function () { return { val: function () { return {}; } }; }),
+      db.ref("orgs").once("value").catch(function () { return { val: function () { return {}; } }; })
+    ]).then(function (r) { orgs = r[9].val() || {}; auditLog = r[8].val() || {}; accounts = r[7].val() || {}; announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
   }
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { audit(u, okMsg); if (okMsg) toast(okMsg); return load(); }).catch(fail);
@@ -81,7 +90,7 @@
   function AREAS() { return { workspaces: LL("Access & workspaces", "Acessos e workspaces"), entitlements: LL("Modules & licences", "Módulos e licenças"), plans: LL("Plans", "Planos"), signups: LL("Beta sign-ups", "Inscrições no beta"), announcement: LL("Announcement", "Comunicação"), feedback: "Feedback", userWorkspaces: LL("Access & workspaces", "Acessos e workspaces"), boards: LL("Boards", "Quadros"), planning: LL("Plannings", "Planejamentos"), itsm: "ITSM", game: "Business Game", sst: LL("Health", "Saúde"), users: LL("Accounts", "Contas") }; }
   function audit(u, msg) {
     const AREA = AREAS();
-    if (OWNER || !db || !me) return;
+    if (!db || !me) return;
     const ps = Object.keys(u || {}), areas = {}, who = {}, wsx = {};
     ps.forEach(function (p) {
       const s = p.split("/"); if (AREA[s[0]]) areas[AREA[s[0]]] = 1;
@@ -91,7 +100,10 @@
     });
     const area = Object.keys(areas).join(", ");
     const e = { t: TS(), by: me.email.toLowerCase(), act: String(msg || area || LL("Change", "Alteração")).slice(0, 200), area: area.slice(0, 200), who: Object.keys(who).slice(0, 12).join(", ").slice(0, 600), ws: Object.keys(wsx).slice(0, 8).join(", ").slice(0, 400), n: ps.length, paths: ps.slice(0, 40).join("\n").slice(0, 2500) };
-    db.ref("audit").push(e).catch(function () { /* audit rules not published yet */ });
+    if (!OWNER) db.ref("audit").push(e).catch(function () { /* audit rules not published yet */ });
+    /* company trail: every company whose workspace was touched */
+    const touched = {}; ps.forEach(function (p) { const s = p.split("/"); const id = s[0] === "workspaces" ? s[1] : s[0] === "userWorkspaces" ? s[2] : null; if (id && ws[id] && ws[id].info && ws[id].info.org) touched[ws[id].info.org] = 1; if (s[0] === "orgs" && s[1]) touched[s[1]] = 1; });
+    Object.keys(touched).forEach(function (o) { db.ref("orgs/" + o + "/audit").push(e).catch(function () { /* not an admin of that company */ }); });
   }
   /* area of work (healthcare, retail, consulting, education, service management…) – drives the ready-made plannings */
   function areaSelect(name, cur, attrs) {
@@ -133,16 +145,22 @@
     const email = f.email.value.trim().toLowerCase(), name = f.name.value.trim(), role = f.role.value;
     if (!validEmail(email)) return toast("Enter a valid e-mail");
     const k = A.key(email), u = {}, days = Number(f.days.value) || 0;
-    if (OWNER && k !== MEK) {
+    if (OWNER && k !== MEK && !orgOfWs(wsId)) {
       const people = {}; Object.keys(ws).forEach(function (w) { Object.keys(ws[w].members || {}).forEach(function (m) { if (m !== MEK) people[m] = 1; }); });
       if (!people[k] && Object.keys(people).length >= PLAN.seats) return limit(t("Your plan includes") + " " + PLAN.seats + " " + t("invited people") + ".");
+    }
+    const oid = orgOfWs(wsId);
+    if (oid && orgs[oid] && k !== MEK) { /* company seats and domain */
+      const o = orgs[oid], L0 = orgLimits(o), ppl = orgPeople(oid), dom = ((o.info || {}).domain || "").toLowerCase();
+      if (!ppl[k] && !(o.admins || {})[k] && Object.keys(ppl).length >= L0.seats) return limit(LL("All ", "Todos os ") + L0.seats + LL(" seats of the company are in use.", " assentos da empresa estão em uso."));
+      if (dom && (o.settings || {}).domainOnly && email.split("@")[1] !== dom && OWNER) return toast(LL("This company only invites e-mails @", "Esta empresa só convida e-mails @") + dom);
     }
     const expires = days ? Date.now() + days * DAY : null;
     u["workspaces/" + wsId + "/members/" + k] = { email: email, name: name || email.split("@")[0], role: role, invitedAt: TS(), invitedBy: me.email, expires: expires };
     u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
     const kind = f.mailType ? f.mailType.value : "welcome";
     f.reset();
-    update(u).then(function () {
+    update(u, LL("Access granted: ", "Acesso concedido: ") + email).then(function () {
       if (kind !== "prospect") return inviteAndTell([email], wsId);
       // access is now real in the database → only then the prospecting e-mail (after explicit confirmation)
       if (window.confirm(t("Access created. Send the sales prospecting e-mail now to") + " " + email + "?")) sendProspect(wsId, [email]);
@@ -850,6 +868,115 @@
     const blob = new Blob(["﻿" + [head].concat(rows).map(function (r) { return r.map(q).join(";"); }).join("\n")], { type: "text/csv;charset=utf-8" });
     const x = document.createElement("a"); x.href = URL.createObjectURL(blob); x.download = name + "-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(x); x.click(); x.remove();
   }
+  /* ---------------- Companies (organizations): company admin view + platform view ---------------- */
+  function ORG_ROLES() { return { owner: LL("Owner", "Proprietário"), admin: LL("Company admin", "Admin da empresa"), billing: LL("Billing admin", "Admin de cobrança") }; }
+  function orgLimits(o) {
+    const inf = (o && o.info) || {}, P = window.CM_PLANS || {}, id = P[inf.plan] ? inf.plan : "free", b = P[id] || { seats: 2, workspaces: 1 };
+    const seats = Number(inf.seats) || b.seats;
+    const wsLim = id === "pro" ? 11 : id === "team" ? 50 * Math.max(seats, 1) : id === "enterprise" ? 9999 : (b.workspaces || 1);
+    return { id: id, name: b.name || id, seats: seats, ws: wsLim, admins: id === "pro" || id === "free" ? 1 : 999, until: inf.until || null };
+  }
+  function orgPeople(oid) { /* distinct people with active access in the company's workspaces (company admins not counted) */
+    const o = orgs[oid] || {}, adm = o.admins || {}, out = {};
+    Object.keys(o.workspaces || {}).forEach(function (w) { const mm = (ws[w] || {}).members || {}; Object.keys(mm).forEach(function (k) { const m = mm[k]; if (!adm[k] && m && (!m.expires || m.expires > Date.now())) out[k] = m.email || k.replace(/,/g, "."); }); });
+    return out;
+  }
+  function orgOfWs(id) { return ((ws[id] || {}).info || {}).org || null; }
+  function myOrgRole(oid) { return isPlatformAdmin() ? "owner" : ((orgs[oid] || {}).admins || {})[MEK] || null; }
+  function isPlatformAdmin() { return !OWNER; }
+  function canOrg(oid) { const r = myOrgRole(oid); return r === "owner" || r === "admin"; }
+  function meter(used, lim) { const pc = lim >= 9999 ? 0 : Math.min(100, used / Math.max(lim, 1) * 100); return '<span class="org-meter' + (pc >= 100 ? " full" : pc >= 85 ? " near" : "") + '"><i style="width:' + pc + '%"></i></span><b class="tnum">' + used + " / " + (lim >= 9999 ? "∞" : lim) + "</b>"; }
+  function orgPane() {
+    const oid = CUR_ORG, o = orgs[oid]; if (!o) return "";
+    const inf = o.info || {}, L0 = orgLimits(o), ppl = orgPeople(oid), wsIds = Object.keys(o.workspaces || {}), adm = o.admins || {}, role = myOrgRole(oid), mgr = canOrg(oid), R = ORG_ROLES();
+    const sel = Object.keys(orgs).length > 1 ? '<select id="orgSel" class="no-i18n">' + Object.keys(orgs).map(function (k) { return '<option value="' + esc(k) + '"' + (k === oid ? " selected" : "") + ">" + esc((orgs[k].info || {}).name || k) + "</option>"; }).join("") + "</select>" : "";
+    const auditL = Object.keys(o.audit || {}).map(function (k) { return o.audit[k]; }).sort(function (a, b) { return (b.t || 0) - (a.t || 0); }).slice(0, 25);
+    const owned = Object.keys(ws).filter(function (id) { return (ws[id].info || {}).owner === MEK && !orgOfWs(id); });
+    const st = o.settings || {};
+    let h = '<section class="card adm-sec org-sec"><div class="sec-head"><div><span class="org-kick">' + LL("Company", "Empresa") + " · " + esc(R[role] || "") + "</span><h2>" + (mgr ? '<input id="orgName" class="org-name no-i18n" value="' + esc(inf.name || oid) + '" maxlength="120" aria-label="' + esc(LL("Company name", "Nome da empresa")) + '">' : esc(inf.name || oid)) + "</h2>" + sel + '</div><span class="plan-badge">' + LL("Plan", "Plano") + ": <b>" + esc(L0.name) + "</b>" + (L0.until ? " · " + LL("until ", "até ") + fmtShort(L0.until) : "") + ' · <a href="../pricing/">' + LL("Change plan", "Mudar de plano") + "</a></span></div>" +
+      '<div class="org-kpis"><div><span>' + LL("Seats (people with access)", "Assentos (pessoas com acesso)") + "</span>" + meter(Object.keys(ppl).length, L0.seats) + '</div><div><span>Workspaces</span>' + meter(wsIds.length, L0.ws) + "</div><div><span>" + LL("Company admins", "Administradores da empresa") + "</span>" + meter(Object.keys(adm).filter(function (k) { return adm[k] !== "billing"; }).length, L0.admins).replace(" full", "") + "</div></div>" +
+      (Object.keys(ppl).length >= L0.seats ? '<p class="org-warn">' + LL("All seats are in use. To invite more people, add seats or upgrade the plan.", "Todos os assentos estão em uso. Para convidar mais pessoas, aumente os assentos ou mude o plano.") + "</p>" : "") + "</section>";
+    /* admins */
+    h += '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Company admins", "Administradores da empresa") + '</h2><p class="muted small">' + LL("Owner: everything, including other owners. Company admin: people, workspaces and settings. Billing admin: sees plan and seats.", "Proprietário: tudo, inclusive outros proprietários. Admin da empresa: pessoas, workspaces e configurações. Admin de cobrança: vê plano e assentos.") + "</p></div></div>" +
+      '<div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>' + LL("Person", "Pessoa") + "</th><th>" + LL("Role", "Papel") + "</th><th></th></tr></thead><tbody>" + Object.keys(adm).sort().map(function (k) {
+        const lock = !mgr || (adm[k] === "owner" && role !== "owner") || k === MEK && adm[k] === "owner" && Object.keys(adm).filter(function (x) { return adm[x] === "owner"; }).length === 1;
+        return '<tr><td data-l="' + esc(LL("Person", "Pessoa")) + '" class="no-i18n"><b>' + esc(k.replace(/,/g, ".")) + "</b>" + (k === MEK ? ' <span class="muted small">(' + LL("you", "você") + ")</span>" : "") + '</td><td data-l="' + esc(LL("Role", "Papel")) + '"><select data-orgrole="' + esc(k) + '"' + (lock ? " disabled" : "") + ">" + Object.keys(R).filter(function (r) { return r !== "owner" || role === "owner" || adm[k] === "owner"; }).map(function (r) { return '<option value="' + r + '"' + (adm[k] === r ? " selected" : "") + ">" + esc(R[r]) + "</option>"; }).join("") + '</select></td><td class="go">' + (lock ? "" : '<button class="btn sm ghost danger-t" data-orgrm="' + esc(k) + '">' + LL("Remove", "Remover") + "</button>") + "</td></tr>";
+      }).join("") + "</tbody></table></div>" +
+      (mgr ? '<form id="orgAddAdm" class="fbar f2"><input name="email" type="email" required placeholder="' + esc(LL("E-mail of the new admin", "E-mail do novo administrador")) + '"><select name="role">' + Object.keys(R).filter(function (r) { return r !== "owner" || role === "owner"; }).map(function (r) { return '<option value="' + r + '"' + (r === "admin" ? " selected" : "") + ">" + esc(R[r]) + "</option>"; }).join("") + '</select><button class="btn sm primary">' + LL("Add admin", "Adicionar administrador") + "</button></form>" : "") + "</section>";
+    /* workspaces */
+    h += '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Company workspaces", "Workspaces da empresa") + '</h2><p class="muted small">' + LL("The administrative workspace and its child workspaces. People invited in any of them use the company's seats.", "A workspace administradora e as filhas. Quem for convidado em qualquer uma delas usa os assentos da empresa.") + "</p></div></div>" +
+      '<div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>Workspace</th><th>' + LL("Type", "Tipo") + "</th><th>" + LL("People", "Pessoas") + "</th><th>" + LL("Boards", "Quadros") + "</th><th>" + LL("Plannings", "Planejamentos") + "</th><th></th></tr></thead><tbody>" +
+      wsIds.map(function (id) { const w = ws[id] || {}, admWs = inf.adminWs === id; return '<tr><td data-l="Workspace" class="no-i18n"><b>' + esc((w.info || {}).name || (o.workspaces[id] || {}).name || id) + '</b></td><td data-l="' + esc(LL("Type", "Tipo")) + '">' + (admWs ? '<span class="lic ok">' + LL("Administrative", "Administradora") + "</span>" : LL("Child", "Filha")) + '</td><td data-l="' + esc(LL("People", "Pessoas")) + '" class="tnum">' + Object.keys(w.members || {}).length + '</td><td data-l="' + esc(LL("Boards", "Quadros")) + '" class="tnum">' + Object.keys(w.boards || {}).length + '</td><td data-l="' + esc(LL("Plannings", "Planejamentos")) + '" class="tnum">' + Object.keys(w.plannings || {}).length + '</td><td class="go"><button class="btn sm" data-orgws="' + esc(id) + '">' + LL("Manage", "Gerenciar") + " ›</button></td></tr>"; }).join("") + "</tbody></table></div>" +
+      (mgr ? '<div class="org-acts"><form id="orgNewWs" class="fbar f2"><input name="name" required maxlength="80" placeholder="' + esc(LL("New child workspace (e.g. Marketing, PMO, IT)", "Nova workspace filha (ex.: Marketing, PMO, TI)")) + '"><button class="btn sm primary">' + LL("Create workspace", "Criar workspace") + "</button></form>" +
+        (owned.length ? '<form id="orgAttach" class="fbar f2"><select name="ws" class="no-i18n">' + owned.map(function (id) { return '<option value="' + esc(id) + '">' + esc((ws[id].info || {}).name || id) + "</option>"; }).join("") + '</select><button class="btn sm">' + LL("Add my workspace to the company", "Adicionar minha workspace à empresa") + "</button></form>" : "") + "</div>" : "") + "</section>";
+    /* settings */
+    h += '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Company settings", "Configurações da empresa") + "</h2></div></div>" +
+      '<form id="orgSet" class="org-set"><label>' + LL("Company e-mail domain", "Domínio de e-mail da empresa") + '<input name="domain" class="no-i18n" placeholder="empresa.com.br" value="' + esc(inf.domain || "") + '"' + (mgr ? "" : " disabled") + '></label>' +
+      '<label class="chk"><input type="checkbox" name="domainOnly"' + (st.domainOnly ? " checked" : "") + (mgr ? "" : " disabled") + "> " + LL("Only invite people with the company domain (guests need an admin)", "Só convidar pessoas com o domínio da empresa (convidados externos precisam de um admin)") + "</label>" +
+      '<label>' + LL("Who can create workspaces", "Quem pode criar workspaces") + '<select name="createWs"' + (mgr ? "" : " disabled") + '><option value="admins"' + (st.createWs !== "members" ? " selected" : "") + ">" + LL("Company admins only", "Só administradores da empresa") + '</option><option value="members"' + (st.createWs === "members" ? " selected" : "") + ">" + LL("Any member", "Qualquer membro") + "</option></select></label>" +
+      (mgr ? '<div class="row-end"><button class="btn primary">' + LL("Save settings", "Salvar configurações") + "</button></div>" : "") + "</form></section>";
+    /* company audit */
+    h += '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Company audit trail", "Auditoria da empresa") + '</h2><p class="muted small">' + LL("The last administrative changes in this company.", "As últimas alterações administrativas desta empresa.") + "</p></div></div>" +
+      (auditL.length ? '<div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>' + LL("When", "Quando") + "</th><th>" + LL("Who", "Quem") + "</th><th>" + LL("Action", "Ação") + "</th><th>" + LL("For", "Para") + "</th></tr></thead><tbody>" + auditL.map(function (e) { return '<tr><td data-l="' + esc(LL("When", "Quando")) + '" class="tnum">' + (e.t ? fmtShort(e.t) + " " + new Date(e.t).toTimeString().slice(0, 5) : "—") + '</td><td data-l="' + esc(LL("Who", "Quem")) + '" class="no-i18n">' + esc(e.by || "") + '</td><td data-l="' + esc(LL("Action", "Ação")) + '"><b>' + esc(e.act || "") + '</b></td><td data-l="' + esc(LL("For", "Para")) + '" class="no-i18n">' + esc(e.who || e.ws || "—") + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<p class="muted small">' + LL("No changes recorded yet.", "Ainda não há alterações registradas.") + "</p>") + "</section>";
+    return h;
+  }
+  function orgsPane(ids) { /* platform admin: every company, plan and seats */
+    const P = window.CM_PLANS || {}, free = ids.filter(function (id) { return !orgOfWs(id); });
+    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Companies & plans", "Empresas e planos") + '</h2><p class="muted small">' + LL("Each company has an administrative workspace, child workspaces, its own admins and a number of seats. Company admins manage their people in Administration.", "Cada empresa tem uma workspace administradora, workspaces filhas, administradores próprios e um número de assentos. Os admins da empresa gerenciam as pessoas na Administração.") + "</p></div></div>";
+    const list = Object.keys(orgs).sort(function (a, b) { return ((orgs[a].info || {}).name || a).localeCompare((orgs[b].info || {}).name || b); });
+    h += list.length ? '<div class="tbl-wrap"><table class="adm-tbl"><thead><tr><th>' + LL("Company", "Empresa") + "</th><th>" + LL("Plan", "Plano") + "</th><th>" + LL("Seats", "Assentos") + "</th><th>Workspaces</th><th>" + LL("Admins", "Administradores") + "</th><th></th></tr></thead><tbody>" + list.map(function (oid) {
+      const o = orgs[oid], inf = o.info || {}, L0 = orgLimits(o), used = Object.keys(orgPeople(oid)).length, ad = o.admins || {};
+      return '<tr><td data-l="' + esc(LL("Company", "Empresa")) + '" class="no-i18n"><b>' + esc(inf.name || oid) + "</b>" + (inf.domain ? ' <span class="muted small">' + esc(inf.domain) + "</span>" : "") + '</td><td data-l="' + esc(LL("Plan", "Plano")) + '"><select data-oplan="' + esc(oid) + '">' + Object.keys(P).map(function (k) { return '<option value="' + k + '"' + (L0.id === k ? " selected" : "") + ">" + esc(P[k].name) + "</option>"; }).join("") + '</select></td><td data-l="' + esc(LL("Seats", "Assentos")) + '"><input type="number" min="1" max="100000" class="org-seats" data-oseats="' + esc(oid) + '" value="' + L0.seats + '"> ' + meter(used, L0.seats) + '</td><td data-l="Workspaces" class="tnum">' + Object.keys(o.workspaces || {}).length + '</td><td data-l="' + esc(LL("Admins", "Administradores")) + '" class="no-i18n small">' + esc(Object.keys(ad).map(function (k) { return k.replace(/,/g, ".") + " (" + (ORG_ROLES()[ad[k]] || ad[k]) + ")"; }).join(", ")) + '</td><td class="go"><button class="btn sm" data-oopen="' + esc(oid) + '">' + LL("Open", "Abrir") + " ›</button></td></tr>";
+    }).join("") + "</tbody></table></div>" : '<p class="muted small">' + LL("No company yet. Create the first one below.", "Ainda não há empresas. Crie a primeira abaixo.") + "</p>";
+    h += '<h3>' + LL("New company", "Nova empresa") + '</h3><form id="orgNew" class="org-new"><input name="name" required maxlength="120" placeholder="' + esc(LL("Company name", "Nome da empresa")) + '"><input name="owner" type="email" required placeholder="' + esc(LL("Owner's e-mail (company admin)", "E-mail do proprietário (admin da empresa)")) + '"><select name="plan">' + Object.keys(P).map(function (k) { return '<option value="' + k + '"' + (k === "team" ? " selected" : "") + ">" + esc(P[k].name) + "</option>"; }).join("") + '</select><input name="seats" type="number" min="1" value="10" title="' + esc(LL("Seats", "Assentos")) + '"><input name="domain" placeholder="' + esc(LL("domain (optional)", "domínio (opcional)")) + '"><select name="ws" class="no-i18n"><option value="">' + LL("Administrative workspace: create a new one", "Workspace administradora: criar uma nova") + "</option>" + free.map(function (id) { return '<option value="' + esc(id) + '">' + esc((ws[id].info || {}).name || id) + "</option>"; }).join("") + '</select><button class="btn primary">' + LL("Create company", "Criar empresa") + "</button></form></section>";
+    if (CUR_ORG && orgs[CUR_ORG]) h += '<div class="org-preview"><p class="muted small">' + LL("What the company admins see:", "O que os administradores da empresa veem:") + "</p>" + orgPane() + "</div>";
+    return h;
+  }
+  function bindOrgs() {
+    const oid = CUR_ORG, o = orgs[oid] || {};
+    const sel = document.getElementById("orgSel"); if (sel) sel.onchange = function () { CUR_ORG = sel.value; render(); };
+    el.querySelectorAll("[data-oopen]").forEach(function (b) { b.onclick = function () { CUR_ORG = b.dataset.oopen; render(); const p = el.querySelector(".org-preview"); if (p) p.scrollIntoView({ behavior: "smooth" }); }; });
+    el.querySelectorAll("[data-oplan]").forEach(function (s0) { s0.onchange = function () { const u = {}; u["orgs/" + s0.dataset.oplan + "/info/plan"] = s0.value; update(u, LL("Company plan changed to ", "Plano da empresa alterado para ") + s0.value); }; });
+    el.querySelectorAll("[data-oseats]").forEach(function (i) { i.onchange = function () { const n = Math.max(1, Math.round(Number(i.value) || 1)), u = {}; u["orgs/" + i.dataset.oseats + "/info/seats"] = n; update(u, LL("Seats changed to ", "Assentos alterados para ") + n); }; });
+    const nf = document.getElementById("orgNew"); if (nf) nf.onsubmit = function (e) {
+      e.preventDefault(); const name = nf.name.value.trim(), owner = nf.owner.value.trim().toLowerCase(); if (!name || !validEmail(owner)) return toast(LL("Fill in the name and a valid e-mail", "Preencha o nome e um e-mail válido"));
+      const id = (slug(name) || "empresa") + "-" + rnd(), ok = A.key(owner), u = {};
+      let wsId = nf.ws.value;
+      if (!wsId) { wsId = (slug(name) || "empresa") + "-adm-" + rnd(); u["workspaces/" + wsId + "/info"] = { name: name + " – " + LL("Administration", "Administração"), created: TS(), createdBy: me.email, owner: ok, ownerEmail: owner, org: id }; u["workspaces/" + wsId + "/members/" + ok] = { email: owner, name: owner.split("@")[0], role: "editor", invitedAt: TS(), invitedBy: me.email }; u["userWorkspaces/" + ok + "/" + wsId] = { name: name + " – " + LL("Administration", "Administração"), owner: true }; }
+      else u["workspaces/" + wsId + "/info/org"] = id;
+      u["orgs/" + id + "/info"] = { name: name, plan: nf.plan.value, seats: Math.max(1, Number(nf.seats.value) || 1), domain: nf.domain.value.trim().toLowerCase() || null, adminWs: wsId, created: TS(), by: me.email };
+      u["orgs/" + id + "/admins/" + ok] = "owner"; u["userOrgs/" + ok + "/" + id] = "owner";
+      u["orgs/" + id + "/workspaces/" + wsId] = { name: (ws[wsId] && ws[wsId].info && ws[wsId].info.name) || name + " – " + LL("Administration", "Administração") };
+      CUR_ORG = id; update(u, LL("Company created: ", "Empresa criada: ") + name);
+    };
+    if (!o.info) return;
+    const nm = document.getElementById("orgName"); if (nm) nm.onchange = function () { const v = nm.value.trim(); if (!v) return; const u = {}; u["orgs/" + oid + "/info/name"] = v; update(u, LL("Company renamed", "Empresa renomeada")); };
+    el.querySelectorAll("[data-orgrole]").forEach(function (s0) { s0.onchange = function () { const k = s0.dataset.orgrole, u = {}; u["orgs/" + oid + "/admins/" + k] = s0.value; u["userOrgs/" + k + "/" + oid] = s0.value; update(u, LL("Admin role changed", "Papel de administrador alterado")); }; });
+    el.querySelectorAll("[data-orgrm]").forEach(function (b) { b.onclick = function () { const k = b.dataset.orgrm; if (!window.confirm(LL("Remove ", "Remover ") + k.replace(/,/g, ".") + LL(" as company admin?", " como administrador da empresa?"))) return; const u = {}; u["orgs/" + oid + "/admins/" + k] = null; u["userOrgs/" + k + "/" + oid] = null; update(u, LL("Company admin removed", "Administrador da empresa removido")); }; });
+    const af = document.getElementById("orgAddAdm"); if (af) af.onsubmit = function (e) {
+      e.preventDefault(); const em = af.email.value.trim().toLowerCase(); if (!validEmail(em)) return toast(LL("Enter a valid e-mail", "Digite um e-mail válido"));
+      const L0 = orgLimits(o), n = Object.keys(o.admins || {}).filter(function (k) { return o.admins[k] !== "billing"; }).length;
+      if (af.role.value !== "billing" && n >= L0.admins) return limit(LL("The ", "O plano ") + L0.name + LL(" plan includes ", " inclui ") + L0.admins + LL(" company admin.", " administrador da empresa."));
+      const k = A.key(em), u = {}; u["orgs/" + oid + "/admins/" + k] = af.role.value; u["userOrgs/" + k + "/" + oid] = af.role.value; update(u, LL("Company admin added: ", "Administrador da empresa adicionado: ") + em);
+    };
+    const wf = document.getElementById("orgNewWs"); if (wf) wf.onsubmit = function (e) {
+      e.preventDefault(); const name = wf.name.value.trim(); if (!name) return; const L0 = orgLimits(o);
+      if (Object.keys(o.workspaces || {}).length >= L0.ws) return limit(LL("The ", "O plano ") + L0.name + LL(" plan allows ", " permite ") + L0.ws + " workspaces.");
+      const id = (slug(name) || "workspace") + "-" + rnd(), u = {};
+      u["workspaces/" + id + "/info"] = { name: name, created: TS(), createdBy: me.email, owner: MEK, ownerEmail: me.email, org: oid };
+      u["userWorkspaces/" + MEK + "/" + id] = { name: name, owner: true }; u["orgs/" + oid + "/workspaces/" + id] = { name: name };
+      update(u, LL("Workspace created: ", "Workspace criada: ") + name);
+    };
+    const at = document.getElementById("orgAttach"); if (at) at.onsubmit = function (e) {
+      e.preventDefault(); const id = at.ws.value; if (!id) return; const u = {}; u["workspaces/" + id + "/info/org"] = oid; u["orgs/" + oid + "/workspaces/" + id] = { name: (ws[id].info || {}).name || id };
+      update(u, LL("Workspace added to the company", "Workspace adicionada à empresa"));
+    };
+    const sf = document.getElementById("orgSet"); if (sf) sf.onsubmit = function (e) {
+      e.preventDefault(); const u = {}; u["orgs/" + oid + "/info/domain"] = sf.domain.value.trim().toLowerCase().replace(/^@/, ""); u["orgs/" + oid + "/settings"] = { domainOnly: sf.domainOnly.checked, createWs: sf.createWs.value };
+      update(u, LL("Company settings saved", "Configurações da empresa salvas"));
+    };
+    el.querySelectorAll("[data-orgws]").forEach(function (b) { b.onclick = function () { const id = b.dataset.orgws; UF.open = id; saveUF(); render(); const g = el.querySelector('[data-sec="ws"]'); if (g) g.click(); const d = document.getElementById("det-" + id); if (d) { d.open = true; d.scrollIntoView({ block: "start" }); } }; });
+  }
   function usersPane(ids, map) {
     const all = Object.keys(map).map(function (k) { return map[k]; }), list = usersFiltered(map);
     const n = function (st) { return all.filter(function (u) { return st === "all" ? true : st === "norenew" ? u.noRenew : u.st === st; }).length; };
@@ -920,15 +1047,16 @@
   function render() {
     const ids = sortByCreated(Object.keys(ws).reduce(function (o, k) { o[k] = (ws[k] || {}).info || {}; return o; }, {}));
     const map = buildUsers(), users = Object.keys(map).map(function (k) { return map[k]; });
-    let h = OWNER ? '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(me.email) + '</b></span><span class="plan-badge">' + esc(t("Plan")) + ": <b>" + esc(PLAN.name) + "</b> · " + PLAN.seats + " " + esc(t("seats")) + '</span><a class="btn sm primary" href="../pricing/">' + esc(t("Upgrade")) + '</a><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>'
+    const OL = OWNER && CUR_ORG && orgs[CUR_ORG] ? orgLimits(orgs[CUR_ORG]) : null;
+    let h = OWNER ? '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(me.email) + '</b></span><span class="plan-badge">' + esc(t("Plan")) + ": <b>" + esc(OL ? OL.name : PLAN.name) + "</b> · " + (OL ? OL.seats : PLAN.seats) + " " + esc(t("seats")) + (OL ? ' · <span class="no-i18n">' + esc((orgs[CUR_ORG].info || {}).name || "") + "</span>" : "") + '</span><a class="btn sm primary" href="../pricing/">' + esc(t("Upgrade")) + '</a><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>'
       : '<div class="userbar"><span class="muted"><span>Administrator</span>: <b class="no-i18n">' + esc(me.email) + '</b></span><a class="btn" href="../workspaces/">My boards</a><button class="btn" id="soBtn">Sign out</button></div>';
     const G1 = LL("Operation", "Operação"), G2 = LL("Governance", "Governança"), G3 = LL("Commercial", "Comercial");
-    const SECS = [["overview", LL("Overview", "Visão geral"), "visao-geral", "", "dashboard", G1], ["users", LL("Users & licences", "Usuários e licenças"), "usuarios", users.filter(function (u) { return u.st === "soon"; }).length || users.length, "people", G1], ["ws", "Workspaces", "workspaces", ids.length, "layers", G1]]
-      .concat(OWNER ? [] : [["modules", LL("Modules & packages", "Módulos e pacotes"), "modulos", Object.keys(modReq || {}).length || "", "catalog", G1], ["usage", LL("Usage & adoption", "Uso e adoção"), "uso", "", "trend", G2], ["audit", LL("Audit trail", "Auditoria"), "auditoria", Object.keys(auditLog).length || "", "lock", G2], ["signups", LL("Beta sign-ups", "Inscrições no beta"), "inscricoes", Object.keys(signups).length, "mail", G3], ["plans", LL("Plans", "Planos"), "planos", Object.keys(plans).length, "kr", G3], ["comms", LL("Announcement", "Comunicação"), "comunicacao", "", "bell", G3], ["feedback", "Feedback", "feedback", Object.keys(feedback).length, "pulse", G3]]);
+    const SECS = (OWNER && CUR_ORG && orgs[CUR_ORG] ? [["org", LL("Company", "Empresa"), "empresa", "", "layers", G1]] : []).concat([["overview", LL("Overview", "Visão geral"), "visao-geral", "", "dashboard", G1], ["users", LL("Users & licences", "Usuários e licenças"), "usuarios", users.filter(function (u) { return u.st === "soon"; }).length || users.length, "people", G1], ["ws", "Workspaces", "workspaces", ids.length, "layers", G1]])
+      .concat(OWNER ? [] : [["orgs", LL("Companies & plans", "Empresas e planos"), "empresas", Object.keys(orgs).length || "", "server", G1], ["modules", LL("Modules & packages", "Módulos e pacotes"), "modulos", Object.keys(modReq || {}).length || "", "catalog", G1], ["usage", LL("Usage & adoption", "Uso e adoção"), "uso", "", "trend", G2], ["audit", LL("Audit trail", "Auditoria"), "auditoria", Object.keys(auditLog).length || "", "lock", G2], ["signups", LL("Beta sign-ups", "Inscrições no beta"), "inscricoes", Object.keys(signups).length, "mail", G3], ["plans", LL("Plans", "Planos"), "planos", Object.keys(plans).length, "kr", G3], ["comms", LL("Announcement", "Comunicação"), "comunicacao", "", "bell", G3], ["feedback", "Feedback", "feedback", Object.keys(feedback).length, "pulse", G3]]);
     const hash = (location.hash || "").slice(1);
     let sec = (SECS.find(function (s) { return s[2] === hash || s[0] === hash; }) || [])[0];
     if (!sec) { try { sec = localStorage.getItem("cmcollab:admsec"); } catch (e) { /* ignore */ } }
-    if (!SECS.some(function (s) { return s[0] === sec; })) sec = "overview";
+    if (!SECS.some(function (s) { return s[0] === sec; })) sec = SECS[0][0];
     const soon = users.filter(function (u) { return u.st === "soon"; }).length;
     let lastG = "";
     h += '<div class="adm-shell"><nav class="adm-nav no-i18n" aria-label="' + esc(LL("Administration", "Administração")) + '"><div class="adm-search"><input type="search" id="admQ" list="admQL" placeholder="' + esc(LL("Find a person or workspace", "Buscar pessoa ou workspace")) + '" autocomplete="off"><datalist id="admQL">' +
@@ -938,8 +1066,9 @@
       return gh + '<button data-sec="' + s[0] + '"' + (s[0] === sec ? ' class="on" aria-current="page"' : "") + '><span class="adm-ni">' + (window.CMIcon ? window.CMIcon(s[4], 16) : "") + "<span>" + s[1] + "</span></span>" + badge + "</button>";
     }).join("") + '</nav><div class="adm-main no-i18n-wrap">';
     const pane = function (k, html) { return '<div class="adm-pane" data-pane="' + k + '"' + (k === sec ? "" : " hidden") + ">" + html + "</div>"; };
+    if (OWNER && CUR_ORG && orgs[CUR_ORG]) h += pane("org", orgPane());
     h += pane("overview", overviewPane(ids, map)) + pane("users", usersPane(ids, map)) + pane("ws", wsPane(ids));
-    if (!OWNER) h += pane("modules", modulesPane(ids)) + pane("usage", usagePane(ids, map)) + pane("audit", auditPane()) + pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
+    if (!OWNER) h += pane("orgs", orgsPane(ids)) + pane("modules", modulesPane(ids)) + pane("usage", usagePane(ids, map)) + pane("audit", auditPane()) + pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
     h += "</div></div>" + '<div id="admDrawer">' + (drawerK && map[drawerK] ? drawerHtml(map[drawerK]) : "") + "</div>";
     h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">' + t("The sign-in link was e-mailed automatically. If you like, also send this personal message (e.g. by WhatsApp).") + '</p>' +
       '<textarea rows="10" readonly></textarea><div class="row-end"><button class="btn" id="dlgClose">Close</button><button class="btn" id="copyInv">Copy message</button><a class="btn primary" id="mailBtn" href="#">Open in e-mail</a></div></div></div>';
@@ -989,6 +1118,7 @@
     if (drawerK) document.onkeydown = function (e) { if (e.key === "Escape" && drawerK) { drawerK = null; const d = document.getElementById("admDrawer"); if (d) d.innerHTML = ""; } };
     el.querySelectorAll(".ws-det").forEach(function (d) { d.ontoggle = function () { if (d.open) { UF.open = d.id.slice(4); saveUF(); } else if (UF.open === d.id.slice(4)) { UF.open = ""; saveUF(); } }; });
     if (!OWNER) bindModules();
+    bindOrgs();
     const admQ = document.getElementById("admQ"); if (admQ) admQ.onchange = admQ.onkeydown = function (e) {
       if (e.type === "keydown" && e.key !== "Enter") return; const v = admQ.value.trim(); if (!v) return;
       if (v.indexOf("ws: ") === 0) { const nm = v.slice(4), id = ids.find(function (i) { return ((ws[i].info || {}).name || i) === nm; }); if (id) { UF.open = id; saveUF(); render(); go("ws"); const d = document.getElementById("det-" + id); if (d) { d.open = true; d.scrollIntoView({ block: "start" }); } } return; }

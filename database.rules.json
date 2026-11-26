@@ -10,8 +10,8 @@
       ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
       ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
       "$ws": {
-        ".read": "auth != null && auth.token.email_verified == true && (data.child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true || (data.child('members').child(auth.token.email.toLowerCase().replace('.', ',')).exists() && (!data.child('members').child(auth.token.email.toLowerCase().replace('.', ',')).child('expires').exists() || data.child('members').child(auth.token.email.toLowerCase().replace('.', ',')).child('expires').val() > now)))",
-        ".write": "auth != null && auth.token.email_verified == true && ((!data.exists() && newData.child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',')) || data.child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ','))"
+        ".read": "auth != null && auth.token.email_verified == true && (data.child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true || (data.child('members').child(auth.token.email.toLowerCase().replace('.', ',')).exists() && (!data.child('members').child(auth.token.email.toLowerCase().replace('.', ',')).child('expires').exists() || data.child('members').child(auth.token.email.toLowerCase().replace('.', ',')).child('expires').val() > now)) || (data.child('info').child('org').exists() && root.child('orgs').child(data.child('info').child('org').val()).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).exists()))",
+        ".write": "auth != null && auth.token.email_verified == true && ((!data.exists() && newData.child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',')) || data.child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || (data.child('info').child('org').exists() && (root.child('orgs').child(data.child('info').child('org').val()).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child(data.child('info').child('org').val()).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin')))"
       }
     },
     "userWorkspaces": {
@@ -19,7 +19,7 @@
       "$k": {
         ".read": "auth != null && auth.token.email_verified == true && ($k == auth.token.email.toLowerCase().replace('.', ',') || root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true)",
         "$ws": {
-          ".write": "auth != null && auth.token.email_verified == true && (newData.parent().parent().parent().child('workspaces').child($ws).child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || root.child('workspaces').child($ws).child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ','))"
+          ".write": "auth != null && auth.token.email_verified == true && (newData.parent().parent().parent().child('workspaces').child($ws).child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || root.child('workspaces').child($ws).child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || (root.child('workspaces').child($ws).child('info').child('org').exists() && (root.child('orgs').child(root.child('workspaces').child($ws).child('info').child('org').val()).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child(root.child('workspaces').child($ws).child('info').child('org').val()).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin')))"
         }
       }
     },
@@ -377,6 +377,54 @@
       "$id": {
         ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true && !data.exists()",
         ".validate": "newData.hasChildren(['t','by','act']) && newData.child('by').val() == auth.token.email.toLowerCase() && newData.child('act').isString() && newData.child('act').val().length <= 200"
+      }
+    },
+    "orgs": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
+      "$org": {
+        ".read": "auth != null && auth.token.email_verified == true && (root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).exists())",
+        ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
+        "info": {
+          "name": {
+            ".write": "auth != null && auth.token.email_verified == true && (root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin')",
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120"
+          },
+          "domain": {
+            ".write": "auth != null && auth.token.email_verified == true && (root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin')",
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          }
+        },
+        "admins": {
+          "$k": {
+            ".write": "auth != null && auth.token.email_verified == true && (root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin') && (data.val() != 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner') && (newData.val() != 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner')",
+            ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'admin' || newData.val() == 'billing')"
+          }
+        },
+        "workspaces": {
+          "$ws": {
+            ".write": "auth != null && auth.token.email_verified == true && (root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin') && (root.child('workspaces').child($ws).child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || newData.parent().parent().parent().parent().child('workspaces').child($ws).child('info').child('owner').val() == auth.token.email.toLowerCase().replace('.', ',') || root.child('workspaces').child($ws).child('info').child('org').val() == $org)",
+            ".validate": "newData.hasChildren(['name'])"
+          }
+        },
+        "settings": {
+          ".write": "auth != null && auth.token.email_verified == true && (root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin')"
+        },
+        "audit": {
+          ".read": "auth != null && auth.token.email_verified == true && (root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).exists())",
+          "$id": {
+            ".write": "auth != null && auth.token.email_verified == true && (root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).exists()) && !data.exists()",
+            ".validate": "newData.hasChildren(['t','by','act']) && newData.child('by').val() == auth.token.email.toLowerCase() && newData.child('act').isString() && newData.child('act').val().length <= 200"
+          }
+        }
+      }
+    },
+    "userOrgs": {
+      "$k": {
+        ".read": "auth != null && auth.token.email_verified == true && ($k == auth.token.email.toLowerCase().replace('.', ',') || root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true)",
+        "$org": {
+          ".write": "auth != null && auth.token.email_verified == true && (root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true || (root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' || root.child('orgs').child($org).child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'admin'))",
+          ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'admin' || newData.val() == 'billing')"
+        }
       }
     }
   }
