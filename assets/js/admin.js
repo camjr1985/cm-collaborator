@@ -662,12 +662,42 @@
     el.querySelectorAll("[data-umod]").forEach(function (c) { c.onchange = function () {
       const q = c.dataset.umod.split("|"); ref("entitlements/users/" + q[0] + "/" + q[1], c.checked ? grantObj("30|beta") : null, c.checked ? LL("Module granted", "Módulo concedido") : LL("Module turned off", "Módulo desligado"));
     }; });
-    el.querySelectorAll("[data-umod2]").forEach(function (c) { c.onchange = function () {
-      const q = c.dataset.umod2.split("|"), per = (el.querySelector('[data-uper="' + q[0] + '"]') || {}).value;
-      ref("entitlements/users/" + q[0] + "/" + q[1], c.checked ? grantObj(per) : null, c.checked ? LL("Module granted", "Módulo concedido") : LL("Module turned off", "Módulo desligado"));
-    }; });
+    /* person drawer: nothing is written until Save (workspace access + modules + period together) */
+    const ds = el.querySelector("[data-dsave]");
+    if (ds) {
+      const k = ds.dataset.dsave, usr = buildUsers()[k], q = function (a) { return el.querySelector("[" + a + '="' + k + '"]'); };
+      const init = {}; el.querySelectorAll("[data-umod2]").forEach(function (c) { init[c.dataset.umod2] = c.checked; });
+      const per0 = q("data-uper") ? q("data-uper").value : "";
+      const pending = function () {
+        const out = [], gw = q("data-gws");
+        if (gw && gw.value) out.push(LL("access to ", "acesso a ") + ((ws[gw.value] || {}).info || {}).name);
+        el.querySelectorAll("[data-umod2]").forEach(function (c) { const m = c.dataset.umod2.split("|")[1], nm = ((MODS().find(function (x) { return x.id === m; }) || {}).name || m); if (c.checked !== init[c.dataset.umod2]) out.push((c.checked ? "+ " : "− ") + nm); });
+        if (q("data-uper") && q("data-uper").value !== per0 && Array.prototype.some.call(el.querySelectorAll("[data-umod2]"), function (c) { return c.checked; })) out.push(LL("period: ", "período: ") + q("data-uper").selectedOptions[0].textContent);
+        return out;
+      };
+      const refresh = function () { const p = pending(); ds.querySelector("[data-dsum]").textContent = p.length ? LL("To save: ", "A salvar: ") + p.join(" · ") : LL("No changes yet", "Nenhuma alteração ainda"); ds.querySelector("[data-dok]").disabled = !p.length; ds.classList.toggle("dirty", !!p.length); };
+      el.querySelectorAll('[data-umod2], [data-uper="' + k + '"], [data-gws="' + k + '"], [data-grole="' + k + '"], [data-gdays="' + k + '"]').forEach(function (x) { x.onchange = refresh; });
+      ds.querySelector("[data-dcancel]").onclick = function () { rr(); };
+      ds.querySelector("[data-dok]").onclick = function () {
+        const u = {}, parts = [], gw = q("data-gws");
+        if (gw && gw.value && usr && ws[gw.value]) {
+          const days = Number((q("data-gdays") || {}).value) || 0, expires = days ? Date.now() + days * DAY : null;
+          u["workspaces/" + gw.value + "/members/" + k] = { email: usr.email, name: usr.name || usr.email.split("@")[0], role: (q("data-grole") || {}).value || "editor", invitedAt: TS(), invitedBy: me.email, expires: expires };
+          u["userWorkspaces/" + k + "/" + gw.value] = { name: ws[gw.value].info.name, expires: expires };
+          parts.push(LL("access to ", "acesso a ") + ws[gw.value].info.name);
+        }
+        const per = (q("data-uper") || {}).value, perCh = q("data-uper") && per !== per0;
+        el.querySelectorAll("[data-umod2]").forEach(function (c) {
+          const m = c.dataset.umod2.split("|")[1];
+          if (c.checked && (c.checked !== init[c.dataset.umod2] || perCh)) { u["entitlements/users/" + k + "/" + m] = grantObj(per); parts.push("+ " + m); }
+          else if (!c.checked && init[c.dataset.umod2]) { u["entitlements/users/" + k + "/" + m] = null; parts.push("− " + m); }
+        });
+        if (!Object.keys(u).length) return;
+        update(u, LL("Saved: ", "Salvo: ") + parts.join(" · "));
+      };
+    }
     /* changing the period applies it right away to the modules already ticked (there is no separate Save) */
-    el.querySelectorAll("[data-uper],[data-wper]").forEach(function (sl) { sl.onchange = function () {
+    el.querySelectorAll("[data-wper]").forEach(function (sl) { sl.onchange = function () {
       const isU = sl.hasAttribute("data-uper"), id = isU ? sl.dataset.uper : sl.dataset.wper, u = {};
       el.querySelectorAll(isU ? "[data-umod2]" : "[data-wmod]").forEach(function (c) { const q = (isU ? c.dataset.umod2 : c.dataset.wmod).split("|"); if (q[0] === id && c.checked) u["entitlements/" + (isU ? "users/" : "ws/") + id + "/" + q[1]] = grantObj(sl.value); });
       if (!Object.keys(u).length) return toast(LL("Period chosen – tick a module to grant it", "Período escolhido – marque um módulo para conceder"));
@@ -1015,9 +1045,9 @@
         const have = {}; u.acc.forEach(function (a) { have[a.id] = 1; });
         const opts = Object.keys(ws).filter(function (id) { return !have[id] && ws[id] && ws[id].info; }).sort(function (a, b) { return String(ws[a].info.name || a).localeCompare(String(ws[b].info.name || b)); });
         return '<section class="d-acc d-give"><div class="d-acc-h"><b>' + LL("Give access to a workspace", "Dar acesso a um workspace") + '</b></div>' + (u.acct ? '<p class="muted small">' + LL("Account: ", "Conta: ") + esc(u.acct.provider === "google.com" ? "Google" : u.acct.provider === "microsoft.com" ? "Microsoft" : LL("e-mail link", "link por e-mail")) + (u.acct.verified ? " · " + LL("e-mail confirmed", "e-mail confirmado") : "") + (u.acct.last ? " · " + LL("last sign-in ", "último acesso ") + fmtDate(u.acct.last) : "") + "</p>" : "") +
-          (opts.length ? '<div class="d-acts"><select data-gws="' + esc(u.k) + '" class="no-i18n">' + opts.map(function (id) { return '<option value="' + esc(id) + '">' + esc(ws[id].info.name || id) + "</option>"; }).join("") + '</select><select data-grole="' + esc(u.k) + '"><option value="editor">' + LL("Editor", "Editor") + '</option><option value="viewer">' + LL("Viewer", "Leitor") + '</option></select><select data-gdays="' + esc(u.k) + '"><option value="0">' + LL("No time limit", "Sem prazo") + '</option><option value="7">7 ' + LL("days", "dias") + '</option><option value="14">14 ' + LL("days", "dias") + '</option><option value="30">30 ' + LL("days", "dias") + '</option><option value="90">90 ' + LL("days", "dias") + '</option></select><button class="btn sm primary" data-gbtn="' + esc(u.k) + '">' + LL("Give access", "Dar acesso") + "</button></div>" : '<p class="muted small">' + LL("Already in every workspace.", "Já está em todos os workspaces.") + "</p>") + "</section>";
+          (opts.length ? '<div class="d-acts"><select data-gws="' + esc(u.k) + '" class="no-i18n"><option value="">' + LL("— choose a workspace —", "— escolha um workspace —") + "</option>" + opts.map(function (id) { return '<option value="' + esc(id) + '">' + esc(ws[id].info.name || id) + "</option>"; }).join("") + '</select><select data-grole="' + esc(u.k) + '"><option value="editor">' + LL("Editor", "Editor") + '</option><option value="viewer">' + LL("Viewer", "Leitor") + '</option></select><select data-gdays="' + esc(u.k) + '"><option value="0">' + LL("No time limit", "Sem prazo") + '</option><option value="7">7 ' + LL("days", "dias") + '</option><option value="14">14 ' + LL("days", "dias") + '</option><option value="30">30 ' + LL("days", "dias") + '</option><option value="90">90 ' + LL("days", "dias") + '</option></select></div>' : '<p class="muted small">' + LL("Already in every workspace.", "Já está em todos os workspaces.") + "</p>") + "</section>";
       })() +
-      (OWNER ? "" : (function () { const em = effMods(u); return '<section class="d-acc d-mods"><div class="d-acc-h"><b>' + LL("Add-on modules", "Módulos adicionais") + "</b>" + periodSel('data-uper="' + esc(u.k) + '"', MODS().map(function (m) { return userMods(u.k)[m.id]; })) + "</div>" + MODS().map(function (m) { const g = userMods(u.k)[m.id], via = (em[m.id] || []).filter(function (x) { return x !== LL("individual", "individual"); }); return '<label class="mtog"><input type="checkbox" data-umod2="' + esc(u.k) + "|" + m.id + '"' + (gActive(g) ? " checked" : "") + "> <b>" + esc(m.name) + "</b> <span>" + esc(LL("individual: ", "individual: ") + grantTxt(g)) + (via.length ? " · " + esc(LL("company package: ", "pacote da empresa: ") + via.join(", ")) : "") + "</span></label>"; }).join("") + '<p class="muted small">' + LL("Changes are saved as soon as you tick a module or change the period. Company packages are set in Modules & packages.", "As alterações são salvas na hora ao marcar o módulo ou mudar o período. Pacotes de empresa ficam em Módulos e pacotes.") + "</p></section>"; })()) +
+      (OWNER ? "" : (function () { const em = effMods(u); return '<section class="d-acc d-mods"><div class="d-acc-h"><b>' + LL("Add-on modules", "Módulos adicionais") + "</b>" + periodSel('data-uper="' + esc(u.k) + '"', MODS().map(function (m) { return userMods(u.k)[m.id]; })) + "</div>" + MODS().map(function (m) { const g = userMods(u.k)[m.id], via = (em[m.id] || []).filter(function (x) { return x !== LL("individual", "individual"); }); return '<label class="mtog"><input type="checkbox" data-umod2="' + esc(u.k) + "|" + m.id + '"' + (gActive(g) ? " checked" : "") + "> <b>" + esc(m.name) + "</b> <span>" + esc(LL("individual: ", "individual: ") + grantTxt(g)) + (via.length ? " · " + esc(LL("company package: ", "pacote da empresa: ") + via.join(", ")) : "") + "</span></label>"; }).join("") + '<p class="muted small">' + LL("Tick the modules, choose the period and click Save. Company packages are set in Modules & packages.", "Marque os módulos, escolha o período e clique em Salvar. Pacotes de empresa ficam em Módulos e pacotes.") + "</p></section>"; })()) +
       u.acc.map(function (a) {
         const w = ws[a.id], ref = a.id + "|" + a.k, bl = w.boards || {}, pl = w.plannings || {};
         return '<section class="d-acc"><div class="d-acc-h"><b class="no-i18n">' + esc(a.ws) + "</b>" + roleSelect("", a.m.role, 'data-role="' + ref + '"') + "</div>" +
@@ -1029,7 +1059,7 @@
           Object.keys(w.itsm || {}).map(function (x) { return '<li>' + ic("itsm") + ' <a class="no-i18n" href="../itsm/?id=' + encodeURIComponent(x) + '">' + esc(w.itsm[x].title || x) + '</a> <span class="muted small">ITSM</span></li>'; }).join("") +
           Object.keys(pl).map(function (p) { return '<li>' + ic("planning") + ' <a class="no-i18n" href="../planning/?id=' + encodeURIComponent(p) + '">' + esc(pl[p].title || p) + '</a> <a class="muted small" href="../planning/?id=' + encodeURIComponent(p) + '#reports">' + LL("dashboard", "painel") + "</a></li>"; }).join("") + "</ul></details>" +
           '<div class="d-mail"><button class="link" data-welcome="' + ref + '">' + (a.m.welcomed ? "✓ " + LL("Welcome sent ", "Boas-vindas enviado em ") + fmtDate(a.m.welcomed) : "✉ " + LL("Send welcome", "Enviar boas-vindas")) + '</button><button class="link" data-prospect="' + ref + '">' + (a.m.prospected ? "✓ " + LL("Prospecting sent ", "Prospecção enviada em ") + fmtDate(a.m.prospected) : "✉ " + LL("Send prospecting", "Enviar prospecção")) + "</button></div></section>";
-      }).join("") + "</aside>";
+      }).join("") + '<footer class="d-save" data-dsave="' + esc(u.k) + '"><span class="muted small" data-dsum>' + LL("No changes yet", "Nenhuma alteração ainda") + '</span><button class="btn sm ghost" data-dcancel>' + LL("Cancel", "Cancelar") + '</button><button class="btn primary" data-dok disabled>' + LL("Save", "Salvar") + "</button></footer></aside>";
   }
   function wsPane(ids) {
     let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("New workspace", "Novo workspace") + '</h2><p class="muted small">' + t('A workspace groups boards and people – e.g. "Mentoring 2026", "Consulting – Company X". People invited to a workspace see all its boards.') + "</p></div></div>" +

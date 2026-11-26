@@ -824,3 +824,12 @@ div.ov-tile { cursor: default; }
 .org-preview { border: 1px dashed var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 @media (max-width: 1100px) { .org-new { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 700px) { .org-kpis { grid-template-columns: 1fr; } .org-new { grid-template-columns: 1fr; } }
+/* person drawer: explicit Save */
+.adm-drawer .d-save { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; margin: 14px -18px -18px; padding: 12px 18px; background: var(--navy-2, #15264a); border-top: 1px solid var(--line); z-index: 2; }
+.adm-drawer .d-save [data-dsum] { flex: 1; min-width: 0; }
+.adm-drawer .d-save.dirty { box-shadow: 0 -6px 18px rgba(0,0,0,.25); }
+.adm-drawer .d-save.dirty [data-dsum] { color: var(--gold, #e9c46a); }
+.adm-drawer .d-save [data-dok][disabled] { opacity: .45; cursor: not-allowed; }
+.adm-drawer select, .adm-drawer input[type=date] { background: rgba(255,255,255,.05); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: 400 var(--fs-13) var(--font); }
+.adm-drawer select option { background: #15264a; color: #e8eef8; }
+.adm-drawer .d-acts select[data-gws] { flex: 1 1 100%; }
