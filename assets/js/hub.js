@@ -499,7 +499,11 @@
         }
         el.innerHTML = '<div id="annSlot"></div>' + userBar(user, admin) + accessBanner(entries) + searchBar() + startStrip(true, (function () { const own = Object.keys(wss).some(function (w) { return admin || isOwner(w, wss[w]); }); return { plan: own || !entries.length, itsm: own, game: own, sst: own }; })()) + recentRows(allowed) + '<div id="gameSlot"></div>' +
           (ids.length ? ids.map(function (id) { return wsSection(id, wss[id], admin); }).join("")
-            : (entries.length ? "" : '<div class="card empty-big"><h3>No boards yet</h3><p class="muted">' + t("Pick a template above to create your first workspace and board – or ask someone to invite this e-mail address.") + "</p></div>"));
+            : (entries.length ? "" : '<div class="card empty-big np-welcome"><h3 class="no-i18n">' + LL("Welcome to CM Collaborator!", "Bem-vindo(a) ao CM Collaborator!") + '</h3><p class="no-i18n">' + LL("Your access to the platform is active. You are not in a workspace, company or plan yet.", "O seu acesso à plataforma está ativo. Você ainda não está em nenhum workspace, empresa ou plano.") + '</p><p class="muted no-i18n" id="npAdmin">' + LL("Contact the administrator who invited you to be added to a workspace – or pick a template above to create your own.", "Fale com o administrador que convidou você para ser incluído(a) num workspace – ou escolha um modelo acima para criar o seu.") + "</p></div>"));
+        if (!ids.length && !entries.length) window.firebase.database().ref("invites/" + A.key(user.email)).once("value").then(function (x) {
+          const v = x.val(), n = document.getElementById("npAdmin"); if (!v || !n) return; v.by = v.contact || "digitalagiletechnology@gmail.com";
+          n.innerHTML = LL("Contact the administrator who invited you", "Fale com o administrador que convidou você") + ' – <a href="mailto:' + esc(v.by) + '">' + esc(v.by) + "</a> – " + LL("to be added to a workspace, company or plan.", "para ser incluído(a) num workspace, empresa ou plano.") + (v.note ? '<br><span class="small">' + esc(v.note) + "</span>" : "");
+        }, function () { /* no invite record */ });
         bindFeedback();
         applyView(el); window.addEventListener("hashchange", function () { applyView(el); });
         el.querySelectorAll("[data-howto]").forEach(function (b) { b.onclick = function () { welcomeDialog(user); }; });

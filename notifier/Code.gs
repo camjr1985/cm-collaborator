@@ -43,6 +43,7 @@ function doPost(e) {
     if (/^azure-/.test(String(req.kind || ""))) return json(azureHandle(req, who));
     if (/^kanbanize-/.test(String(req.kind || ""))) return json(kbHandle(req, who));
     if (/^game-/.test(String(req.kind || ""))) return json(gameNotify(req, who, brand));
+    if (req.kind === "invite") return json(platformInvite(req, who, brand));
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
     var info = get("workspaces/" + wsId + "/info", req.idToken) || {};
@@ -112,7 +113,7 @@ function welcome(m, info, lang, brand) {
   var sb = bl.filter(function (b) { return /comece|start here|^1[-\s·]/i.test(b.k + " " + b.t); })[0] || bl[0];
   var tour = sb && /comece|start here/i.test(sb.k + " " + sb.t);
   var L = pt ? {
-    subject: "Bem-vindo(a) ao " + brand + " – o seu acesso está ativo ✨",
+    subject: "Seu acesso ao " + brand + " está ativo – workspace " + (info.name || ""),
     hi: "Olá" + (first ? " " + first : "") + ",",
     intro: "O seu acesso ao workspace <b>“" + esc(wsName) + "”</b> no " + brand + " já está ativo! 🎉",
     until: until ? "O seu acesso de teste é válido até <b>" + until + "</b>." : "O seu acesso não tem prazo de validade.",
@@ -129,7 +130,7 @@ function welcome(m, info, lang, brand) {
     bye: "Atenciosamente,<br><b>Carlos Alexandre</b><br>CEO · " + CFG.company,
     auto: "Mensagem automática do " + brand + " · " + CFG.company + ". Recebeu este e-mail porque foi convidado(a) para um workspace."
   } : {
-    subject: "Welcome to " + brand + " – your access is active ✨",
+    subject: "Your access to " + brand + " is active – workspace " + (info.name || ""),
     hi: "Hi" + (first ? " " + first : "") + ",",
     intro: "Your access to the workspace <b>“" + esc(wsName) + "”</b> on " + brand + " is now active! 🎉",
     until: until ? "Your test access is valid until <b>" + until + "</b>." : "Your access has no end date.",
@@ -1274,4 +1275,47 @@ function installMonCheck() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === "monCheck") ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger("monCheck").timeBased().everyMinutes(5).create();
   return monCheck();
+}
+
+
+/* ---- Platform invitation (admin only): the person is registered in invites/<key>; no workspace needed.
+   Short, personal and with one link – plain text + simple HTML, no emoji in the subject (helps against spam filters). */
+function platformInvite(req, who, brand) {
+  if (get("admins/" + key(who.email), req.idToken) !== true) throw new Error("not allowed");
+  var pt = req.lang !== "en", list = [].concat(req.to || []).slice(0, CFG.maxPerCall), sent = [], skipped = [];
+  var hub = CFG.site + "workspaces/";
+  list.forEach(function (to) {
+    to = String(to).toLowerCase();
+    var v = get("invites/" + key(to), req.idToken);
+    if (!v || !v.email) { skipped.push(to); return; }
+    var first = String(v.name || "").split(" ")[0] || "", inviter = String(v.contact || Session.getEffectiveUser().getEmail() || "");
+    var ws = get("userWorkspaces/" + key(to), req.idToken) || {}, wsNames = Object.keys(ws).map(function (k) { return ws[k] && ws[k].name; }).filter(String);
+    var subject = pt ? "Convite para o " + brand + (v.note ? " – " + v.note : "") : "Invitation to " + brand + (v.note ? " – " + v.note : "");
+    var lines = pt ? [
+      "Olá" + (first ? " " + first : "") + ",",
+      "Seja bem-vindo(a) ao " + brand + ". O seu acesso à plataforma já está ativo.",
+      v.note ? "Motivo do convite: " + v.note + "." : "",
+      "Como entrar: abra " + hub + " e clique em Entrar com Google ou Microsoft usando este e-mail (" + v.email + "). Não é preciso criar senha.",
+      wsNames.length ? "Você já tem acesso a: " + wsNames.join(", ") + "." : "Se ainda não aparecer nenhum workspace, empresa ou plano para você, fale com o administrador que fez o convite: " + inviter + ".",
+      "Atenciosamente,", "Carlos Alexandre – " + CFG.company
+    ] : [
+      "Hello" + (first ? " " + first : "") + ",",
+      "Welcome to " + brand + ". Your access to the platform is active.",
+      v.note ? "Reason for the invitation: " + v.note + "." : "",
+      "How to sign in: open " + hub + " and click Sign in with Google or Microsoft using this e-mail (" + v.email + "). No password needed.",
+      wsNames.length ? "You already have access to: " + wsNames.join(", ") + "." : "If no workspace, company or plan shows up for you yet, contact the administrator who invited you: " + inviter + ".",
+      "Kind regards,", "Carlos Alexandre – " + CFG.company
+    ];
+    lines = lines.filter(String);
+    var text = lines.join("\n\n") + "\n\n" + (pt ? "Você recebeu este e-mail porque foi cadastrado(a) no " : "You received this e-mail because you were registered in ") + brand + ".";
+    var html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1d2433;max-width:560px">' +
+      lines.slice(0, -2).map(function (l) { return "<p>" + esc(l).replace(esc(hub), '<a href="' + hub + '">' + esc(hub.replace("https://", "")) + "</a>") + "</p>"; }).join("") +
+      '<p style="margin:22px 0"><a href="' + hub + '" style="background:#1f4fa3;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:8px;font-weight:bold">' + (pt ? "Entrar no " : "Open ") + esc(brand) + "</a></p>" +
+      "<p>" + esc(lines[lines.length - 2]) + "<br><b>" + esc(lines[lines.length - 1]) + '</b></p><p style="font-size:12px;color:#6b7280">' + (pt ? "Você recebeu este e-mail porque foi cadastrado(a) no " : "You received this e-mail because you were registered in ") + esc(brand) + ".</p></div>";
+    var opt = { name: brand, htmlBody: html };
+    if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+    MailApp.sendEmail(v.email, subject, text, opt);
+    sent.push(to);
+  });
+  return { ok: true, sent: sent, skipped: skipped, quota: MailApp.getRemainingDailyQuota() };
 }

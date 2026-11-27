@@ -426,6 +426,14 @@
           ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'admin' || newData.val() == 'billing')"
         }
       }
+    },
+    "invites": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
+      "$k": {
+        ".read": "auth != null && auth.token.email_verified == true && ($k == auth.token.email.toLowerCase().replace('.', ',') || root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true)",
+        ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
+        ".validate": "!newData.exists() || (newData.hasChildren(['email']) && newData.child('email').val().toLowerCase().replace('.', ',') == $k)"
+      }
     }
   }
 }

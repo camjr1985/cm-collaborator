@@ -6,7 +6,7 @@
   const t = function (s) { return (window.MBt || String)(s); };
   const PT = window.MB_LANG === "pt";
   const TEMPLATES = (window.MBTemplateList ? window.MBTemplateList() : [{ id: "persona", name: "Persona Map + Priority Map" }, { id: "blank", name: "Blank board" }]).map(function (x) { return [x.id, x.name]; });
-  let db, me, accounts = {}, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null, orgs = {}, myOrgs = {}, CUR_ORG = null;
+  let db, me, accounts = {}, invites = {}, NEWP = false, ws = {}, ent = { ws: {}, users: {} }, modReq = {}, feedback = {}, signups = {}, signupWs = null, signupDays = null, plans = {}, announcement = null, OWNER = false, PLAN = null, MEK = null, orgs = {}, myOrgs = {}, CUR_ORG = null;
   const DAY = 86400000;
   function daysLeft(exp) { return Math.ceil((exp - Date.now()) / DAY); }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString(window.MB_LOCALE || (PT ? "pt-BR" : "en-GB"), { day: "2-digit", month: "short", year: "numeric" }); }
@@ -79,8 +79,9 @@
       db.ref("moduleRequests").once("value").catch(function () { return { val: function () { return null; } }; }),
       db.ref("users").once("value").catch(function () { return { val: function () { return {}; } }; }),
       db.ref("audit").orderByKey().limitToLast(1500).once("value").catch(function () { return { val: function () { return {}; } }; }),
-      db.ref("orgs").once("value").catch(function () { return { val: function () { return {}; } }; })
-    ]).then(function (r) { orgs = r[9].val() || {}; auditLog = r[8].val() || {}; accounts = r[7].val() || {}; announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
+      db.ref("orgs").once("value").catch(function () { return { val: function () { return {}; } }; }),
+      db.ref("invites").once("value").catch(function () { return { val: function () { return {}; } }; })
+    ]).then(function (r) { invites = r[10].val() || {}; orgs = r[9].val() || {}; auditLog = r[8].val() || {}; accounts = r[7].val() || {}; announcement = r[0].val(); plans = r[1].val() || {}; ws = r[2].val() || {}; feedback = r[3].val() || {}; signups = r[4].val() || {}; ent = Object.assign({ ws: {}, users: {} }, r[5].val() || {}); modReq = r[6].val() || {}; render(); });
   }
   function update(u, okMsg) {
     return db.ref().update(u).then(function () { audit(u, okMsg); if (okMsg) toast(okMsg); return load(); }).catch(fail);
@@ -677,7 +678,7 @@
       };
       const refresh = function () { const p = pending(); ds.querySelector("[data-dsum]").textContent = p.length ? LL("To save: ", "A salvar: ") + p.join(" · ") : LL("No changes yet", "Nenhuma alteração ainda"); ds.querySelector("[data-dok]").disabled = !p.length; ds.classList.toggle("dirty", !!p.length); };
       el.querySelectorAll('[data-umod2], [data-uper="' + k + '"], [data-gws="' + k + '"], [data-grole="' + k + '"], [data-gdays="' + k + '"]').forEach(function (x) { x.onchange = refresh; });
-      ds.querySelector("[data-dcancel]").onclick = function () { rr(); };
+      ds.querySelector("[data-dcancel]").onclick = function () { render(); };
       ds.querySelector("[data-dok]").onclick = function () {
         const u = {}, parts = [], gw = q("data-gws");
         if (gw && gw.value && usr && ws[gw.value]) {
@@ -749,6 +750,12 @@
       const u = map[k] || (map[k] = { k: k, name: a.name || "", email: a.email, acc: [] });
       u.acct = a; if (!u.name && a.name) u.name = a.name;
     });
+    /* people registered by an admin (invites/<key>) – they show up even before any workspace or sign-in */
+    if (!OWNER) Object.keys(invites).forEach(function (k) {
+      const v = invites[k] || {}; if (!v.email) return;
+      const u = map[k] || (map[k] = { k: k, name: v.name || "", email: v.email, acc: [] });
+      u.inv = v; if (!u.name && v.name) u.name = v.name;
+    });
     Object.keys(map).forEach(function (k) {
       const u = map[k], act = u.acc.filter(function (a) { return a.st !== "off"; });
       if (!u.acc.length) { u.st = "noacc"; u.next = null; u.off = 0; u.boards = u.plans = u.games = u.itsm = 0; u.noRenew = false; u.role = "editor"; return; }
@@ -768,7 +775,7 @@
     return map;
   }
   function stLabel(u) {
-    if (u.st === "noacc") return '<span class="lic off">' + LL("No access yet", "Sem acesso ainda") + "</span>";
+    if (u.st === "noacc") return u.inv && !u.acct ? '<span class="lic soon">' + (u.inv.sent ? LL("Invited ", "Convidado em ") + fmtShort(u.inv.sent) : LL("Registered", "Cadastrado")) + "</span>" : '<span class="lic off">' + LL("No access yet", "Sem acesso ainda") + "</span>";
     if (u.st === "none") return '<span class="lic none">' + LL("No time limit", "Sem prazo") + "</span>";
     if (u.st === "off") return '<span class="lic off">' + LL("Expired", "Expirado") + "</span>";
     const d = daysLeft(u.next);
@@ -1007,12 +1014,67 @@
     };
     el.querySelectorAll("[data-orgws]").forEach(function (b) { b.onclick = function () { const id = b.dataset.orgws; UF.open = id; saveUF(); render(); const g = el.querySelector('[data-sec="ws"]'); if (g) g.click(); const d = document.getElementById("det-" + id); if (d) { d.open = true; d.scrollIntoView({ block: "start" }); } }; });
   }
+  /* ---- New person: register, optionally give workspace / modules / plan / company, and e-mail the invitation ---- */
+  function newPersonHtml(ids) {
+    const P = window.CM_PLANS || {}, R = ORG_ROLES();
+    const wsOpts = ids.slice().sort(function (a, b) { return String((ws[a].info || {}).name || a).localeCompare(String((ws[b].info || {}).name || b)); });
+    return '<div class="adm-drawer-bg" data-npclose></div><aside class="adm-drawer np" role="dialog" aria-label="' + esc(LL("New person", "Nova pessoa")) + '"><header><span class="av">+</span><div><h2>' + LL("New person", "Nova pessoa") + '</h2><span class="muted small">' + LL("Register the person and choose what they get. Everything below the e-mail is optional.", "Cadastre a pessoa e escolha o que ela recebe. Tudo abaixo do e-mail é opcional.") + '</span></div><button class="btn sm ghost" data-npclose aria-label="' + esc(LL("Close", "Fechar")) + '">✕</button></header>' +
+      '<form id="npF" class="np-f">' +
+      '<section class="d-acc"><div class="g2"><label>' + LL("Name", "Nome") + '<input name="name" maxlength="80" placeholder="Dra. Adriana Silva" class="no-i18n"></label><label>E-mail *<input name="email" type="email" required placeholder="nome@empresa.com" class="no-i18n"></label></div>' +
+      '<label>' + LL("Note for the invitation (optional)", "Observação para o convite (opcional)") + '<input name="note" maxlength="160" placeholder="' + esc(LL("e.g. Presentation of the Health module – AstraZeneca", "ex.: Apresentação do módulo Saúde – AstraZeneca")) + '"></label></section>' +
+      '<section class="d-acc"><div class="d-acc-h"><b>' + LL("Workspace", "Workspace") + '</b><span class="muted small">' + LL("optional", "opcional") + '</span></div><select name="ws" class="no-i18n"><option value="">' + LL("— no workspace for now —", "— sem workspace por enquanto —") + "</option>" + wsOpts.map(function (id) { return '<option value="' + esc(id) + '">' + esc((ws[id].info || {}).name || id) + "</option>"; }).join("") + '</select><div class="d-acts"><select name="role"><option value="editor">' + LL("Editor", "Editor") + '</option><option value="viewer">' + LL("Viewer", "Leitor") + '</option></select><select name="days"><option value="0">' + LL("No time limit", "Sem prazo") + '</option><option value="7">7 ' + LL("days", "dias") + '</option><option value="14">14 ' + LL("days", "dias") + '</option><option value="30" selected>30 ' + LL("days", "dias") + '</option><option value="90">90 ' + LL("days", "dias") + "</option></select></div></section>" +
+      '<section class="d-acc"><div class="d-acc-h"><b>' + LL("Add-on modules", "Módulos adicionais") + "</b>" + periodSel('name="per"') + "</div>" + MODS().map(function (m) { return '<label class="mtog"><input type="checkbox" name="mod" value="' + m.id + '"> <b>' + esc(m.name) + "</b></label>"; }).join("") + "</section>" +
+      '<section class="d-acc"><div class="d-acc-h"><b>' + LL("Plan", "Plano") + '</b><span class="muted small">' + LL("optional", "opcional") + '</span></div><div class="d-acts"><select name="plan"><option value="">' + LL("— keep Free —", "— manter Free —") + "</option>" + Object.keys(P).filter(function (k) { return k !== "free"; }).map(function (k) { return '<option value="' + k + '">' + esc(P[k].name) + "</option>"; }).join("") + '</select><input name="seats" type="number" min="1" max="999" value="5" aria-label="' + esc(LL("Seats", "Assentos")) + '" title="' + esc(LL("Seats", "Assentos")) + '"><select name="months"><option value="0">' + LL("No end date", "Sem data de fim") + '</option><option value="1">1 ' + LL("month", "mês") + '</option><option value="3">3 ' + LL("months", "meses") + '</option><option value="12" selected>12 ' + LL("months", "meses") + "</option></select></div></section>" +
+      (Object.keys(orgs).length ? '<section class="d-acc"><div class="d-acc-h"><b>' + LL("Company", "Empresa") + '</b><span class="muted small">' + LL("optional", "opcional") + '</span></div><div class="d-acts"><select name="org" class="no-i18n"><option value="">' + LL("— no company —", "— sem empresa —") + "</option>" + Object.keys(orgs).map(function (k) { return '<option value="' + esc(k) + '">' + esc((orgs[k].info || {}).name || k) + "</option>"; }).join("") + '</select><select name="orole"><option value="">' + LL("Member (uses a seat in the company workspace above)", "Membro (usa um assento na workspace da empresa acima)") + "</option>" + Object.keys(R).map(function (r) { return '<option value="' + r + '">' + esc(R[r]) + "</option>"; }).join("") + "</select></div></section>" : "") +
+      '<label class="chk np-send"><input type="checkbox" name="send" checked> ' + LL("E-mail the invitation now (from the platform account, with the link and how to sign in)", "Enviar o convite por e-mail agora (pela conta da plataforma, com o link e como entrar)") + "</label>" +
+      '<footer class="d-save dirty"><span class="muted small">' + LL("Nothing is saved until you click Save.", "Nada é gravado até clicar em Salvar.") + '</span><button type="button" class="btn sm ghost" data-npclose>' + LL("Cancel", "Cancelar") + '</button><button class="btn primary">' + LL("Save", "Salvar") + "</button></footer></form></aside>";
+  }
+  function mailInvite(emails) {
+    const url = window.CMCOLLAB_MAILER; if (!url || !emails.length) return Promise.resolve({ ok: false, error: "no mailer" });
+    return window.firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken: tok, kind: "invite", to: emails, lang: PT ? "pt" : "en", brand: window.CMCOLLAB_BRAND || "" }) });
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) throw new Error(j.error || "notifier error");
+      const st = {}; (j.sent || []).forEach(function (em) { st["invites/" + A.key(em) + "/sent"] = TS(); });
+      if (Object.keys(st).length) db.ref().update(st).then(load, function () { /* ignore */ });
+      return j;
+    }).catch(function (e) { console.warn("invite mail", e); return { ok: false, error: String(e.message || e) }; });
+  }
+  function bindNewPerson() {
+    const nb = document.getElementById("uNew"); if (nb) nb.onclick = function () { NEWP = true; drawerK = null; render(); setTimeout(function () { const f = document.getElementById("npF"); if (f) f.email.focus(); }, 50); };
+    el.querySelectorAll("[data-npclose]").forEach(function (b) { b.onclick = function () { NEWP = false; render(); }; });
+    const f = document.getElementById("npF"); if (!f) return;
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      const email = f.email.value.trim().toLowerCase(), name = f.name.value.trim(); if (!validEmail(email)) return toast(LL("Enter a valid e-mail", "Informe um e-mail válido"));
+      const k = A.key(email), u = {}, parts = [];
+      u["invites/" + k] = Object.assign({}, invites[k] || {}, { email: email, name: name || (invites[k] || {}).name || email.split("@")[0], note: f.note.value.trim() || null, by: me.email, contact: window.CMCOLLAB_CONTACT || "digitalagiletechnology@gmail.com", t: TS() });
+      const wsId = f.ws.value;
+      if (wsId && ws[wsId]) {
+        const days = Number(f.days.value) || 0, expires = days ? Date.now() + days * DAY : null, oid = orgOfWs(wsId);
+        if (oid && orgs[oid]) { const L0 = orgLimits(orgs[oid]), ppl = orgPeople(oid); if (!ppl[k] && Object.keys(ppl).length >= L0.seats) return limit(LL("All ", "Todos os ") + L0.seats + LL(" seats of the company are in use.", " assentos da empresa estão em uso.")); }
+        u["workspaces/" + wsId + "/members/" + k] = { email: email, name: name || email.split("@")[0], role: f.role.value, invitedAt: TS(), invitedBy: me.email, expires: expires };
+        u["userWorkspaces/" + k + "/" + wsId] = { name: ws[wsId].info.name, expires: expires };
+        parts.push(LL("workspace ", "workspace ") + ws[wsId].info.name);
+      }
+      Array.prototype.forEach.call(f.querySelectorAll("[name=mod]:checked"), function (c) { u["entitlements/users/" + k + "/" + c.value] = grantObj(f.per.value); parts.push(c.value); });
+      if (f.plan.value) { const mo = Number(f.months.value) || 0; u["plans/" + k] = { email: email, plan: f.plan.value, seats: Math.max(1, Number(f.seats.value) || 1), until: mo ? Date.now() + mo * 30 * DAY : null, by: me.email, at: TS(), source: "admin" }; parts.push(LL("plan ", "plano ") + f.plan.value); }
+      if (f.org && f.org.value) { const oid = f.org.value; if (f.orole.value) { u["orgs/" + oid + "/admins/" + k] = f.orole.value; u["userOrgs/" + k + "/" + oid] = f.orole.value; } parts.push(LL("company ", "empresa ") + ((orgs[oid].info || {}).name || oid)); }
+      const send = f.send.checked, btn = f.querySelector(".btn.primary"); btn.disabled = true;
+      db.ref().update(u).then(function () {
+        audit(u, LL("Person registered: ", "Pessoa cadastrada: ") + email + (parts.length ? " (" + parts.join(", ") + ")" : ""));
+        NEWP = false; drawerK = k;
+        if (!send) { toast(LL("Saved – invitation not sent", "Salvo – convite não enviado")); return load(); }
+        return mailInvite([email]).then(function (j) { toast(j.ok && (j.sent || []).length ? LL("Saved and invitation e-mailed to ", "Salvo e convite enviado para ") + email : LL("Saved, but the e-mail could not be sent: ", "Salvo, mas o e-mail não pôde ser enviado: ") + (j.error || "")); return load(); });
+      }).catch(function (er) { btn.disabled = false; fail(er); });
+    };
+  }
   function usersPane(ids, map) {
     const all = Object.keys(map).map(function (k) { return map[k]; }), list = usersFiltered(map);
     const n = function (st) { return all.filter(function (u) { return st === "all" ? true : st === "norenew" ? u.noRenew : u.st === st; }).length; };
     const chip = function (st, l) { return '<button class="fchip' + ((UF.st || "all") === st ? " on" : "") + '" data-ust="' + st + '">' + l + ' <span class="count">' + n(st) + "</span></button>"; };
     const nsel = Object.keys(SEL).filter(function (k) { return map[k]; }).length;
-    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Users & licences", "Usuários e licenças") + '</h2><p class="muted small">' + LL("One row per person: what they can open, until when, and the decision to extend or not. Select people to act in bulk; click a person for the details.", "Uma linha por pessoa: o que ela acessa, até quando, e a decisão de prorrogar ou não. Selecione pessoas para agir em lote; clique na pessoa para ver os detalhes.") + '</p></div><div class="sec-acts"><button class="btn sm" id="uCsv">' + LL("Export CSV", "Exportar CSV") + "</button></div></div>";
+    let h = '<section class="card adm-sec"><div class="sec-head"><div><h2>' + LL("Users & licences", "Usuários e licenças") + (OWNER ? "" : ' <button class="btn sm primary" id="uNew">+ ' + LL("New person", "Nova pessoa") + "</button>") + '</h2><p class="muted small">' + LL("One row per person: what they can open, until when, and the decision to extend or not. Select people to act in bulk; click a person for the details.", "Uma linha por pessoa: o que ela acessa, até quando, e a decisão de prorrogar ou não. Selecione pessoas para agir em lote; clique na pessoa para ver os detalhes.") + '</p></div><div class="sec-acts"><button class="btn sm" id="uCsv">' + LL("Export CSV", "Exportar CSV") + "</button></div></div>";
     h += '<div class="fbar">' + chip("all", LL("All", "Todos")) + chip("soon", LL("Expiring ≤ 7d", "Vencendo ≤ 7 dias")) + chip("off", LL("Expired", "Expirados")) + chip("ok", LL("Active", "Ativos")) + chip("noacc", LL("No access yet", "Sem acesso")) + chip("none", LL("No limit", "Sem prazo")) + chip("norenew", LL("Won't renew", "Não renovar")) + "</div>";
     h += '<div class="fbar f2"><input id="uQ" type="search" value="' + esc(UF.q || "") + '" placeholder="' + esc(LL("Search name, e-mail or workspace", "Buscar nome, e-mail ou workspace")) + '"><select id="uWs" class="no-i18n"><option value="">' + LL("All workspaces", "Todos os workspaces") + "</option>" + ids.map(function (id) { return '<option value="' + esc(id) + '"' + (UF.ws === id ? " selected" : "") + ">" + esc(ws[id].info.name) + "</option>"; }).join("") + '</select><select id="uSort"><option value="name">' + LL("Sort: name", "Ordenar: nome") + '</option><option value="exp"' + (UF.sort === "exp" ? " selected" : "") + ">" + LL("Sort: nearest expiry", "Ordenar: validade mais próxima") + "</option></select></div>";
     h += '<div class="bulk"' + (nsel ? "" : " hidden") + '><b>' + plural(nsel, LL("selected", "selecionado"), LL("selected", "selecionados")) + '</b><span class="muted small">' + (UF.ws ? LL("in workspace ", "no workspace ") + esc((ws[UF.ws] && ws[UF.ws].info.name) || "") : LL("in all their workspaces", "em todos os workspaces deles")) + '</span><span class="sp"></span>' +
@@ -1040,6 +1102,7 @@
     if (!u) return "";
     const ic = function (n) { return window.CMIcon ? window.CMIcon(n, 14) : ""; };
     return '<div class="adm-drawer-bg" data-dclose></div><aside class="adm-drawer" role="dialog" aria-label="' + esc(u.name || u.email) + '"><header><span class="av no-i18n">' + esc((u.name || u.email)[0].toUpperCase()) + '</span><div><h2 class="no-i18n">' + esc(u.name || u.email) + '</h2><span class="muted no-i18n">' + esc(u.email) + '</span></div><button class="btn sm ghost" data-dclose aria-label="' + esc(LL("Close", "Fechar")) + '">✕</button></header>' +
+      (!OWNER && !u.acct ? '<div class="d-inv"><span class="muted small">' + (u.inv && u.inv.sent ? LL("Invitation e-mailed on ", "Convite enviado em ") + fmtDate(u.inv.sent) : LL("Invitation not sent yet", "Convite ainda não enviado")) + (u.inv && u.inv.note ? " · " + esc(u.inv.note) : "") + '</span><button class="btn sm" data-reinv="' + esc(u.email) + '">' + (u.inv && u.inv.sent ? LL("Resend invitation", "Reenviar convite") : LL("Send invitation", "Enviar convite")) + "</button></div>" : "") +
       '<div class="d-sum">' + stLabel(u) + (u.noRenew ? ' <span class="lic nr">' + LL("Won't renew", "Não renovar") + "</span>" : "") + '<span class="muted small">' + plural(u.acc.length, "workspace", "workspaces") + " · " + plural(u.boards, LL("board", "quadro"), LL("boards", "quadros")) + " · " + plural(u.plans, LL("planning", "planejamento"), LL("plannings", "planejamentos")) + (u.games ? " · " + plural(u.games, LL("game", "partida"), LL("games", "partidas")) : "") + "</span></div>" +
       (function () {
         const have = {}; u.acc.forEach(function (a) { have[a.id] = 1; });
@@ -1099,7 +1162,7 @@
     if (OWNER && CUR_ORG && orgs[CUR_ORG]) h += pane("org", orgPane());
     h += pane("overview", overviewPane(ids, map)) + pane("users", usersPane(ids, map)) + pane("ws", wsPane(ids));
     if (!OWNER) h += pane("orgs", orgsPane(ids)) + pane("modules", modulesPane(ids)) + pane("usage", usagePane(ids, map)) + pane("audit", auditPane()) + pane("signups", signupsSection()) + pane("plans", plansSection()) + pane("comms", annSection()) + pane("feedback", feedbackSection());
-    h += "</div></div>" + '<div id="admDrawer">' + (drawerK && map[drawerK] ? drawerHtml(map[drawerK]) : "") + "</div>";
+    h += "</div></div>" + '<div id="admDrawer">' + (NEWP ? newPersonHtml(ids) : drawerK && map[drawerK] ? drawerHtml(map[drawerK]) : "") + "</div>";
     h += '<div class="modal-lite" id="inviteDlg" hidden><div class="card"><h2></h2><p class="muted small">' + t("The sign-in link was e-mailed automatically. If you like, also send this personal message (e.g. by WhatsApp).") + '</p>' +
       '<textarea rows="10" readonly></textarea><div class="row-end"><button class="btn" id="dlgClose">Close</button><button class="btn" id="copyInv">Copy message</button><a class="btn primary" id="mailBtn" href="#">Open in e-mail</a></div></div></div>';
     el.innerHTML = h;
@@ -1149,6 +1212,12 @@
     el.querySelectorAll(".ws-det").forEach(function (d) { d.ontoggle = function () { if (d.open) { UF.open = d.id.slice(4); saveUF(); } else if (UF.open === d.id.slice(4)) { UF.open = ""; saveUF(); } }; });
     if (!OWNER) bindModules();
     bindOrgs();
+    if (!OWNER) bindNewPerson();
+    el.querySelectorAll("[data-reinv]").forEach(function (b) { b.onclick = function () {
+      const em = b.dataset.reinv, k = A.key(em); b.disabled = true;
+      const pre = invites[k] ? Promise.resolve() : db.ref("invites/" + k).set({ email: em, name: (buildUsers()[k] || {}).name || em.split("@")[0], by: me.email, t: TS() });
+      pre.then(function () { return mailInvite([em]); }).then(function (j) { b.disabled = false; toast(j.ok && (j.sent || []).length ? LL("Invitation e-mailed to ", "Convite enviado para ") + em : LL("Could not send: ", "Não foi possível enviar: ") + (j.error || "")); if (j.ok) audit({ invites: 1 }, LL("Invitation e-mailed: ", "Convite enviado: ") + em); });
+    }; });
     const admQ = document.getElementById("admQ"); if (admQ) admQ.onchange = admQ.onkeydown = function (e) {
       if (e.type === "keydown" && e.key !== "Enter") return; const v = admQ.value.trim(); if (!v) return;
       if (v.indexOf("ws: ") === 0) { const nm = v.slice(4), id = ids.find(function (i) { return ((ws[i].info || {}).name || i) === nm; }); if (id) { UF.open = id; saveUF(); render(); go("ws"); const d = document.getElementById("det-" + id); if (d) { d.open = true; d.scrollIntoView({ block: "start" }); } } return; }

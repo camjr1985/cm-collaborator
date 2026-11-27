@@ -833,3 +833,14 @@ div.ov-tile { cursor: default; }
 .adm-drawer select, .adm-drawer input[type=date] { background: rgba(255,255,255,.05); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: 400 var(--fs-13) var(--font); }
 .adm-drawer select option { background: #15264a; color: #e8eef8; }
 .adm-drawer .d-acts select[data-gws] { flex: 1 1 100%; }
+/* new person drawer */
+.np-f label:not(.chk):not(.mtog) { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: var(--fs-13); margin-top: 8px; }
+.np-f .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.adm-drawer input:not([type=checkbox]):not([type=date]) { background: rgba(255,255,255,.05); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 400 var(--fs-13) var(--font); min-width: 0; }
+.np-f select[name=ws], .np-f select[name=org] { width: 100%; }
+.np-f input[name=seats] { width: 70px; }
+.np-send { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 4px; font-size: var(--fs-13); }
+.d-inv { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 6px 0 8px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.np-welcome h3 { margin-top: 0; }
+@media (max-width: 560px) { .np-f .g2 { grid-template-columns: 1fr; } }
+.np-f .g2 input { width: 100%; }
