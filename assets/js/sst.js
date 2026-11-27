@@ -138,7 +138,7 @@
 
   /* ---------------- shell ---------------- */
   function render() {
-    const T = { panel: L("Panel", "Painel"), list: L("Occurrences", "Ocorrências"), board: L("Board", "Quadro"), people: L("Employees", "Colaboradores"), due: L("Due dates", "Vencimentos"), plans: L("Plannings", "Planejamentos"), kpi: L("Indicators", "Indicadores"), cfg: L("Settings", "Configurações") };
+    const T = { panel: L("Panel", "Painel"), list: L("Occurrences", "Ocorrências"), board: L("Board", "Quadro"), people: L("Employees", "Colaboradores"), due: L("Due dates", "Vencimentos"), abs: L("Absenteeism", "Absenteísmo"), plans: L("Plannings", "Planejamentos"), kpi: L("Indicators", "Indicadores"), cfg: L("Settings", "Configurações") };
     const list = wsList();
     if (!document.getElementById("sstView")) {
       app.innerHTML = '<header class="pl-top st-top"><a class="pl-back" href="../workspaces/" title="' + esc(L("My boards", "Meus quadros")) + '">←</a><span class="pl-logo">CM</span>' +
@@ -164,7 +164,7 @@
   }
   function renderView() {
     const v = document.getElementById("sstView"); if (!v) return;
-    ({ panel: panel, list: listView, board: boardView, people: peopleView, due: dueView, plans: plansView, kpi: kpiView, cfg: cfgView })[view](v);
+    ({ panel: panel, list: listView, board: boardView, people: peopleView, due: dueView, abs: absView, plans: plansView, kpi: kpiView, cfg: cfgView })[view](v);
   }
 
   /* ---------------- guided journey (Jornada guiada) ---------------- */
@@ -232,11 +232,11 @@
   /* ---------------- panel ---------------- */
   function bars(rows, series) {
     const raw = Math.max.apply(null, rows.map(function (r) { return Math.max.apply(null, series.map(function (s) { return r[s.k] || 0; })); })), max = Math.max(2, Math.ceil(raw / 2) * 2);
-    const W = Math.max(340, rows.length * (series.length * 14 + 18) + 50), H = 190, top = 18, base = H - 28;
+    const step = Math.max(series.length * 14 + 18, 58), W = Math.max(340, rows.length * step + 50), H = 190, top = 18, base = H - 28;
     let o = '<svg viewBox="0 0 ' + W + " " + H + '" class="st-bars" role="img" style="width:100%;min-width:' + Math.min(W, 560) + 'px;height:auto">';
     [0, .5, 1].forEach(function (t) { const y = base - (base - top) * t; o += '<line x1="34" x2="' + (W - 4) + '" y1="' + y + '" y2="' + y + '" class="g"/><text x="30" y="' + (y + 4) + '" text-anchor="end" class="ax">' + nf(max * t) + "</text>"; });
     rows.forEach(function (r, i) {
-      const gx = 44 + i * (series.length * 14 + 18);
+      const gx = 44 + i * step + (step - series.length * 14 - 18) / 2;
       series.forEach(function (s, j) { const v = r[s.k] || 0, h = (base - top) * v / max; o += '<rect x="' + (gx + j * 14) + '" y="' + (base - h) + '" width="12" height="' + Math.max(0, h) + '" rx="3" fill="' + s.c + '"><title>' + esc(r.n + " · " + s.n + ": " + v) + "</title></rect>"; });
       o += '<text x="' + (gx + series.length * 7) + '" y="' + (H - 10) + '" text-anchor="middle" class="ax">' + esc(r.n) + "</text>";
     });
@@ -258,7 +258,9 @@
     const rows = months.map(function (m) { const rs = R.filter(function (r) { return ym(r.when || r.created || 0) === m && r.status !== "cancel"; }); return { n: monLabel(m), a: rs.filter(isAcc).length, q: rs.filter(function (r) { return r.type === "near" || r.type === "unsafe"; }).length, e: rs.filter(function (r) { return r.type === "env"; }).length }; });
     const tile = function (ic, val, lbl, cls, sub) { return '<div class="st-tile' + (cls ? " " + cls : "") + '"><span class="st-ti">' + IC(ic, 18) + "</span><b>" + val + "</b><span>" + esc(lbl) + "</span>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</div>"; };
     const byType = {}; open.forEach(function (r) { byType[r.type] = (byType[r.type] || 0) + 1; });
-    v.innerHTML = '<div class="st-wrap"><div class="st-tiles">' +
+    const nt = NT(), A0 = absStats();
+    v.innerHTML = '<div class="st-wrap"><div class="st-aihead"><button class="pl-btn primary" id="pnAi">' + IC("spark", 16) + " " + esc(L("Executive summary with AI", "Resumo executivo com IA")) + '</button><span class="st-chip ' + ((nt.to || []).length ? "good" : "") + '" data-goto="cfg" role="button">' + IC("bell", 13) + " " + esc((nt.to || []).length ? L("E-mail alerts on · ", "Alertas por e-mail ligados · ") + nt.to.length + L(" recipient(s)", " destinatário(s)") + (nt.daily !== false ? L(" · daily 08:00", " · diário 08:00") : "") : L("E-mail alerts off – turn on in Settings", "Alertas por e-mail desligados – ligue em Configurações")) + "</span>" +
+      (A0.rateMonth != null ? '<span class="st-chip ' + (A0.target != null && A0.rateMonth > A0.target ? "bad" : "good") + '" data-goto="abs" role="button">' + esc(L("Absenteeism ", "Absenteísmo ")) + nf(A0.rateMonth, 2) + "%" + (A0.target != null ? " · " + L("target ", "meta ") + nf(A0.target, 1) + "%" : "") + "</span>" : "") + "</div><div class=\"st-tiles\">" +
       tile("clock", since == null ? "–" : nf(since), L("days without lost-time accident", "dias sem acidente com afastamento"), since != null && since < 30 ? "bad" : "good") +
       tile("alert", nf(accL.length), L("lost-time accidents (year)", "acidentes com afastamento (ano)"), accL.length ? "bad" : "", nf(accN.length) + L(" without lost time", " sem afastamento")) +
       tile("calendar", nf(days), L("days lost (year)", "dias perdidos (ano)")) +
@@ -274,6 +276,7 @@
       (catP.length || late.length ? '<h3 class="st-h3">' + esc(L("Needs attention", "Requer atenção")) + '</h3><ul class="st-att">' + catP.map(function (r) { return '<li data-open="' + r.id + '"><b>' + esc(r.key || "") + "</b> " + esc(r.title) + ' <span class="st-chip bad">' + esc(L("CAT overdue", "CAT em atraso")) + "</span></li>"; }).join("") + late.filter(function (r) { return catP.indexOf(r) < 0; }).map(function (r) { return '<li data-open="' + r.id + '"><b>' + esc(r.key || "") + "</b> " + esc(r.title) + ' <span class="st-chip warn">' + esc(L("past the deadline", "fora do prazo")) + "</span></li>"; }).join("") + "</ul>" : "") + "</section></div>" +
       kpiStrip() + "</div>";
     bindOpen(v);
+    v.querySelector("#pnAi").onclick = function (e) { aiPanel(e.currentTarget); };
   }
   function kpiStrip() {
     const cards = allKpis().slice(0, 6); if (!cards.length) return "";
@@ -374,7 +377,8 @@
       "<label>" + esc(L("Place / sector", "Local / setor")) + '<input name="place" list="stPlaces" maxlength="80" value="' + esc(r.place || "") + '"><datalist id="stPlaces">' + places.map(function (p) { return '<option value="' + esc(p) + '">'; }).join("") + "</datalist></label></div>" +
       (r.type === "improve" || r.type === "inspection" || r.type === "env" ? "" : '<div class="pl-2"><label>' + esc(L("Person involved", "Pessoa envolvida")) + '<input name="person" list="stPeople" maxlength="80" value="' + esc(r.person || "") + '" placeholder="' + esc(L("Pick an employee or type a name", "Escolha um colaborador ou digite um nome")) + '"><datalist id="stPeople">' + people().map(function (x) { return '<option value="' + esc(x.name) + '">' + esc([x.reg, x.role, x.sector].filter(Boolean).join(" · ")) + "</option>"; }).join("") + "</datalist>" + '</label><label>' + esc(L("Job / role", "Função")) + '<input name="personRole" maxlength="60" value="' + esc(r.personRole || "") + '"></label></div>') +
       (sevSel ? '<div class="pl-2">' + sevSel + (T.cat ? '<label class="chk st-leave"><input type="checkbox" name="leave"' + (r.leave ? " checked" : "") + "> " + esc(L("With lost time (absence)", "Com afastamento")) + "</label>" : "<span></span>") + "</div>" : "") +
-      (T.cat || r.type === "leave" ? '<div class="pl-2"><label>' + esc(L("Days lost / away", "Dias perdidos / afastado")) + '<input type="number" min="0" name="daysLost" value="' + esc(r.daysLost == null ? "" : r.daysLost) + '"></label><span></span></div>' : "") +
+      (T.cat || r.type === "leave" ? '<div class="pl-2"><label>' + esc(L("Days lost / away", "Dias perdidos / afastado")) + '<input type="number" min="0" name="daysLost" value="' + esc(r.daysLost == null ? "" : r.daysLost) + '"></label>' + (r.type === "leave" || T.cat ? "<label>" + esc(L("Reason (no diagnosis)", "Motivo (sem diagnóstico)")) + '<select name="absKind"><option value="">—</option>' + ABSK().map(function (x) { return opt(x[0], x[1], r.absKind || (r.type === "leave" ? "short" : "")); }).join("") + "</select></label>" : "<span></span>") + "</div>" +
+        '<div class="pl-2"><label>' + esc(L("Away from", "Afastado desde")) + '<input type="date" name="absStart" value="' + esc(r.absStart || "") + '"></label><label>' + esc(L("Expected return", "Retorno previsto")) + '<input type="date" name="absEnd" value="' + esc(r.absEnd || "") + '"></label></div>' : "") +
       (T.cat ? '<fieldset class="st-fs"><legend>CAT – ' + esc(L("work accident report", "comunicação de acidente de trabalho")) + '</legend><div class="pl-3"><label>' + esc(L("CAT number", "Número da CAT")) + '<input name="catNum" maxlength="40" value="' + esc((r.cat || {}).num || "") + '"></label><label class="chk st-leave"><input type="checkbox" name="s2210"' + ((r.cat || {}).s2210 ? " checked" : "") + "> " + esc(L("Sent to eSocial (S-2210)", "Enviada ao eSocial (S-2210)")) + "</label>" + '<label>' + esc(L("Issued on", "Emitida em")) + '<input type="date" name="catDate" value="' + esc((r.cat || {}).date || "") + '"></label></div><p class="muted small">' + esc(L("Legal deadline: first business day after the accident; immediately in case of death (Law 8.213/91, art. 22). Also report it to eSocial (S-2210).", "Prazo legal: até o 1º dia útil seguinte ao acidente; imediato em caso de óbito (Lei 8.213/91, art. 22). Informar também ao eSocial (S-2210).")) + "</p></fieldset>" : "") +
       (r.type === "exam" ? '<div class="pl-3"><label>' + esc(L("Exam", "Exame")) + '<select name="examKind">' + EXAMS().map(function (x) { return opt(x[0], x[1], (r.exam || {}).kind || "periodic"); }).join("") + "</select></label><label>" + esc(L("Scheduled for", "Agendado para")) + '<input type="date" name="examDate" value="' + esc((r.exam || {}).date || "") + '"></label><label>' + esc(L("Result (ASO)", "Resultado (ASO)")) + '<select name="examResult"><option value="">—</option>' + RESULTS().map(function (x) { return opt(x[0], x[1], (r.exam || {}).result || ""); }).join("") + "</select></label></div>" : "") +
       (r.type === "epi" ? '<div class="pl-3"><label>' + esc(L("Equipment", "Equipamento")) + '<input name="epiItem" maxlength="80" value="' + esc((r.epi || {}).item || "") + '" placeholder="' + esc(L("e.g. safety boots, gloves, harness", "ex.: botina, luvas, cinto paraquedista")) + '"></label><label>' + esc(L("Quantity", "Quantidade")) + '<input type="number" min="1" name="epiQty" value="' + esc((r.epi || {}).qty || 1) + '"></label><label>' + esc(L("Size / CA", "Tamanho / CA")) + '<input name="epiSize" maxlength="30" value="' + esc((r.epi || {}).size || "") + '"></label></div>' : "") +
@@ -392,6 +396,7 @@
     if (f.severity) o.severity = f.severity.value;
     if (f.leave) o.leave = f.leave.checked || null;
     if (f.daysLost) o.daysLost = f.daysLost.value === "" ? null : Number(f.daysLost.value);
+    if (f.absKind) { o.absKind = f.absKind.value || null; o.absStart = f.absStart.value || null; o.absEnd = f.absEnd.value || null; if (o.absStart && o.absEnd && o.absEnd >= o.absStart && o.daysLost == null) o.daysLost = dayN(o.absEnd) - dayN(o.absStart) + 1; }
     if (T.cat) o.cat = f.catNum.value.trim() || f.catDate.value || f.s2210.checked ? { num: f.catNum.value.trim() || null, date: f.catDate.value || null, s2210: f.s2210.checked || null } : null;
     if (r.type === "exam") o.exam = { kind: f.examKind.value, date: f.examDate.value || null, result: f.examResult.value || null };
     if (r.type === "epi") o.epi = { item: f.epiItem.value.trim() || null, qty: Number(f.epiQty.value) || 1, size: f.epiSize.value.trim() || null };
@@ -413,7 +418,7 @@
           const rid = db.ref().push().key, rec = Object.assign({ type: type, status: "new", key: "SST-" + String(res.snapshot.val()).padStart(4, "0"), created: TS(), by: me.email, updated: TS() }, o);
           Object.keys(rec).forEach(function (k) { if (rec[k] === null || rec[k] === undefined) delete rec[k]; });
           openRec = rid;
-          return sref("records/" + rid).set(rec).then(function () { close(); toast(rec.key + " " + L("registered", "registrado") + (TY[type].cat ? " · " + L("CAT due ", "CAT até ") + fmtD(catDue(rec)) : "")); drawer(rid); });
+          return sref("records/" + rid).set(rec).then(function () { if (NT().instant !== false && (NT().to || []).length && (TY[type].cat || type === "leave" || rec.severity === "high" || rec.severity === "fatal")) notify("sst-record", { rec: rid }); close(); toast(rec.key + " " + L("registered", "registrado") + (TY[type].cat ? " · " + L("CAT due ", "CAT até ") + fmtD(catDue(rec)) : "")); drawer(rid); });
         }).catch(function (e2) { btn.disabled = false; fail(e2); });
       };
     });
@@ -436,9 +441,11 @@
       '<form class="pl-form" id="sdF">' + fieldsHtml(r) +
       (r.type === "acc" || r.type === "commute" || r.type === "near" || r.type === "disease" || r.type === "env" || r.type === "inspection" || r.type === "unsafe" ? "<label>" + esc(L("Root cause analysis (5 whys, Ishikawa)", "Análise de causa raiz (5 porquês, Ishikawa)")) + '<textarea name="rootCause" rows="3" maxlength="2000">' + esc(r.rootCause || "") + "</textarea></label>" : "") +
       '<div class="d-actions"><button type="button" class="pl-btn" id="sdCancel" disabled>' + esc(L("Cancel changes", "Cancelar alterações")) + '</button><button class="pl-btn primary" id="sdSave" disabled>' + esc(L("Save", "Salvar")) + "</button></div></form>" +
+      '<div class="st-aibar"><button type="button" class="pl-btn sm" id="sdAi">' + IC("spark", 14) + " " + esc(L("Analyse with AI: root cause and actions", "Analisar com IA: causa raiz e ações")) + '</button></div><div id="sdAiOut"></div>' +
       '<div class="st-acts" id="sdActs"></div>' +
       '<p class="muted small">' + esc(L("Registered by ", "Registrado por ")) + esc(who(r.by)) + " · " + esc(fmtDT(r.created)) + (r.closedAt ? " · " + esc(L("closed ", "encerrado ")) + esc(fmtDT(r.closedAt)) : "") + '</p><button class="pl-btn ghost danger sm" id="sdDel">' + esc(L("Delete record", "Excluir registro")) + "</button>";
     d.querySelector("#sdX").onclick = closeDrawer;
+    d.querySelector("#sdAi").onclick = function () { aiRecord(Object.assign({ id: id }, data.records[id] || r), d); };
     d.querySelectorAll(".st-status [data-st]").forEach(function (b) { b.onclick = function () { setStatus(id, b.dataset.st); }; });
     const f = d.querySelector("#sdF"), sv = d.querySelector("#sdSave"), cc = d.querySelector("#sdCancel");
     f.addEventListener("input", function () { f.classList.add("dirty"); sv.disabled = cc.disabled = false; });
@@ -456,6 +463,7 @@
       });
     };
     drawActions(d, r, acts);
+    aiShow(r, d);
   }
   function drawActions(d, r, acts) {
     const box = d.querySelector("#sdActs"), ppl = members(), today = new Date().toISOString().slice(0, 10);
@@ -656,22 +664,203 @@
       (ks.length ? '<div class="st-kpis">' + ks.map(kpiCard).join("") + "</div>" : '<p class="muted small">' + esc(L("No indicators yet. Open a planning of the module → Indicators → New indicator.", "Ainda não há indicadores. Abra um planejamento do módulo → Indicadores → Novo indicador.")) + "</p>") + "</section></div>";
   }
 
+  /* ---------------- notifications (platform notifier – Digital Agile account) ----------------
+     settings.notify = { to: [e-mails], daily: bool, days: 7|15|30, instant: bool }  – recipients must be members of the workspace (checked by the notifier). */
+  function NT() { return S().notify || {}; }
+  function notify(kind, extra) {
+    const url = window.CMCOLLAB_MAILER; if (!url) return Promise.resolve({ ok: false, error: L("Notifier not configured", "Notificador não configurado") });
+    return window.firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({ idToken: tok, kind: kind, ws: WS, lang: "pt", brand: window.CMCOLLAB_BRAND || "" }, extra || {})) });
+    }).then(function (r) { return r.json(); }).then(function (j) { if (j && !j.ok) console.info("notifier:", kind, j.error); return j; }).catch(function (e) { console.info("notifier:", e.message); return { ok: false, error: e.message }; });
+  }
+
+  /* ---------------- AI (same provider and daily limit as the rest of the platform; no names are sent) ---------------- */
+  function aiOn() { if (S().ai === false) { toast(L("AI is off in this module (Settings).", "A IA está desligada neste módulo (Configurações).")); return false; } if (!window.CMAI || !window.CMAI.generate) { toast(L("AI unavailable right now.", "IA indisponível neste momento.")); return false; } return true; }
+  function aiBusy(b, on) { if (!b) return; b.disabled = on; if (on) { b.dataset.t = b.innerHTML; b.innerHTML = IC("spark", 14) + " " + esc(L("Thinking…", "Analisando…")); } else if (b.dataset.t) b.innerHTML = b.dataset.t; }
+  function aiLog(what, n) { sref("settings/aiLog/" + db.ref().push().key).set({ what: what, n: n || 0, at: Date.now(), by: me.email }).catch(function () { /* optional */ }); }
+  function aiNote() { return '<p class="muted small st-ainote">' + IC("lock", 12) + " " + esc(L("Only aggregated numbers and the description go to the AI – no names, registration or diagnosis. AI can make mistakes: review before deciding.", "Só números agregados e a descrição vão para a IA – sem nomes, matrícula ou diagnóstico. A IA pode errar: revise antes de decidir.")) + "</p>"; }
+  function aiRecord(r, d) {
+    if (!aiOn()) return; const b = d.querySelector("#sdAi"); aiBusy(b, true);
+    const T = TYPES()[r.type] || {};
+    const prompt = "Você é especialista em Saúde e Segurança do Trabalho no Brasil (NRs, PGR/NR-01, PCMSO/NR-07, eSocial). Analise a ocorrência e responda SOMENTE em JSON: " +
+      '{"causa":"análise de causa raiz em 5 porquês, texto curto","fatores":["fator contribuinte"],"acoes":[{"t":"ação objetiva","prazoDias":7,"tipo":"eliminar|substituir|engenharia|administrativa|EPI"}],"nrs":["NR-xx – motivo"],"recorrencia":"baixa|média|alta","comunicacao":"mensagem curta para o DDS"}. ' +
+      "Siga a hierarquia de controles (eliminar antes de EPI). Máximo 5 ações. Não invente diagnóstico médico. Dados: tipo=" + (T.n || r.type) + "; título=" + (r.title || "") + "; gravidade=" + (r.severity || "-") + "; local=" + (r.place || "-") + "; com afastamento=" + (r.leave ? "sim" : "não") + "; descrição=" + String(r.desc || "").slice(0, 1200);
+    window.CMAI.generate("sst-record", prompt).then(function (x) {
+      aiBusy(b, false); if (!x || (!x.causa && !(x.acoes || []).length)) return toast(L("The AI returned nothing useful.", "A IA não devolveu sugestões."));
+      aiCache[r.id] = x; aiShow(r, document.getElementById("stDrawer") || d);
+    }, function (e) { aiBusy(b, false); fail(e); });
+  }
+  const aiCache = {};
+  function aiShow(r, d) {
+    const x = aiCache[r.id], box = d && d.querySelector("#sdAiOut"); if (!x || !box) return;
+    { const acts = (x.acoes || []).slice(0, 5);
+      box.innerHTML = '<div class="st-aibox"><div class="st-head2"><b>' + IC("spark", 15) + " " + esc(L("AI suggestion", "Sugestão da IA")) + '</b><span class="st-chip ' + (x.recorrencia === "alta" ? "bad" : x.recorrencia === "média" ? "warn" : "good") + '">' + esc(L("Recurrence risk: ", "Risco de recorrência: ")) + esc(x.recorrencia || "–") + "</span></div>" +
+        (x.causa ? "<p><b>" + esc(L("Root cause", "Causa raiz")) + ":</b> " + esc(x.causa) + '</p><button class="pl-btn sm" id="aiUseCause">' + esc(L("Use as root cause", "Usar como causa raiz")) + "</button>" : "") +
+        ((x.fatores || []).length ? '<p class="small"><b>' + esc(L("Contributing factors", "Fatores contribuintes")) + ":</b> " + esc(x.fatores.join(" · ")) + "</p>" : "") +
+        (acts.length ? '<div class="st-ailist">' + acts.map(function (a, i) { return '<div class="st-li"><span><b>' + esc(a.t) + '</b> <span class="muted small">' + esc((a.tipo ? a.tipo + " · " : "") + L("in ", "em ") + (a.prazoDias || 7) + L(" days", " dias")) + '</span></span><button class="pl-btn sm primary" data-aiadd="' + i + '">' + esc(L("Add action", "Adicionar ação")) + "</button></div>"; }).join("") + '</div><button class="pl-btn sm" id="aiAddAll">' + esc(L("Add all actions", "Adicionar todas as ações")) + "</button>" : "") +
+        ((x.nrs || []).length ? '<p class="small"><b>NRs:</b> ' + esc(x.nrs.join(" · ")) + "</p>" : "") + (x.comunicacao ? '<p class="small"><b>DDS:</b> ' + esc(x.comunicacao) + "</p>" : "") + aiNote() + "</div>";
+      const add = function (a) { const due = new Date(Date.now() + (Number(a.prazoDias) || 7) * DAY).toISOString().slice(0, 10); return sref("records/" + r.id + "/actions/" + db.ref().push().key).set({ t: String(a.t).slice(0, 200), due: due, at: Date.now(), by: me.email, ai: true }); };
+      const uc = box.querySelector("#aiUseCause"); if (uc) uc.onclick = function () { const f = d.querySelector("#sdF"); if (f && f.rootCause) { f.rootCause.value = x.causa; f.rootCause.dispatchEvent(new Event("input", { bubbles: true })); toast(L("Filled in – click Save", "Preenchido – clique em Salvar")); } };
+      box.querySelectorAll("[data-aiadd]").forEach(function (bt) { bt.onclick = function () { bt.disabled = true; x.added = x.added || {}; x.added[bt.dataset.aiadd] = 1; add(acts[bt.dataset.aiadd]).then(function () { aiLog("record-action", 1); toast(L("Action added", "Ação adicionada")); }, fail); }; });
+      const aa = box.querySelector("#aiAddAll"); if (aa) aa.onclick = function () { aa.disabled = true; const todo = acts.filter(function (a0, i) { return !(x.added || {})[i]; }); x.added = {}; acts.forEach(function (a0, i) { x.added[i] = 1; }); Promise.all(todo.map(add)).then(function () { aiLog("record-action", todo.length); toast(todo.length + " " + L("actions added", "ações adicionadas")); }, fail); };
+      box.querySelectorAll("[data-aiadd]").forEach(function (bt) { if ((x.added || {})[bt.dataset.aiadd]) bt.disabled = true; });
+    }
+  }
+  function panelFacts() {
+    const R = recs(), y0 = new Date(new Date().getFullYear(), 0, 1).getTime(), yr = R.filter(function (r) { return (r.when || r.created) >= y0 && r.status !== "cancel"; }), dd = dues(), A0 = absStats();
+    return { acidentesComAfastamentoAno: yr.filter(function (r) { return isAcc(r) && r.leave; }).length, acidentesSemAfastamentoAno: yr.filter(function (r) { return isAcc(r) && !r.leave; }).length, quaseAcidentesAno: yr.filter(function (r) { return r.type === "near" || r.type === "unsafe"; }).length,
+      catEmAtraso: R.filter(catLate).length, registrosAbertos: R.filter(isOpen).length, asoVencidos: dd.filter(function (x) { return x.kind === "exam" && x.st === "late"; }).length, asoVencem30d: dd.filter(function (x) { return x.kind === "exam" && x.st === "soon"; }).length,
+      nrVencidos: dd.filter(function (x) { return x.kind === "training" && x.st === "late"; }).length, nrVencem30d: dd.filter(function (x) { return x.kind === "training" && x.st === "soon"; }).length, epiVencidos: dd.filter(function (x) { return x.kind === "ppe" && x.st === "late"; }).length,
+      absenteismoMesPct: A0.rateMonth == null ? null : Number(A0.rateMonth.toFixed(2)), metaAbsenteismoPct: A0.target, diasPerdidos12m: A0.days12, custoEstimado12m: A0.cost, afastadosAgora: A0.away.length, retornosEm7dias: A0.back7.length, reincidentes: A0.repeat.length,
+      absPorMotivo: A0.byKind.map(function (x) { return x.n + ": " + x.v + " dias"; }), absPorSetor: A0.bySector.slice(0, 5).map(function (x) { return x.n + ": " + x.v + " dias"; }) };
+  }
+  function aiPanel(b) {
+    if (!aiOn()) return; aiBusy(b, true);
+    const prompt = "Você é diretor(a) de Saúde e Segurança do Trabalho de uma indústria no Brasil. Com os números abaixo (dados agregados, sem nomes), escreva um resumo executivo para a liderança. Responda SOMENTE em JSON: " +
+      '{"titulo":"frase curta","resumo":"3 a 4 frases","prioridades":[{"t":"o que fazer esta semana","porque":"impacto"}],"riscos":["risco legal ou operacional"],"ganhos":["ganho esperado ao agir"]}. Máximo 4 prioridades. Cite eSocial (S-2210/S-2220) e NR-07 quando fizer sentido. Números: ' + JSON.stringify(panelFacts());
+    window.CMAI.generate("sst-panel", prompt).then(function (x) {
+      aiBusy(b, false); if (!x || !x.resumo) return toast(L("The AI returned nothing useful.", "A IA não devolveu sugestões.")); aiLog("panel", 1);
+      const txt = (x.titulo || "") + "\n\n" + x.resumo + "\n\n" + L("Priorities", "Prioridades") + ":\n" + (x.prioridades || []).map(function (p) { return "• " + p.t + (p.porque ? " – " + p.porque : ""); }).join("\n") + ((x.riscos || []).length ? "\n\n" + L("Risks", "Riscos") + ":\n• " + x.riscos.join("\n• ") : "") + ((x.ganhos || []).length ? "\n\n" + L("Gains", "Ganhos") + ":\n• " + x.ganhos.join("\n• ") : "");
+      modal("<h2>" + IC("spark", 18) + " " + esc(x.titulo || L("Executive summary", "Resumo executivo")) + '</h2><p>' + esc(x.resumo) + "</p>" +
+        ((x.prioridades || []).length ? '<h3 class="st-h3">' + esc(L("Priorities this week", "Prioridades da semana")) + '</h3><ol class="st-aiol">' + x.prioridades.map(function (p) { return "<li><b>" + esc(p.t) + "</b>" + (p.porque ? ' <span class="muted small">' + esc(p.porque) + "</span>" : "") + "</li>"; }).join("") + "</ol>" : "") +
+        ((x.riscos || []).length ? '<h3 class="st-h3">' + esc(L("Risks", "Riscos")) + "</h3><ul>" + x.riscos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>" : "") +
+        ((x.ganhos || []).length ? '<h3 class="st-h3">' + esc(L("Expected gains", "Ganhos esperados")) + "</h3><ul>" + x.ganhos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>" : "") + aiNote() +
+        '<div class="pl-row-end"><button class="pl-btn" id="aiCopy">' + esc(L("Copy", "Copiar")) + '</button><button class="pl-btn primary" data-close>' + esc(L("Close", "Fechar")) + "</button></div>", function (box) {
+        box.querySelector(".pl-card").classList.add("wide");
+        box.querySelector("#aiCopy").onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { toast(L("Copied", "Copiado")); }, function () { toast(L("Copy not allowed here", "Cópia não permitida aqui")); }); };
+      });
+    }, function (e) { aiBusy(b, false); fail(e); });
+  }
+
+  /* ---------------- absenteeism (Absenteísmo) ----------------
+     Absence = record type "leave" (+ accidents/diseases "with lost time"). Fields: absKind, absStart (YYYY-MM-DD), absEnd (expected return), returned, daysLost.
+     settings: absHeadcount (workforce; default = active employees), absTarget (% goal), absDayCost (average cost of one day away),
+     absPlan/<id>{t, owner, due, done, ind, ai, plan?{pid,item}} = control actions of the absenteeism programme. */
+  function ABSK() { return [["short", L("Medical certificate (up to 15 days)", "Atestado médico (até 15 dias)")], ["inss", L("Social security leave (over 15 days)", "Afastamento previdenciário – INSS (mais de 15 dias)")], ["work", L("Work accident / occupational disease", "Acidente / doença do trabalho")], ["family", L("Family care / legal leaves", "Acompanhamento familiar / licenças legais")], ["unjust", L("Unjustified absence", "Falta não justificada")], ["other", L("Other", "Outro")]]; }
+  function absKindName(k) { const x = ABSK().find(function (a) { return a[0] === k; }); return x ? x[1] : L("Not informed", "Não informado"); }
+  function dS(t) { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function dayN(s) { return Math.round(Date.parse(s + "T12:00:00Z") / DAY); }
+  function absList() {
+    return recs().filter(function (r) { return r.status !== "cancel" && (r.type === "leave" || (isAcc(r) && r.leave)); }).map(function (r) {
+      const start = r.absStart || dS(r.when || r.created || Date.now()), n = Number(r.daysLost) || 0;
+      const end = r.absEnd || (n ? dS(Date.parse(start + "T12:00:00") + (n - 1) * DAY) : start), p = r.personId && data.people && data.people[r.personId];
+      return { r: r, start: start, end: end, days: n || Math.max(1, dayN(end) - dayN(start) + 1), kind: r.absKind || (isAcc(r) ? "work" : ""), sector: (p && p.sector) || r.place || L("Not informed", "Não informado"), who: r.personId || (r.person || "").toLowerCase() };
+    });
+  }
+  function absStats() {
+    const s = S(), list = absList(), today = todayS(), tN = dayN(today), headA = people().filter(function (p) { return p.active !== false; }).length, head = Number(s.absHeadcount) || headA;
+    const months = []; for (let i = 11; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months.push(ym(d.getTime())); }
+    const rows = months.map(function (m) {
+      const a = dayN(m + "-01"), dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate(), b = a + dim - 1, cut = m === ym(Date.now()) ? Math.min(b, tN) : b;
+      let days = 0; list.forEach(function (x) { const s0 = Math.max(a, dayN(x.start)), e0 = Math.min(cut, dayN(x.end)); if (e0 >= s0) days += e0 - s0 + 1; });
+      const span = cut - a + 1; return { m: m, n: monLabel(m), days: days, rate: head && span > 0 ? days / (head * span) * 100 : null };
+    });
+    const y0 = dayN(months[0] + "-01"), in12 = list.filter(function (x) { return dayN(x.end) >= y0; }), days12 = rows.reduce(function (t, r) { return t + r.days; }, 0);
+    const agg = function (f) { const o = {}; in12.forEach(function (x) { const k = f(x); const s0 = Math.max(y0, dayN(x.start)), e0 = Math.min(tN, dayN(x.end)); o[k] = (o[k] || 0) + Math.max(0, e0 - s0 + 1); }); return Object.keys(o).map(function (k) { return { n: k, v: o[k] }; }).filter(function (x) { return x.v > 0; }).sort(function (a, b) { return b.v - a.v; }); };
+    const cnt = {}; in12.forEach(function (x) { if (x.who) cnt[x.who] = (cnt[x.who] || 0) + 1; });
+    const cur = rows[rows.length - 1];
+    return { head: head, headA: headA, rows: rows, list: list, rateMonth: cur.rate, target: Number(s.absTarget) || null, days12: days12, cost: Number(s.absDayCost) ? days12 * Number(s.absDayCost) : null,
+      away: list.filter(function (x) { return !x.r.returned && dayN(x.start) <= tN && dayN(x.end) >= tN; }), back7: list.filter(function (x) { return !x.r.returned && dayN(x.end) >= tN && dayN(x.end) <= tN + 7; }),
+      repeat: Object.keys(cnt).filter(function (k) { return cnt[k] >= 3; }), byKind: agg(function (x) { return absKindName(x.kind); }), bySector: agg(function (x) { return x.sector; }) };
+  }
+  function money(v) { return v == null ? "–" : v.toLocaleString(LOC, { style: "currency", currency: S().absCurrency || "BRL", maximumFractionDigits: 0 }); }
+  function absView(v) {
+    const A0 = absStats(), s = S(), plan = Object.keys(s.absPlan || {}).map(function (k) { return Object.assign({ id: k }, s.absPlan[k]); }).sort(function (a, b) { return (a.done ? 1 : 0) - (b.done ? 1 : 0) || String(a.due || "9").localeCompare(String(b.due || "9")); });
+    const tile = function (ic, val, lbl, cls, sub) { return '<div class="st-tile' + (cls ? " " + cls : "") + '"><span class="st-ti">' + IC(ic, 18) + "</span><b>" + val + "</b><span>" + esc(lbl) + "</span>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</div>"; };
+    const over = A0.rateMonth != null && A0.target != null && A0.rateMonth > A0.target, ppl = members(), today = todayS();
+    const hb = function (arr) { if (!arr.length) return '<p class="muted small">' + esc(L("No absences in the period.", "Sem ausências no período.")) + "</p>"; const mx = arr[0].v; return '<div class="st-hbars">' + arr.slice(0, 7).map(function (x) { return "<div><span>" + esc(x.n) + '</span><i style="width:' + Math.max(4, x.v / mx * 100) + '%;background:#5c6b80"></i><b>' + x.v + "</b></div>"; }).join("") + "</div>"; };
+    const rateRows = A0.rows.map(function (r) { return { n: r.n, a: r.rate == null ? 0 : Math.round(r.rate * 100) / 100 }; });
+    v.innerHTML = '<div class="st-wrap"><div class="st-tiles">' +
+      tile("trend", A0.rateMonth == null ? "–" : nf(A0.rateMonth, 2) + "%", L("absenteeism this month", "absenteísmo no mês"), over ? "bad" : A0.rateMonth != null ? "good" : "", A0.target != null ? L("target ≤ ", "meta ≤ ") + nf(A0.target, 1) + "% · " + L("workforce ", "efetivo ") + nf(A0.head) : L("set the target in Settings", "defina a meta em Configurações")) +
+      tile("calendar", nf(A0.days12), L("days lost (12 months)", "dias perdidos (12 meses)"), "", A0.cost != null ? money(A0.cost) + L(" estimated cost", " de custo estimado") : L("set the cost per day in Settings", "informe o custo/dia em Configurações")) +
+      tile("people", nf(A0.away.length), L("away today", "afastados hoje"), A0.away.length ? "warn" : "") +
+      tile("clock", nf(A0.back7.length), L("returns in 7 days", "retornos em 7 dias"), A0.back7.length ? "warn" : "", L("schedule the return-to-work exam", "agende o ASO de retorno")) +
+      tile("alert", nf(A0.repeat.length), L("recurring (3+ absences in 12 months)", "reincidentes (3+ ausências em 12 meses)"), A0.repeat.length ? "bad" : "") +
+      tile("task", nf(plan.filter(function (a) { return !a.done; }).length), L("control actions open", "ações de controle abertas"), plan.some(function (a) { return !a.done && a.due && a.due < today; }) ? "warn" : "") + "</div>" +
+      '<div class="st-grid2"><section class="st-card"><div class="st-head2"><h3>' + esc(L("Absenteeism rate – 12 months (%)", "Taxa de absenteísmo – 12 meses (%)")) + '</h3></div><div class="st-scroll">' + bars(rateRows, [{ k: "a", n: L("% of scheduled days lost", "% dos dias previstos perdidos"), c: "#5c6b80" }]) + '</div><p class="muted small">' + esc(L("Rate = days away ÷ (workforce × days of the month) × 100. Workforce and target in Settings.", "Taxa = dias de ausência ÷ (efetivo × dias do mês) × 100. Efetivo e meta em Configurações.")) + "</p></section>" +
+      '<section class="st-card"><h3>' + esc(L("Days lost by reason", "Dias perdidos por motivo")) + "</h3>" + hb(A0.byKind) + '<h3 class="st-h3">' + esc(L("By sector", "Por setor")) + "</h3>" + hb(A0.bySector) + "</section></div>" +
+      '<section class="st-card"><div class="st-head2"><h3>' + esc(L("Away and returning", "Afastados e retornos")) + '</h3><button class="pl-btn sm" id="abNew">' + IC("plus", 14) + " " + esc(L("Register absence", "Registrar afastamento")) + "</button></div>" +
+      (A0.away.length || A0.back7.length ? '<div class="st-scroll"><table class="st-tbl"><thead><tr><th>' + esc(L("Record", "Registro")) + "</th><th>" + esc(L("Sector", "Setor")) + "</th><th>" + esc(L("Reason", "Motivo")) + "</th><th>" + esc(L("Since", "Desde")) + "</th><th>" + esc(L("Expected return", "Retorno previsto")) + "</th><th></th></tr></thead><tbody>" +
+        A0.away.concat(A0.back7.filter(function (x) { return A0.away.indexOf(x) < 0; })).map(function (x) { const need = x.days >= 30; return '<tr><td><button class="link" data-open="' + x.r.id + '"><b>' + esc(x.r.key) + "</b> " + esc(x.r.person || x.r.title) + "</button></td><td>" + esc(x.sector) + "</td><td>" + esc(absKindName(x.kind)) + "</td><td>" + fmtS(x.start) + "</td><td>" + fmtS(x.end) + (need ? ' <span class="st-chip warn">' + esc(L("Return ASO (NR-07)", "ASO de retorno (NR-07)")) + "</span>" : "") + '</td><td><button class="pl-btn sm" data-back="' + x.r.id + '">' + esc(L("Returned", "Retornou")) + "</button></td></tr>"; }).join("") + "</tbody></table></div>"
+        : '<p class="muted small">' + esc(L("Nobody away right now.", "Ninguém afastado agora.")) + "</p>") + "</section>" +
+      '<section class="st-card"><div class="st-head2"><h3>' + IC("task", 16) + " " + esc(L("Absenteeism control programme", "Programa de controle do absenteísmo")) + '</h3><button class="pl-btn sm primary" id="abAi">' + IC("spark", 14) + " " + esc(L("Build the plan with AI", "Montar plano com IA")) + "</button></div>" +
+      '<div id="abAiOut"></div>' +
+      (plan.length ? plan.map(function (a) { const p = a.plan && plans.find(function (x) { return x.id === a.plan.pid; }); return '<div class="st-act' + (a.done ? " done" : "") + (!a.done && a.due && a.due < today ? " late" : "") + '"><label class="chk"><input type="checkbox" data-abdone="' + a.id + '"' + (a.done ? " checked" : "") + "> <span>" + esc(a.t) + (a.ai ? ' <span class="st-chip">IA</span>' : "") + '</span></label><small class="muted">' + esc([a.owner ? who(a.owner) : "", a.due ? L("until ", "até ") + fmtS(a.due) : "", a.ind ? L("indicator: ", "indicador: ") + a.ind : ""].filter(Boolean).join(" · ")) + "</small>" +
+        (a.plan ? '<a class="st-plink" href="../planning/?id=' + encodeURIComponent(a.plan.pid) + "&item=" + encodeURIComponent(a.plan.item) + '">' + IC("planning", 13) + " " + esc(p ? p.title : L("planning", "planejamento")) + "</a>" : (plans.length ? '<button class="link sm" data-abplan="' + a.id + '">' + IC("planning", 13) + " " + esc(L("Take to a planning", "Levar para um planejamento")) + "</button>" : "")) + '<button class="link sm danger" data-abdel="' + a.id + '">' + esc(L("remove", "remover")) + "</button></div>"; }).join("") : '<p class="muted small">' + esc(L("No control actions yet. Add one or let the AI suggest a plan from your numbers.", "Nenhuma ação de controle ainda. Adicione ou deixe a IA sugerir um plano a partir dos seus números.")) + "</p>") +
+      '<form class="st-addact" id="abAct"><input name="t" maxlength="200" required placeholder="' + esc(L("New action – e.g. return-to-work interview by the leader", "Nova ação – ex.: entrevista de retorno com a liderança")) + '"><select name="owner"><option value="">' + esc(L("Owner", "Responsável")) + "</option>" + Object.keys(ppl).map(function (k) { return opt(ppl[k].email, ppl[k].name || ppl[k].email, ""); }).join("") + '</select><input type="date" name="due"><button class="pl-btn sm primary">' + esc(L("Add", "Adicionar")) + "</button></form></section></div>";
+    bindOpen(v);
+    v.querySelector("#abNew").onclick = function () { recDialog(null, "leave"); };
+    v.querySelectorAll("[data-back]").forEach(function (b) { b.onclick = function () { const id = b.dataset.back, r = data.records[id]; sref("records/" + id).update({ returned: true, absEnd: todayS() < (r.absEnd || "") ? todayS() : (r.absEnd || todayS()), status: r.type === "leave" ? "done" : r.status, closedAt: r.type === "leave" ? TS() : (r.closedAt || null), updated: TS() }).then(function () { toast(L("Return registered", "Retorno registrado")); }, fail); }; });
+    v.querySelectorAll("[data-abdone]").forEach(function (c) { c.onchange = function () { sref("settings/absPlan/" + c.dataset.abdone + "/done").set(c.checked || null).catch(fail); }; });
+    v.querySelectorAll("[data-abdel]").forEach(function (c) { c.onclick = function () { sref("settings/absPlan/" + c.dataset.abdel).remove().catch(fail); }; });
+    v.querySelectorAll("[data-abplan]").forEach(function (c) { c.onclick = function () { absToPlanning(c.dataset.abplan); }; });
+    const f = v.querySelector("#abAct");
+    f.onsubmit = function (e) { e.preventDefault(); const a = { t: f.t.value.trim(), owner: f.owner.value || null, due: f.due.value || null, at: Date.now(), by: me.email }; if (!a.t) return; Object.keys(a).forEach(function (k) { if (a[k] === null) delete a[k]; }); sref("settings/absPlan/" + db.ref().push().key).set(a).catch(fail); };
+    v.querySelector("#abAi").onclick = function (e) { aiAbs(e.currentTarget, v.querySelector("#abAiOut")); };
+  }
+  function aiAbs(b, out) {
+    if (!aiOn()) return; aiBusy(b, true);
+    const prompt = "Você é especialista em gestão de absenteísmo e saúde ocupacional no Brasil (NR-07/PCMSO, NR-01/PGR riscos psicossociais, eSocial S-2230). Com os números agregados abaixo (sem nomes), monte um programa de controle do absenteísmo. Responda SOMENTE em JSON: " +
+      '{"diagnostico":"3 frases","acoes":[{"t":"ação concreta","prazoDias":30,"indicador":"como medir"}],"meta":"meta sugerida em % e prazo","ganho":"ganho estimado em dias/custo se a meta for atingida"}. Máximo 6 ações, práticas e respeitando a LGPD (sem expor pessoas). Números: ' + JSON.stringify(panelFacts());
+    window.CMAI.generate("sst-abs", prompt).then(function (x) {
+      aiBusy(b, false); const acts = ((x && x.acoes) || []).slice(0, 6); if (!acts.length) return toast(L("The AI returned nothing useful.", "A IA não devolveu sugestões."));
+      out.innerHTML = '<div class="st-aibox"><p><b>' + esc(L("Diagnosis", "Diagnóstico")) + ":</b> " + esc(x.diagnostico || "") + "</p>" + (x.meta ? '<p class="small"><b>' + esc(L("Target", "Meta")) + ":</b> " + esc(x.meta) + "</p>" : "") + (x.ganho ? '<p class="small"><b>' + esc(L("Gain", "Ganho")) + ":</b> " + esc(x.ganho) + "</p>" : "") +
+        '<div class="st-ailist">' + acts.map(function (a, i) { return '<div class="st-li"><span><b>' + esc(a.t) + '</b> <span class="muted small">' + esc((a.indicador ? a.indicador + " · " : "") + L("in ", "em ") + (a.prazoDias || 30) + L(" days", " dias")) + '</span></span><button class="pl-btn sm primary" data-aiab="' + i + '">' + esc(L("Add", "Adicionar")) + "</button></div>"; }).join("") + '</div><button class="pl-btn sm" id="aiAbAll">' + esc(L("Add all to the programme", "Adicionar todas ao programa")) + "</button>" + aiNote() + "</div>";
+      const add = function (a) { return sref("settings/absPlan/" + db.ref().push().key).set({ t: String(a.t).slice(0, 200), due: new Date(Date.now() + (Number(a.prazoDias) || 30) * DAY).toISOString().slice(0, 10), ind: a.indicador ? String(a.indicador).slice(0, 120) : null, ai: true, at: Date.now(), by: me.email }); };
+      out.querySelectorAll("[data-aiab]").forEach(function (bt) { bt.onclick = function () { bt.disabled = true; add(acts[bt.dataset.aiab]).then(function () { aiLog("abs-action", 1); }, fail); }; });
+      out.querySelector("#aiAbAll").onclick = function () { Promise.all(acts.map(add)).then(function () { aiLog("abs-action", acts.length); toast(acts.length + " " + L("actions added", "ações adicionadas")); }, fail); };
+    }, function (e) { aiBusy(b, false); fail(e); });
+  }
+  function absToPlanning(aid) {
+    const a = (S().absPlan || {})[aid]; if (!a) return;
+    modal("<h2>" + esc(L("Take the action to a planning", "Levar a ação para um planejamento")) + '</h2><form class="pl-form" id="tpA"><label>' + esc(L("Planning", "Planejamento")) + '<select name="p">' + plans.map(function (p) { return opt(p.id, p.title, ""); }).join("") + '</select></label><div class="pl-row-end"><button type="button" class="pl-btn" data-close>' + esc(L("Cancel", "Cancelar")) + '</button><button class="pl-btn primary">' + esc(L("Create task", "Criar tarefa")) + "</button></div></form>", function (box, close) {
+      const f = box.querySelector("#tpA");
+      f.onsubmit = function (e) {
+        e.preventDefault(); const pid = f.p.value, P = plans.find(function (x) { return x.id === pid; }) || {};
+        const st = ((kpiCache[pid] || {}).settings || {}).statuses || ((window.PLAN_METHODS || {})[P.method] || {}).statuses || [{ id: "todo" }];
+        const first = (st.find(function (s) { return s.cat === "todo" && s.stage !== "up"; }) || st[0]).id, prefix = ((kpiCache[pid] || {}).settings || {}).prefix || "PLN";
+        db.ref("planning/" + pid + "/data/settings/seq").transaction(function (n) { return (n || 0) + 1; }).then(function (res) {
+          const iid = db.ref().push().key, it = { type: "task", title: a.t, status: first, order: Date.now(), created: TS(), by: me.email, key: prefix + "-" + res.snapshot.val(), desc: L("Absenteeism control programme", "Programa de controle do absenteísmo") + (a.ind ? " · " + L("indicator: ", "indicador: ") + a.ind : ""), src: { sst: WS, abs: aid } };
+          if (a.owner) it.assignee = a.owner; if (a.due) it.end = a.due;
+          return db.ref("planning/" + pid + "/data/items/" + iid).set(it).then(function () { return sref("settings/absPlan/" + aid + "/plan").set({ pid: pid, item: iid }); });
+        }).then(function () { close(); toast(L("Task created in the planning", "Tarefa criada no planejamento")); }, fail);
+      };
+    });
+  }
+
   /* ---------------- settings ---------------- */
   function cfgView(v) {
-    const s = S(), hht = s.hht || {}, months = [];
+    const s = S(), hht = s.hht || {}, months = [], nt = s.notify || {}, ppl = members(), owner = ((wss[WS] || {}).info || {}).owner;
     for (let i = 11; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months.push(ym(d.getTime())); }
+    const emails = Object.keys(ppl).map(function (k) { return ppl[k].email; }).filter(Boolean), log = s.aiLog || {}, aiN = Object.keys(log).reduce(function (t, k) { return t + (Number(log[k].n) || 1); }, 0);
     v.innerHTML = '<div class="st-wrap"><form class="st-card pl-form" id="cfF"><h3>' + esc(L("Settings of the module", "Configurações do módulo")) + "</h3>" +
       "<label>" + esc(L("Places / sectors (one per line)", "Locais / setores (um por linha)")) + '<textarea name="places" rows="4">' + esc((s.places || []).join("\n")) + "</textarea></label>" +
       '<div class="pl-2"><label>' + esc(L("Investigation deadline (days)", "Prazo de investigação (dias)")) + '<input type="number" min="1" name="invDays" value="' + esc(s.invDays || 7) + '"></label><label>' + esc(L("Deadline for requests – PPE, exams, suggestions (days)", "Prazo das solicitações – EPI, exames, sugestões (dias)")) + '<input type="number" min="1" name="reqDays" value="' + esc(s.reqDays || 5) + '"></label></div>' +
       '<fieldset class="st-fs"><legend>' + esc(L("Man-hours worked per month (for FR and SR)", "Horas-homem trabalhadas por mês (para TF e TG)")) + '</legend><div class="st-hht">' + months.map(function (m) { return "<label>" + esc(monLabel(m)) + '<input type="number" min="0" step="any" name="h_' + m + '" value="' + esc(hht[m] == null ? "" : hht[m]) + '"></label>'; }).join("") + "</div></fieldset>" +
+      '<fieldset class="st-fs"><legend>' + esc(L("Absenteeism", "Absenteísmo")) + '</legend><div class="pl-3"><label>' + esc(L("Workforce (headcount)", "Efetivo (headcount)")) + '<input type="number" min="0" name="absHeadcount" value="' + esc(s.absHeadcount || "") + '" placeholder="' + people().filter(function (p) { return p.active !== false; }).length + '"></label><label>' + esc(L("Target – maximum rate (%)", "Meta – taxa máxima (%)")) + '<input type="number" min="0" step="0.1" name="absTarget" value="' + esc(s.absTarget || "") + '" placeholder="2,5"></label><label>' + esc(L("Average cost of one day away", "Custo médio de um dia de ausência")) + '<input type="number" min="0" step="any" name="absDayCost" value="' + esc(s.absDayCost || "") + '" placeholder="R$"></label></div></fieldset>' +
+      '<fieldset class="st-fs"><legend>' + IC("bell", 14) + " " + esc(L("E-mail notifications", "Notificações por e-mail")) + '</legend><p class="muted small">' + esc(L("Sent by the platform (Digital Agile Technology account) only to members of this workspace.", "Enviadas pela plataforma (conta Digital Agile Technology) somente para membros deste workspace.")) + "</p>" +
+        '<div class="st-ntto">' + emails.map(function (e) { return '<label class="chk"><input type="checkbox" name="nto" value="' + esc(e) + '"' + ((nt.to || []).indexOf(e) >= 0 ? " checked" : "") + "> " + esc(e) + "</label>"; }).join("") + (emails.length ? "" : '<p class="muted small">' + esc(L("Invite people to the workspace first.", "Convide pessoas para o workspace primeiro.")) + "</p>") + "</div>" +
+        '<label class="chk"><input type="checkbox" name="ndaily"' + (nt.daily !== false ? " checked" : "") + "> " + esc(L("Daily summary at 08:00 (only when something needs attention)", "Resumo diário às 08:00 (só quando houver algo pendente)")) + "</label>" +
+        '<label>' + esc(L("Warn about exams, NR and PPE due within", "Avisar exames, NR e EPI que vencem em até")) + '<select name="ndays">' + [7, 15, 30, 60].map(function (n) { return opt(n, n + L(" days", " dias"), nt.days || 30); }).join("") + "</select></label>" +
+        '<label class="chk"><input type="checkbox" name="ninstant"' + (nt.instant !== false ? " checked" : "") + "> " + esc(L("Immediate alert for accidents, diseases, absences and serious occurrences", "Alerta imediato de acidentes, doenças, afastamentos e ocorrências graves")) + "</label>" +
+        '<div class="pl-row"><button type="button" class="pl-btn" id="ntNow">' + IC("send", 14) + " " + esc(L("Send the alert summary now", "Enviar o resumo de alertas agora")) + '</button><span class="muted small" id="ntMsg"></span></div></fieldset>' +
+      '<fieldset class="st-fs"><legend>' + IC("spark", 14) + " " + esc(L("Artificial intelligence", "Inteligência artificial")) + '</legend><label class="chk"><input type="checkbox" name="ai"' + (s.ai !== false ? " checked" : "") + "> " + esc(L("Enable AI (root cause, action plans, executive summary, absenteeism programme)", "Ligar a IA (causa raiz, planos de ação, resumo executivo, programa de absenteísmo)")) + '</label><p class="muted small">' + esc(L("Governance: ", "Governança: ")) + aiN + esc(L(" AI suggestions accepted in this module so far.", " sugestões da IA aceitas neste módulo até agora.")) + "</p></fieldset>" +
       '<div class="pl-row-end"><button class="pl-btn primary">' + esc(L("Save", "Salvar")) + "</button></div></form></div>";
     const f = v.querySelector("#cfF");
     f.onsubmit = function (e) {
       e.preventDefault();
-      const u = { places: f.places.value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean), invDays: Number(f.invDays.value) || 7, reqDays: Number(f.reqDays.value) || 5, hht: Object.assign({}, hht) };
+      const u = { places: f.places.value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean), invDays: Number(f.invDays.value) || 7, reqDays: Number(f.reqDays.value) || 5, hht: Object.assign({}, hht),
+        absHeadcount: Number(f.absHeadcount.value) || null, absTarget: f.absTarget.value === "" ? null : Number(String(f.absTarget.value).replace(",", ".")), absDayCost: Number(f.absDayCost.value) || null, ai: f.ai.checked,
+        notify: { to: [].slice.call(f.querySelectorAll("[name=nto]:checked")).map(function (x) { return x.value; }), daily: f.ndaily.checked, days: Number(f.ndays.value) || 30, instant: f.ninstant.checked } };
       months.forEach(function (m) { const x = f["h_" + m].value; if (x === "") delete u.hht[m]; else u.hht[m] = Number(x); });
-      sref("settings").set(u).then(function () { toast(L("Settings saved", "Configurações salvas")); }, fail);
+      sref("settings").update(u).then(function () { toast(L("Settings saved", "Configurações salvas")); }, fail);
     };
+    v.querySelector("#ntNow").onclick = function (e) {
+      const b = e.currentTarget, m = v.querySelector("#ntMsg"); if (!(NT().to || []).length) { m.textContent = L("Choose the recipients and save first.", "Escolha os destinatários e salve primeiro."); return; }
+      b.disabled = true; m.textContent = L("Sending…", "Enviando…");
+      notify("sst-digest", { days: NT().days || 30 }).then(function (j) { b.disabled = false; m.textContent = j && j.ok ? (j.empty ? L("Nothing pending – no e-mail needed.", "Nada pendente – nenhum e-mail necessário.") : L("Sent to ", "Enviado para ") + (j.sent || []).join(", ")) : L("Could not send: ", "Não foi possível enviar: ") + ((j && j.error) || ""); });
+    };
+    void owner;
   }
 
   start();

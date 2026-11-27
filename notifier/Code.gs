@@ -43,6 +43,7 @@ function doPost(e) {
     if (/^azure-/.test(String(req.kind || ""))) return json(azureHandle(req, who));
     if (/^kanbanize-/.test(String(req.kind || ""))) return json(kbHandle(req, who));
     if (/^game-/.test(String(req.kind || ""))) return json(gameNotify(req, who, brand));
+    if (/^sst-/.test(String(req.kind || ""))) return json(sstNotify(req, who, brand));
     if (req.kind === "invite") return json(platformInvite(req, who, brand));
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
@@ -806,6 +807,7 @@ function dailyDigest() {
     var per = digestCompute(pid, P, wsCache[ws], today, false);
     if (Object.keys(per).length && MailApp.getRemainingDailyQuota() > Object.keys(per).length) total += digestSend(pid, P, wsCache[ws], per, CFG.brand, "pt").length;
   });
+  try { total += sstDaily(); } catch (e) { console.log("sst daily: " + e); }
   console.log("daily digest: " + total + " e-mails");
   return total;
 }
@@ -1318,4 +1320,119 @@ function platformInvite(req, who, brand) {
     sent.push(to);
   });
   return { ok: true, sent: sent, skipped: skipped, quota: MailApp.getRemainingDailyQuota() };
+}
+
+
+/* ---------------- Health module (Saúde): alert summary and immediate alerts ----------------
+ * Kinds: sst-digest (button "Enviar o resumo de alertas agora"), sst-record (accident, disease, absence or serious record just registered).
+ * Daily: sstDaily() runs inside dailyDigest (08:00 Lisbon) for every workspace with settings.notify.daily and recipients.
+ * Security: the caller's token must read sst/<ws>/settings (member of the workspace with the "sst" licence);
+ * recipients = settings.notify.to filtered to active members of the workspace; content built here; no names of employees with
+ * health data go beyond the record key/title already visible to the members. Daily cap shared with the ITSM helper (itsmCap). */
+var SST_TYPES = { acc: "Acidente de trabalho", commute: "Acidente de trajeto", near: "Quase-acidente", unsafe: "Ato ou condição insegura", disease: "Doença ocupacional", exam: "Exame ocupacional", leave: "Afastamento / retorno", epi: "Solicitação de EPI", inspection: "Inspeção / não conformidade", env: "Incidente ambiental", improve: "Sugestão de melhoria" };
+function sstAddM(d, m) { var x = new Date(d + "T12:00:00Z"); x.setUTCMonth(x.getUTCMonth() + Number(m)); return x.toISOString().slice(0, 10); }
+function sstBr(d) { return d ? d.split("-").reverse().join("/") : "–"; }
+function sstCompute(S, days) {
+  var today = dayStr(new Date()), lim = Utilities.formatDate(new Date(Date.now() + days * 864e5), "Europe/Lisbon", "yyyy-MM-dd"), out = { late: [], soon: [], cat: [], acts: [], back: [] };
+  var ppl = S.people || {};
+  Object.keys(ppl).forEach(function (k) {
+    var p = ppl[k]; if (!p || p.active === false) return;
+    var push = function (what, next) { if (!next) return; var row = { who: p.name, sector: p.sector || "", what: what, next: next }; if (next < today) out.late.push(row); else if (next <= lim) out.soon.push(row); };
+    var ex = Object.keys(p.exams || {}).map(function (x) { return p.exams[x]; }).filter(function (e) { return e.date && e.kind !== "dismissal"; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0];
+    if (ex && Number(ex.months)) push("Exame periódico (ASO)", sstAddM(ex.date, ex.months));
+    var nr = {}; Object.keys(p.trainings || {}).forEach(function (x) { var t = p.trainings[x], kk = (t.nr || "") + "|" + (t.course || ""); if (t.date && (!nr[kk] || nr[kk].date < t.date)) nr[kk] = t; });
+    Object.keys(nr).forEach(function (kk) { var t = nr[kk]; if (Number(t.months)) push([t.nr, t.course].filter(Boolean).join(" – "), sstAddM(t.date, t.months)); });
+    Object.keys(p.ppe || {}).forEach(function (x) { var e = p.ppe[x]; if (e.date && Number(e.months)) push("EPI " + e.item, sstAddM(e.date, e.months)); });
+  });
+  var R = S.records || {};
+  Object.keys(R).forEach(function (k) {
+    var r = R[k]; if (!r || r.status === "cancel") return;
+    var catT = r.type === "acc" || r.type === "commute" || r.type === "disease";
+    if (catT && r.when && !(r.cat && r.cat.num) && Date.now() - r.when > 864e5) out.cat.push({ key: r.key, title: r.title });
+    Object.keys(r.actions || {}).forEach(function (a) { var x = r.actions[a]; if (!x.done && x.due && x.due < today) out.acts.push({ key: r.key, title: x.t, due: x.due }); });
+    if ((r.type === "leave" || r.leave) && !r.returned && r.absEnd && r.absEnd >= today && r.absEnd <= Utilities.formatDate(new Date(Date.now() + 7 * 864e5), "Europe/Lisbon", "yyyy-MM-dd")) out.back.push({ key: r.key, title: r.person || r.title, due: r.absEnd, aso: Number(r.daysLost) >= 30 });
+  });
+  var ab = (S.settings || {}).absPlan || {}; Object.keys(ab).forEach(function (k) { var a = ab[k]; if (a && !a.done && a.due && a.due < today) out.acts.push({ key: "Absenteísmo", title: a.t, due: a.due }); });
+  out.late.sort(function (a, b) { return a.next < b.next ? -1 : 1; }); out.soon.sort(function (a, b) { return a.next < b.next ? -1 : 1; });
+  out.n = out.late.length + out.soon.length + out.cat.length + out.acts.length + out.back.length;
+  return out;
+}
+function sstRecipients(W, settings) {
+  var nt = settings.notify || {}, mem = W.members || {}, now = Date.now(), out = [];
+  (nt.to || []).forEach(function (e) { var m = mem[key(e)]; if (m && m.email && (!m.expires || m.expires > now)) out.push({ email: m.email, name: m.name || m.email.split("@")[0] }); });
+  return out;
+}
+function sstMailHtml(brand, wsName, title, introHtml, body, link, btn) {
+  return '<div style="background:#f3f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:640px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ef">' +
+    '<div style="background:#0e1a33;padding:18px 24px;color:#fff;font-size:17px;font-weight:bold">' + esc(brand) + " · Saúde · " + esc(title) + '</div><div style="padding:22px 24px;color:#1d2433;font-size:15px;line-height:1.55">' +
+    '<p style="color:#5b6478;font-size:13px;margin:0 0 6px">' + esc(wsName) + "</p>" + introHtml + body +
+    '<p style="text-align:center;margin:22px 0 6px"><a href="' + link + '" style="background:#e8c468;color:#0e1a33;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:10px;display:inline-block">' + esc(btn) + "</a></p></div>" +
+    brandSig(brand, true) + '<div style="padding:12px 24px;background:#f7f8fb;color:#7a8499;font-size:12px">Notificação automática do módulo Saúde · ' + esc(brand) + " · " + CFG.company + " · Dados de saúde são sensíveis (LGPD): este e-mail não traz diagnóstico nem CID.</div></div></div>";
+}
+function sstTable(title, color, rows, cols) {
+  if (!rows.length) return "";
+  return '<h3 style="font-size:15px;margin:18px 0 6px;color:' + color + '">' + esc(title) + " (" + rows.length + ')</h3><table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    rows.slice(0, 25).map(function (r) { return '<tr style="border-bottom:1px solid #eef0f5">' + cols.map(function (c) { return '<td style="padding:6px 8px">' + c(r) + "</td>"; }).join("") + "</tr>"; }).join("") + (rows.length > 25 ? '<tr><td style="padding:6px 8px;color:#7a8499">… e mais ' + (rows.length - 25) + "</td></tr>" : "") + "</table>";
+}
+function sstSendDigest(ws, W, S, brand, days) {
+  var settings = S.settings || {}, to = sstRecipients(W, settings); if (!to.length) return { sent: [], empty: true, noRecipients: true };
+  var c = sstCompute(S, days); if (!c.n) return { sent: [], empty: true };
+  if (!itsmCap("sst-" + ws, { mailCap: 30 }, to.length)) throw new Error("limite diário de e-mails deste workspace atingido");
+  var wsName = (W.info || {}).name || ws, link = CFG.site + "sst/?ws=" + encodeURIComponent(ws);
+  var body = sstTable("Vencidos", "#e5484d", c.late, [function (r) { return "<b>" + esc(r.who) + '</b><br><span style="color:#7a8499">' + esc(r.sector) + "</span>"; }, function (r) { return esc(r.what); }, function (r) { return '<span style="color:#e5484d">' + sstBr(r.next) + "</span>"; }]) +
+    sstTable("Vencem em até " + days + " dias", "#c27c00", c.soon, [function (r) { return "<b>" + esc(r.who) + '</b><br><span style="color:#7a8499">' + esc(r.sector) + "</span>"; }, function (r) { return esc(r.what); }, function (r) { return sstBr(r.next); }]) +
+    sstTable("CAT sem número (prazo legal: 1º dia útil)", "#e5484d", c.cat, [function (r) { return "<b>" + esc(r.key) + "</b> " + esc(r.title); }]) +
+    sstTable("Retornos de afastamento nos próximos 7 dias", "#2f80ed", c.back, [function (r) { return "<b>" + esc(r.key) + "</b> " + esc(r.title); }, function (r) { return sstBr(r.due) + (r.aso ? ' · <b style="color:#c27c00">agendar ASO de retorno (NR-07)</b>' : ""); }]) +
+    sstTable("Ações atrasadas", "#c27c00", c.acts, [function (r) { return "<b>" + esc(r.key) + "</b> " + esc(r.title); }, function (r) { return "desde " + sstBr(r.due); }]);
+  var sent = [];
+  to.forEach(function (t) {
+    var intro = "<p>Olá, " + esc(String(t.name).split(" ")[0]) + "! Este é o resumo do que precisa de atenção em saúde e segurança do trabalho: <b>" + c.late.length + "</b> vencido(s), <b>" + c.soon.length + "</b> a vencer, <b>" + c.cat.length + "</b> CAT pendente(s), <b>" + c.back.length + "</b> retorno(s) e <b>" + c.acts.length + "</b> ação(ões) atrasada(s).</p><p>Convoque antes de vencer – a lista de convocação (CSV) está na aba Vencimentos.</p>";
+    var html = sstMailHtml(brand, wsName, "Resumo de alertas", intro, body, link, "Abrir a Central de Saúde");
+    var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+    MailApp.sendEmail(t.email, "Saúde · " + c.late.length + " vencido(s) e " + c.soon.length + " a vencer · " + wsName, html.replace(/<\/tr>|<\/p>|<br>|<\/h3>/g, "\n").replace(/<\/td>/g, "  ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim(), opt);
+    sent.push(t.email);
+  });
+  return { sent: sent };
+}
+function sstNotify(req, who, brand) {
+  var tok = req.idToken, ws = String(req.ws || "");
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(ws)) throw new Error("bad workspace");
+  var settings = get("sst/" + ws + "/settings", tok); // proves the caller is a member with the licence
+  if (settings === null) throw new Error("not allowed");
+  var W = adminGet("workspaces/" + ws) || {};
+  if (req.kind === "sst-digest") {
+    var S = adminGet("sst/" + ws) || {}, days = [7, 15, 30, 60].indexOf(Number(req.days)) >= 0 ? Number(req.days) : 30;
+    var r = sstSendDigest(ws, W, S, brand, days); r.ok = true; r.quota = MailApp.getRemainingDailyQuota(); return r;
+  }
+  if (req.kind === "sst-record") {
+    var rid = String(req.rec || ""); if (!/^[A-Za-z0-9_-]{1,40}$/.test(rid)) throw new Error("bad record");
+    var rec = get("sst/" + ws + "/records/" + rid, tok); if (!rec) throw new Error("not allowed");
+    if ((settings.notify || {}).instant === false) return { ok: true, sent: [], off: true };
+    var to = sstRecipients(W, settings).filter(function (t) { return t.email.toLowerCase() !== String(who.email).toLowerCase(); });
+    if (!to.length) return { ok: true, sent: [], empty: true };
+    if (!itsmCap("sst-" + ws, { mailCap: 30 }, to.length)) throw new Error("limite diário de e-mails deste workspace atingido");
+    var catT = rec.type === "acc" || rec.type === "commute" || rec.type === "disease", link = CFG.site + "sst/?ws=" + encodeURIComponent(ws) + "&rec=" + encodeURIComponent(rid), wsName = (W.info || {}).name || ws;
+    var body = '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:12px 0;background:#f7f8fb;border-radius:10px"><tr><td style="padding:10px 12px"><b>' + esc(rec.key) + "</b> " + esc(rec.title) + '<br><span style="color:#5b6478">' + esc(SST_TYPES[rec.type] || rec.type) + (rec.place ? " · " + esc(rec.place) : "") + (rec.leave ? " · com afastamento" : "") + (rec.absEnd ? " · retorno previsto " + sstBr(rec.absEnd) : "") + "</span></td></tr></table>" +
+      (catT ? '<p style="color:#e5484d"><b>CAT:</b> prazo legal até o 1º dia útil seguinte (imediato em caso de óbito) – Lei 8.213/91, art. 22 – e envio ao eSocial (S-2210).</p>' : "") +
+      (rec.type === "leave" && Number(rec.daysLost) >= 30 ? '<p style="color:#c27c00">Afastamento de 30 dias ou mais: agende o ASO de retorno antes da volta (NR-07).</p>' : "");
+    var sent = [];
+    to.forEach(function (t) {
+      var html = sstMailHtml(brand, wsName, "Novo registro", "<p>Olá, " + esc(String(t.name).split(" ")[0]) + "! " + esc(who.displayName || String(who.email).split("@")[0]) + " registrou agora:</p>", body, link, "Abrir o registro");
+      var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo;
+      MailApp.sendEmail(t.email, "Saúde · " + (SST_TYPES[rec.type] || "Registro") + ": " + rec.key + " · " + rec.title, html.replace(/<\/tr>|<\/p>|<br>/g, "\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").trim(), opt);
+      sent.push(t.email);
+    });
+    return { ok: true, sent: sent };
+  }
+  throw new Error("unknown e-mail type");
+}
+function sstDaily() {
+  var all = adminGet("sst") || {}, total = 0;
+  Object.keys(all).forEach(function (ws) {
+    var S = all[ws] || {}, nt = (S.settings || {}).notify || {}; if (nt.daily === false || !(nt.to || []).length) return;
+    var W = adminGet("workspaces/" + ws) || {}, ent = adminGet("entitlements/ws/" + ws + "/sst") || {};
+    if (!ent.on || (ent.until && ent.until < Date.now())) return;
+    try { total += (sstSendDigest(ws, W, S, CFG.brand, Number(nt.days) || 30).sent || []).length; } catch (e) { console.log("sst " + ws + ": " + e); }
+  });
+  return total;
 }

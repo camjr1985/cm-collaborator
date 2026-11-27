@@ -128,3 +128,16 @@
 #stJg .st-jgn { font-size: var(--fs-11); background: #1baf7a; color: #fff; border-radius: 10px; padding: 1px 7px; }
 @media (max-width: 720px) { #stJg .st-jgl { display: none; } #stJg { padding: 7px 9px; } }
 @media (max-width: 760px) { .st-top .pl-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; } .st-top .pl-actions .st-ws { flex: 1; max-width: none; min-width: 0; } }
+
+/* AI, notifications and absenteeism (27/11) */
+.st-aihead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.st-aihead .st-chip[role=button] { cursor: pointer; }
+.st-aibar { margin: 10px 0 4px; }
+.st-aibox { border: 1px solid #c9d8f5; background: linear-gradient(180deg, #f3f7ff, #fff); border-radius: 12px; padding: 12px 14px; margin: 8px 0 12px; display: grid; gap: 8px; }
+.st-aibox p { margin: 0; }
+.st-ailist { display: grid; gap: 6px; }
+.st-ailist .st-li { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.st-ainote { margin: 4px 0 0; }
+.st-aiol { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 6px; }
+.st-ntto { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 8px; }
+.st-fs .pl-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
