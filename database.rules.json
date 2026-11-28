@@ -434,6 +434,10 @@
         ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
         ".validate": "!newData.exists() || (newData.hasChildren(['email']) && newData.child('email').val().toLowerCase().replace('.', ',') == $k)"
       }
+    },
+    "broadcasts": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('admins').child(auth.token.email.toLowerCase().replace('.', ',')).val() == true"
     }
   }
 }

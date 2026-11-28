@@ -45,6 +45,7 @@ function doPost(e) {
     if (/^game-/.test(String(req.kind || ""))) return json(gameNotify(req, who, brand));
     if (/^sst-/.test(String(req.kind || ""))) return json(sstNotify(req, who, brand));
     if (req.kind === "invite") return json(platformInvite(req, who, brand));
+    if (req.kind === "broadcast") return json(platformBroadcast(req, who, brand));
     var wsId = String(req.ws || "");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(wsId)) throw new Error("bad workspace");
     var info = get("workspaces/" + wsId + "/info", req.idToken) || {};
@@ -1435,4 +1436,26 @@ function sstDaily() {
     try { total += (sstSendDigest(ws, W, S, CFG.brand, Number(nt.days) || 30).sent || []).length; } catch (e) { console.log("sst " + ws + ": " + e); }
   });
   return total;
+}
+
+
+/* ---- Announcement e-mail to registered users (admin only). The text is read from broadcasts/<id> (written by a
+   platform admin), never from the request, and every recipient gets an individual message (no shared To/Cc). */
+function platformBroadcast(req, who, brand) {
+  if (get("admins/" + key(who.email), req.idToken) !== true) throw new Error("not allowed");
+  var id = String(req.id || "");
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new Error("bad id");
+  var b = get("broadcasts/" + id, req.idToken);
+  if (!b || !b.subject || !b.text) throw new Error("broadcast not found");
+  var list = [].concat(req.to || []).slice(0, CFG.maxPerCall), sent = [], failed = [];
+  var linkify = function (t) { return esc(t).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1">$1</a>'); };
+  var html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1d2433;max-width:600px">' +
+    String(b.text).split(/\n\s*\n/).map(function (p) { return "<p>" + linkify(p).replace(/\n/g, "<br>") + "</p>"; }).join("") + "</div>";
+  list.forEach(function (to) {
+    to = String(to).toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { failed.push(to); return; }
+    try { var opt = { name: brand, htmlBody: html }; if (CFG.replyTo) opt.replyTo = CFG.replyTo; MailApp.sendEmail(to, String(b.subject), String(b.text), opt); sent.push(to); }
+    catch (e) { failed.push(to); }
+  });
+  return { ok: true, sent: sent, failed: failed, quota: MailApp.getRemainingDailyQuota() };
 }
