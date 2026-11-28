@@ -404,6 +404,7 @@
   }
   function userBar(user, admin) {
     return '<div class="userbar"><span class="muted"><span>Signed in as</span> <b class="no-i18n">' + esc(user.email) + "</b></span>" + planBadge() +
+      '<a class="btn" href="../conta/seguranca/">' + esc(LL("Account security", "Segurança da conta")) + "</a>" +
       '<button class="btn" data-howto><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.1-2.4 3.8M12 17h.01"/></svg> <span>' + esc(LL("How to start", "Como começar")) + "</span></button>" +
       '<button class="btn" data-feedback><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg> <span>Give feedback</span></button>' +
       (admin ? '<a class="btn" href="../admin/">Administration</a>' : "") + '<button class="btn" id="soBtn">Sign out</button></div>';

@@ -1,146 +1,203 @@
-/*
- * CM Collaborator – authentication & access layer (Firebase Auth + Realtime Database).
- * Security is enforced by database.rules.json on the server, not by this file.
- * This file only signs people in and reads what the rules allow them to read.
- *
- * window.CMAuth API
- *   enabled                     true when config.js has a Firebase config
- *   ready()                     Promise<user|null> (also completes e-mail sign-in links)
- *   user()                      current Firebase user or null
- *   key(email)                  database key for an e-mail ("a.b@x.com" -> "a,b@x,com")
- *   isAdmin()                   Promise<boolean>
- *   signInGoogle()              Promise
- *   signInMicrosoft()           Promise (Office 365; rejects with NEEDS_VERIFICATION after sending the verification e-mail)
- *   sendLink(email)             Promise – sends a passwordless sign-in link
- *   signOut()                   Promise
- *   db()                        firebase.database()
+/* CM Collaborator: optional native TOTP, preserving the existing compat API.
+ * Security remains enforced by Firebase/RTDB. This client creates no bypass,
+ * administrative reset, password login or mandatory-enrollment policy.
  */
 (function () {
   "use strict";
   const cfg = window.CMCOLLAB_FIREBASE;
-  const V = "10.12.2";
   const EMAIL_KEY = "cmcollab:emailForSignIn";
-  let readyP = null, current = null, adminP = null;
-
-  function key(email) { return String(email || "").trim().toLowerCase().replace(/\./g, ","); }
-  function load(src) {
-    return new Promise(function (res, rej) {
-      if (document.querySelector('script[src="' + src + '"]')) return res();
-      const s = document.createElement("script");
-      s.src = src; s.onload = res; s.onerror = function () { rej(new Error("Could not load " + src)); };
-      document.head.appendChild(s);
-    });
+  const source = document.currentScript && document.currentScript.src;
+  let readyP = null, current = null, adminP = null, interactiveAuth = false, authFault = false;
+  let compat = null, modular = null, sdk = null, sdkModule = null;
+  const t = function (message) { return (window.MBt || String)(message); };
+  const problem = function (code, message) { const error = new Error(message); error.code = code; return error; };
+  const loadModule = function (src) { return import(src); };
+  function moduleUrl(path) {
+    if (!source) throw problem("auth/sdk-unavailable", "Authentication script URL is unavailable");
+    return new URL(path, source).href;
   }
-  function base(name) { return "https://www.gstatic.com/firebasejs/" + V + "/firebase-" + name + "-compat.js"; }
-
+  function key(email) { return String(email || "").trim().toLowerCase().replace(/\./g, ","); }
+  function continuationUrl() {
+    const u = new URL(location.href);
+    ["apiKey", "oobCode", "mode", "continueUrl", "tenantId", "mfaReauth"].forEach(function (p) { u.searchParams.delete(p); });
+    u.hash = ""; return u.href;
+  }
   function cleanLinkUrl() {
     const u = new URL(location.href);
     ["apiKey", "oobCode", "mode", "lang", "continueUrl", "tenantId"].forEach(function (p) { u.searchParams.delete(p); });
     history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
   }
-  function firstUser() { return new Promise(function (res) { const off = window.firebase.auth().onAuthStateChanged(function (u) { off(); res(u); }); }); }
-  function completeEmailLink() {
-    const a = window.firebase.auth();
-    if (!a.isSignInWithEmailLink(location.href)) return Promise.resolve();
-    /* already signed in (e.g. with Google, or the link was opened again): do not ask for the e-mail – just clean the address */
-    return firstUser().then(function (cur) {
-      if (cur) { cleanLinkUrl(); return; }
-      let email = null;
-      try { email = localStorage.getItem(EMAIL_KEY); } catch (e) { /* ignore */ }
-      if (!email) email = window.prompt((window.MBt || String)("Confirm your e-mail to finish signing in"));
-      if (!email) { cleanLinkUrl(); return; }
-      return a.signInWithEmailLink(email.trim(), location.href).then(function () {
-        try { localStorage.removeItem(EMAIL_KEY); } catch (e) { /* ignore */ }
-        cleanLinkUrl();
-      }, function (e) { cleanLinkUrl(); throw e; });
-    });
+  // Account-security reauthentication owns its nonce/UID-bound link and cleanup.
+  // Ordinary sign-in credentials leave history before any asynchronous exchange.
+  let bootLink = null;
+  if (cfg && cfg.databaseURL) {
+    const incoming = new URL(location.href);
+    if (incoming.searchParams.get("mfaReauth") !== "1" && incoming.searchParams.get("mode") === "signIn" && incoming.searchParams.has("oobCode")) {
+      bootLink = incoming.href; cleanLinkUrl();
+    }
   }
-  /* every signed-in account is listed for the admins (Admin → Users), even before it gets any access */
-  /* usage & adoption: one mark per day and per module (users/<key>/days/<YYYY-MM-DD>, users/<key>/mods/<module>) – read by Administration → Usage */
+  function syncCurrent() { current = authFault ? null : compat.currentUser || null; adminP = null; return current; }
+  function safeResult(result) {
+    if (!result || !result.user) return result;
+    const user = compat.currentUser;
+    if (!user || user.uid !== result.user.uid) throw problem("auth/user-mismatch", "The signed-in account changed");
+    // Keep SDK credentials/tokens out of a custom return DTO. Consumers receive
+    // the same compat User surface they already use, including getIdToken().
+    return { user: user, ...(result.providerId ? { providerId: result.providerId } : {}), ...(result.operationType ? { operationType: result.operationType } : {}) };
+  }
+  async function challenge(error) {
+    const ui = await loadModule(moduleUrl("mfa/dialog.mjs"));
+    if (typeof ui.resolveTotpChallenge !== "function") throw problem("auth/mfa-ui-unavailable", "Authenticator confirmation is unavailable");
+    return ui.resolveTotpChallenge({ auth: modular, sdk: sdk, error: error });
+  }
+  async function withInteractive(operation, after) {
+    if (typeof operation !== "function") throw new TypeError("A local authentication operation is required");
+    if (authFault) throw problem("auth/sign-out-required", "Sign out before trying again");
+    if (interactiveAuth) throw problem("auth/operation-in-progress", "Another authentication operation is active");
+    const before = current && current.uid, startingUid = compat.currentUser && compat.currentUser.uid;
+    interactiveAuth = true;
+    try {
+      let result;
+      try { result = await operation(); }
+      catch (error) {
+        if (!error || error.code !== "auth/multi-factor-auth-required") throw error;
+        result = await challenge(error); // Never retry the first factor or fall back.
+      }
+      const normalized = safeResult(result); syncCurrent();
+      return after ? await after(normalized) : normalized;
+    } catch (error) {
+      const needsVerification = error && error.message === "NEEDS_VERIFICATION" && compat.currentUser && !compat.currentUser.emailVerified;
+      // A cancelled in-flight MFA request may have settled with a new identity.
+      // Clear that partial sign-in before releasing observer suppression.
+      if (!needsVerification && compat.currentUser && compat.currentUser.uid !== startingUid) {
+        try { await compat.signOut(); }
+        catch { authFault = true; current = null; adminP = null; throw problem("auth/sign-out-required", "Sign out before trying again"); }
+      }
+      syncCurrent();
+      if (!needsVerification && before !== (current && current.uid)) location.reload();
+      throw error;
+    } finally { syncCurrent(); interactiveAuth = false; }
+  }
   function trackUsage(u) {
-    if (!u || !u.email) return;
+    if (!u || !u.email || !u.emailVerified) return;
     const p = location.pathname, mod = /\/board\//.test(p) ? "collab" : /\/planning\//.test(p) ? "planning" : /\/itsm\//.test(p) ? "itsm" : /\/game\//.test(p) ? "game" : /\/sst\//.test(p) ? "sst" : /\/workspaces\//.test(p) ? "hub" : "";
     const day = new Date().toISOString().slice(0, 10), mark = "cm:use:" + day + ":" + mod;
-    try { if (sessionStorage.getItem(mark)) return; } catch (e) { /* ignore */ }
-    const o = { email: u.email.toLowerCase(), last: window.firebase.database.ServerValue.TIMESTAMP }; o["days/" + day] = true; if (mod) o["mods/" + mod] = window.firebase.database.ServerValue.TIMESTAMP;
-    window.firebase.database().ref("users/" + key(u.email)).update(o).then(function () { try { sessionStorage.setItem(mark, "1"); } catch (e) { /* ignore */ } }, function () { /* rules not published yet */ });
+    try { if (sessionStorage.getItem(mark)) return; } catch (e) { /* optional usage marker */ }
+    const o = { email: u.email.toLowerCase(), last: window.firebase.database.ServerValue.TIMESTAMP };
+    o["days/" + day] = true; if (mod) o["mods/" + mod] = window.firebase.database.ServerValue.TIMESTAMP;
+    window.firebase.database().ref("users/" + key(u.email)).update(o).then(function () {
+      try { sessionStorage.setItem(mark, "1"); } catch (e) { /* optional usage marker */ }
+    }, function () { /* database rules govern access */ });
   }
   function registerAccount(u) {
-    if (!u || !u.email) return;
-    setTimeout(function () { trackUsage(u); }, 1500);
-    try { if (sessionStorage.getItem("cm:acct") === u.uid) return; } catch (e) { /* ignore */ }
+    if (!u || !u.email || !u.emailVerified) return;
+    setTimeout(function () { if (current && current.uid === u.uid && !interactiveAuth) trackUsage(u); }, 1500);
+    try { if (sessionStorage.getItem("cm:acct") === u.uid) return; } catch (e) { /* optional account marker */ }
     const r = window.firebase.database().ref("users/" + key(u.email)), prov = ((u.providerData || [])[0] || {}).providerId || "password";
     r.update({ email: u.email.toLowerCase(), name: u.displayName || null, provider: prov, verified: !!u.emailVerified, last: window.firebase.database.ServerValue.TIMESTAMP }).then(function () {
       return r.child("first").transaction(function (v) { return v || Date.now(); });
-    }).then(function () { try { sessionStorage.setItem("cm:acct", u.uid); } catch (e) { /* ignore */ } }, function () { /* rules not published yet */ });
+    }).then(function () { try { sessionStorage.setItem("cm:acct", u.uid); } catch (e) { /* optional account marker */ } }, function () { /* database rules govern access */ });
   }
-
+  function observe() {
+    return new Promise(function (resolve, reject) {
+      let initialized = false;
+      compat.onAuthStateChanged(function (user) {
+        if (interactiveAuth || authFault) return; // No registration/reload before MFA/verification.
+        const previous = current && current.uid;
+        current = user || null; adminP = null;
+        if (initialized && previous !== (current && current.uid)) { location.reload(); return; }
+        initialized = true; registerAccount(current); resolve(current);
+      }, reject);
+    });
+  }
+  async function completeEmailLink() {
+    let link = bootLink; bootLink = null;
+    const url = new URL(location.href);
+    if (url.searchParams.get("mfaReauth") === "1") return;
+    if (!link && sdk.isSignInWithEmailLink(modular, location.href)) { link = location.href; cleanLinkUrl(); }
+    if (!link || !sdk.isSignInWithEmailLink(modular, link) || compat.currentUser) return;
+    let email = null;
+    try { email = localStorage.getItem(EMAIL_KEY); } catch (e) { /* ask in this tab */ }
+    if (!email) email = window.prompt(t("Confirm your e-mail to finish signing in"));
+    if (!email || !email.trim()) return;
+    try {
+      await withInteractive(function () { return sdk.signInWithEmailLink(modular, email.trim(), link); }, function (result) {
+        try { localStorage.removeItem(EMAIL_KEY); } catch (e) { /* optional email hint */ }
+        registerAccount(result && result.user); return result;
+      });
+    } finally { link = null; }
+  }
   function ready() {
     if (!cfg || !cfg.databaseURL) return Promise.resolve(null);
-    if (readyP) return readyP;
-    readyP = load(base("app"))
-      .then(function () { return Promise.all([load(base("auth")), load(base("database"))]); })
-      .then(function () {
-        if (!window.firebase.apps.length) window.firebase.initializeApp(cfg);
-        return completeEmailLink().catch(function (e) { console.warn(e); if (e && e.code !== "auth/invalid-action-code" && e.code !== "auth/expired-action-code") alert(e.message); });
-      })
-      .then(function () {
-        return new Promise(function (res) {
-          const off = window.firebase.auth().onAuthStateChanged(function (u) { off(); current = u; registerAccount(u); res(u); });
-        });
-      });
+    if (readyP) return readyP.then(function () { return current; });
+    readyP = Promise.resolve().then(function () { return loadModule(moduleUrl("mfa/sdk.mjs")); }).then(async function (module) {
+      if (!module.firebase || module.firebase.SDK_VERSION !== "13.4.0" || !module.sdk || typeof module.getApp !== "function") throw problem("auth/sdk-unavailable", "The reviewed authentication SDK is unavailable");
+      if (window.firebase && window.firebase !== module.firebase) throw problem("auth/sdk-conflict", "Reload to use one authentication SDK");
+      sdkModule = module; window.firebase = module.firebase; sdk = module.sdk;
+      const app = window.firebase.apps.find(function (a) { return a.name === "[DEFAULT]"; }) || window.firebase.initializeApp(cfg);
+      if (app.options && ["projectId", "databaseURL", "apiKey"].some(function (k) { return cfg[k] && app.options[k] !== cfg[k]; })) throw problem("auth/app-mismatch", "The authentication project does not match this site");
+      compat = app.auth(); modular = sdk.getAuth(module.getApp(app.name));
+      await observe();
+      try { await completeEmailLink(); }
+      catch (error) {
+        if (error && error.code === "auth/sign-out-required") throw error;
+        // No credential or provider error object is logged. A cancelled challenge
+        // leaves an anonymous page; it never becomes a successful sign-in.
+        if (!error || error.code !== "auth/mfa-cancelled") window.alert(t("Could not finish signing in. Request a new link or try again."));
+      }
+      return syncCurrent();
+    });
     return readyP;
   }
-
   window.CMAuth = {
-    enabled: !!(cfg && cfg.databaseURL),
-    ready: ready,
-    key: key,
+    enabled: !!(cfg && cfg.databaseURL), ready: ready, key: key,
     user: function () { return current; },
     db: function () { return window.firebase.database(); },
     isAdmin: function () {
-      if (!current || !current.email) return Promise.resolve(false);
-      if (!adminP) {
-        adminP = window.firebase.database().ref("admins/" + key(current.email)).once("value")
-          .then(function (s) { return s.val() === true; }, function () { return false; });
-      }
+      if (!current || !current.email || !current.emailVerified) return Promise.resolve(false);
+      if (!adminP) adminP = window.firebase.database().ref("admins/" + key(current.email)).once("value").then(function (s) { return s.val() === true; }, function () { return false; });
       return adminP;
+    },
+    security: function () {
+      return ready().then(function () {
+        if (authFault) throw problem("auth/sign-out-required", "Sign out before trying again");
+        if (!modular || !sdkModule) throw problem("auth/sdk-unavailable", "Authentication is not configured");
+        return { auth: modular, sdk: sdk, compat: compat, runMfa: function (operation) { return withInteractive(operation); } };
+      });
     },
     signInGoogle: function () {
       return ready().then(function () {
-        const p = new window.firebase.auth.GoogleAuthProvider();
-        p.setCustomParameters({ prompt: "select_account" });
-        return window.firebase.auth().signInWithPopup(p);
-      }).then(function () { location.reload(); });
+        return withInteractive(function () {
+          const provider = new sdk.GoogleAuthProvider(); provider.setCustomParameters({ prompt: "select_account" });
+          return sdk.signInWithPopup(modular, provider);
+        }, function (result) { registerAccount(result && result.user); location.reload(); });
+      });
     },
-    /* Microsoft (Office 365 / Entra ID). Needs the Microsoft provider enabled in Firebase Auth (CMCOLLAB_MS_LOGIN = true).
-       Firebase marks Microsoft e-mails as unverified: on the first sign-in we send a verification link, because the database
-       rules only accept verified e-mails. Optional CMCOLLAB_MS_TENANT restricts sign-in to one company's tenant. */
     signInMicrosoft: function () {
       return ready().then(function () {
-        const p = new window.firebase.auth.OAuthProvider("microsoft.com");
-        const prm = { prompt: "select_account" }; if (window.CMCOLLAB_MS_TENANT) prm.tenant = window.CMCOLLAB_MS_TENANT;
-        p.setCustomParameters(prm);
-        return window.firebase.auth().signInWithPopup(p);
-      }).then(function (res) {
-        const u = res && res.user;
-        if (u && !u.emailVerified) {
-          return u.sendEmailVerification({ url: location.href.split("#")[0] }).then(function () {
-            const e = new Error("NEEDS_VERIFICATION"); e.email = u.email; throw e;
-          });
-        }
-        location.reload();
+        return withInteractive(function () {
+          const provider = new sdk.OAuthProvider("microsoft.com"), params = { prompt: "select_account" };
+          if (window.CMCOLLAB_MS_TENANT) params.tenant = window.CMCOLLAB_MS_TENANT;
+          provider.setCustomParameters(params); return sdk.signInWithPopup(modular, provider);
+        }, async function (result) {
+          const user = result && result.user;
+          if (user && !user.emailVerified) {
+            await user.sendEmailVerification({ url: continuationUrl() });
+            const error = new Error("NEEDS_VERIFICATION"); error.email = user.email; throw error;
+          }
+          registerAccount(user); location.reload();
+        });
       });
     },
     sendLink: function (email) {
       return ready().then(function () {
-        const url = location.href.split("#")[0];
-        try { localStorage.setItem(EMAIL_KEY, email); } catch (e) { /* ignore */ }
-        return window.firebase.auth().sendSignInLinkToEmail(email, { url: url, handleCodeInApp: true });
+        try { localStorage.setItem(EMAIL_KEY, email); } catch (e) { /* optional email hint */ }
+        return compat.sendSignInLinkToEmail(email, { url: continuationUrl(), handleCodeInApp: true });
       });
     },
     signOut: function () {
-      return ready().then(function () { return window.firebase.auth().signOut(); }).then(function () { location.reload(); });
+      if (authFault && compat) return compat.signOut().then(function () { authFault = false; syncCurrent(); location.reload(); });
+      return ready().then(function () { return withInteractive(function () { return compat.signOut(); }, function () { location.reload(); }); });
     }
   };
 })();

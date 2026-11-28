@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://cm-collaborator.firebaseapp.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app; frame-src https://cm-collaborator.firebaseapp.com https://accounts.google.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="robots" content="noindex">
+  <title>Segurança da conta · CM Collaborator</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/type.css">
+  <link rel="stylesheet" href="../../assets/css/site.css">
+  <link rel="stylesheet" href="../../assets/css/account-security.css">
+</head>
+<body class="account-security-page">
+  <header class="nav"><div class="nav-in"><a class="brand" href="../../"><span class="logo">CM</span><span>CM Collaborator</span></a><a class="account-back" href="../../workspaces/" data-copy="back">Meus quadros</a><div class="spacer"></div><div class="lang" data-lang-switch></div></div></header>
+  <main class="account-wrap">
+    <header class="account-heading"><span class="account-eyebrow" data-copy="account">Sua conta</span><h1 data-copy="title">Segurança da conta</h1><p data-copy="intro">Adicione, se quiser, uma segunda etapa para proteger sua conta.</p></header>
+    <p id="accountStatus" class="account-status" role="status" aria-live="polite" data-copy="loading">Carregando sua conta…</p>
+    <section class="account-card" aria-labelledby="identityTitle"><h2 id="identityTitle" data-copy="identity">Conta conectada</h2><p id="accountEmail" class="no-i18n"></p><p id="accountVerified"></p><p id="accountFactors"></p><div class="account-actions"><button id="accountRefresh" type="button" data-copy="refresh">Atualizar status</button><button id="accountVerify" type="button" hidden data-copy="verify">Verificar e-mail</button></div></section>
+    <section class="account-card" aria-labelledby="mfaTitle"><h2 id="mfaTitle" data-copy="mfa">Aplicativo autenticador</h2><p data-copy="optional">Ativação opcional. Depois de confirmar, os próximos logins nesta conta também pedirão o código do aplicativo autenticador. Isso vale para os métodos de entrada vinculados à conta.</p><p id="accountEnrollmentStatus"></p><button id="accountStart" type="button" disabled data-copy="start">Ativar autenticação em duas etapas</button>
+      <div id="accountReauth" hidden><h3 data-copy="reauthTitle">Confirme sua identidade</h3><p data-copy="reauthText">Por segurança, confirme novamente sua conta antes de ativar a proteção.</p><div class="account-actions"><button id="accountGoogle" type="button" hidden data-copy="google">Confirmar com Google</button><button id="accountMicrosoft" type="button" hidden data-copy="microsoft">Confirmar com Microsoft</button><button id="accountEmailReauth" type="button" data-copy="emailReauth">Receber link de confirmação por e-mail</button></div><p class="account-muted" data-copy="sameDevice">Abra o link neste navegador, com a mesma conta conectada. Ele serve somente para confirmar sua identidade.</p></div>
+      <form id="accountEnroll" hidden><h3 data-copy="addApp">Adicione a conta no autenticador</h3><p data-copy="manual">No aplicativo autenticador, escolha adicionar uma conta manualmente. Use seu e-mail como nome, a chave abaixo e código baseado em tempo (TOTP).</p><p class="account-secret-warning" data-copy="secretWarning">Esta chave é privada. Não envie por e-mail, mensagens ou suporte. Digite-a somente no seu aplicativo autenticador.</p><label for="accountSecret" data-copy="key">Chave de configuração</label><output id="accountSecret" class="account-secret no-i18n" aria-live="off"></output><p class="account-muted" data-copy="profile">Configuração: código de 6 dígitos, 30 segundos, SHA-1.</p><label for="accountCode" data-copy="code">Código de 6 dígitos do aplicativo</label><input id="accountCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required spellcheck="false"><div class="account-actions"><button id="accountConfirm" type="submit" data-copy="confirm">Confirmar e ativar</button><button id="accountCancel" type="button" class="account-secondary" data-copy="cancel">Cancelar</button></div></form>
+    </section>
+    <section class="account-card account-guide" aria-labelledby="guideTitle"><h2 id="guideTitle" data-copy="guideTitle">Como configurar pelo celular</h2><ol><li data-copy="guide1">No Android ou iPhone, instale um aplicativo autenticador gratuito que suporte TOTP, como Google Authenticator ou Microsoft Authenticator.</li><li data-copy="guide2">Volte a esta página, toque em ativar e confirme sua identidade, se solicitado.</li><li data-copy="guide3">No autenticador, adicione uma conta usando uma chave de configuração. No Microsoft Authenticator, escolha “Outra conta”. Use a opção de inserir a chave manualmente.</li><li data-copy="guide4">Digite a chave exibida nesta página. Selecione “baseado em tempo”, quando houver essa opção. Não use código baseado em contador.</li><li data-copy="guide5">Volte para esta página e digite o código de 6 dígitos que o aplicativo está mostrando. Toque em “Confirmar e ativar”.</li><li data-copy="guide6">Aguarde a confirmação “Proteção ativada”. Nos próximos logins, mantenha o autenticador disponível para informar o código.</li></ol><p data-copy="samePhone">Está usando o mesmo celular? Alterne entre o navegador e o autenticador para inserir a chave manualmente. Não é preciso fotografar a tela.</p><h3 data-copy="lostTitle">Se perder acesso ao autenticador</h3><p data-copy="lost">Fale com o administrador para avaliar a recuperação pelos canais do provedor. Esta página não oferece códigos de reserva nem remoção da proteção sem acesso à conta. Mantenha seu celular protegido e planeje como recuperar seu aplicativo autenticador.</p></section>
+    <p class="account-apps"><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank" rel="noopener noreferrer">Google Authenticator · Android</a> · <a href="https://apps.apple.com/app/google-authenticator/id388497605" target="_blank" rel="noopener noreferrer">Google Authenticator · iPhone</a></p>
+    <noscript>Ative o JavaScript para gerenciar a segurança da sua conta.</noscript>
+  </main>
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/i18n-es.js"></script>
+  <script src="../../assets/js/i18n.js"></script>
+  <script src="../../assets/js/auth.js"></script>
+  <script type="module" src="../../assets/js/mfa/account.mjs"></script>
+</body>
+</html>

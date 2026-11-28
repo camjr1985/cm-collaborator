@@ -3287,3 +3287,5 @@ window.MB_ES = {
 "target ≤ ": "meta ≤ ",
 "workforce ": "plantilla "
 };
+
+Object.assign(window.MB_ES, {"Account security":"Seguridad de la cuenta","Optional authenticator and mobile setup guide":"Autenticador opcional y guía en el móvil"});

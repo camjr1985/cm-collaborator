@@ -107,6 +107,7 @@
   const EMO = { collab: "🧩", planning: "🗺️", itsm: "🛠️", game: "🎲", sst: "⛑️" };
   function apps() {
     return [
+      { id: "security", name: L("Account security", "Segurança da conta"), desc: L("Optional authenticator and mobile setup guide", "Autenticador opcional e guia no celular"), core: true, icon: "lock", href: "conta/seguranca/" },
       { id: "collab", name: L("Collaboration", "Colaboração"), desc: L("AI whiteboards, templates and live workshops", "Quadros colaborativos com IA, templates e dinâmicas ao vivo"), core: true, icon: "board", href: "workspaces/#colaboracao" },
       { id: "planning", name: L("Planning", "Planejamento"), desc: L("Roadmap, Waterfall, Scrum, Kanban, OKRs and reports", "Roadmap, Waterfall, Scrum, Kanban, OKRs e relatórios"), core: true, icon: "planning", href: "workspaces/#planejamento" },
       { id: "itsm", name: "ITSM", desc: L("Service management (ITIL 4)", "Gestão de serviços (ITIL 4)"), icon: "itsm", href: "itsm/" },
