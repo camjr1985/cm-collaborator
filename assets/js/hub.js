@@ -464,7 +464,7 @@
     if (!a || !a.on || !(a.title || a.text)) return "";
     let seen = null; try { seen = localStorage.getItem("cmcollab:ann:" + key); } catch (x) { /* ignore */ }
     if (seen && Number(seen) >= Number(a.t || 0)) return "";
-    return '<div class="ann-banner"><span class="bb-ic">📣</span><div><b>' + esc(a.title || LL("Announcement", "Comunicado")) + '</b><p class="muted small ann-text">' + esc(a.text || "").replace(/\n/g, "<br>") + '</p></div><button class="btn sm ghost" id="annX" data-t="' + esc(a.t || 0) + '">' + esc(LL("Got it", "Entendi")) + "</button></div>";
+    return '<div class="ann-banner no-i18n"><span class="bb-ic">📣</span><div><b>' + esc(a.title || LL("Announcement", "Comunicado")) + '</b><p class="muted small ann-text">' + esc(a.text || "").replace(/\n/g, "<br>") + '</p></div><button class="btn sm ghost" id="annX" data-t="' + esc(a.t || 0) + '">' + esc(LL("Got it", "Entendi")) + "</button></div>";
   }
   function bindFeedback() { el.querySelectorAll("[data-feedback]").forEach(function (b) { b.onclick = feedbackDialog; }); }
   function list(user) {

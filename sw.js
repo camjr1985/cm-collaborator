@@ -1,5 +1,5 @@
 /* Public shell only. Account security and auth code always require the network. */
-const CACHE = "cmcollab-v56-optional-mfa";
+const CACHE = "cmcollab-v57-ptbr-default";
 const CORE = ["./", "./workspaces/", "./board/", "./assets/css/type.css", "./assets/css/site.css", "./assets/css/board.css", "./assets/js/i18n-es.js", "./assets/js/i18n.js", "./assets/js/config.js", "./assets/js/board.js", "./assets/js/ai.js", "./assets/js/sync.js", "./assets/js/hub.js", "./assets/js/templates/kits.js", "./assets/js/templates/kits2.js", "./assets/js/icons.js", "./assets/js/modules.js", "./assets/favicon.svg", "./assets/app/icon-192.png"];
 const SCOPE = new URL("./", self.location.href).pathname;
 function cacheKey(request) {

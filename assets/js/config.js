@@ -79,7 +79,7 @@ window.CMCOLLAB_NEW = {
   };
   window.CMNewBadge = function (id, extra) {
     if (!window.CMIsNew(id)) return "";
-    const pt = (function () { try { return (localStorage.getItem("cmcollab:lang") || navigator.language || "").toLowerCase().indexOf("pt") === 0; } catch (e) { return false; } })();
+    const pt = (function () { try { return (localStorage.getItem("cmcollab:lang") || "pt").toLowerCase().indexOf("pt") === 0; } catch (e) { return false; } })();
     return '<span class="new-badge' + (extra ? " " + extra : "") + '" data-new-id="' + id + '">' + (window.MB_LANG === "es" ? "NUEVO" : pt ? "NOVO" : "NEW") + "</span>";
   };
   window.CMMarkSeen = function (id) {

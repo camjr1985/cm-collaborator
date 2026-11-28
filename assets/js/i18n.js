@@ -18,7 +18,7 @@
   const nav = String(navigator.language || "").toLowerCase();
   if (urlLang) { lang = urlLang; try { localStorage.setItem("cmcollab:lang", lang); } catch (e) { /* ignore */ } }
   else if (saved) lang = saved;
-  else lang = /^pt-pt/.test(nav) ? "pt-pt" : /^pt/.test(nav) ? "pt" : /^es/.test(nav) ? "es" : "en";
+  else lang = "pt"; // default PT-BR for everyone (all current users are Brazilian); EN/ES/PT-PT only by explicit choice
   const BASE = lang === "pt-pt" ? "pt" : lang;
   const LOCALE = { en: "en-GB", pt: "pt-BR", "pt-pt": "pt-PT", es: "es-ES" }[lang];
   document.documentElement.lang = { en: "en", pt: "pt-BR", "pt-pt": "pt-PT", es: "es" }[lang];
